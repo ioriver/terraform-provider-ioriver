@@ -67,7 +67,6 @@ jobs:
           IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID: ${{ secrets.IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID }}
           IORIVER_TEST_ORIGIN_ID: ${{ secrets.IORIVER_TEST_ORIGIN_ID }}
           IORIVER_TEST_DOMAIN_ID: ${{ secrets.IORIVER_TEST_DOMAIN_ID }}
-          TF_LOG: 'INFO'
         run: |
           make sweep
 
@@ -83,7 +82,6 @@ jobs:
           IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID: ${{ secrets.IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID }}
           IORIVER_TEST_ORIGIN_ID: ${{ secrets.IORIVER_TEST_ORIGIN_ID }}
           IORIVER_TEST_DOMAIN_ID: ${{ secrets.IORIVER_TEST_DOMAIN_ID }}
-          TF_LOG: 'INFO'
         run: |
           make testacc
 
