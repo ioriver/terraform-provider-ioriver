@@ -10,7 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Add "id-token" with the intended permissions.
 permissions:
   contents: 'write'
   id-token: 'write'
