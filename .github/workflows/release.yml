@@ -26,15 +26,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      - name: Install dependencies
-        if: success()
-        run: |
-          go get
-      - name: Generate docs
-        if: ${{ success() }}
-        run: |
-          mkdir -p docs
-          go generate ./...
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef # v6.0.0
         id: import_gpg
