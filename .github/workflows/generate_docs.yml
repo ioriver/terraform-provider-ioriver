@@ -49,13 +49,13 @@ jobs:
           golangci-lint run --fast
 
       - name: Generate docs
-        if: ${{ success() }}
+        if: success()
         run: |
           mkdir -p docs
           go generate ./...
 
       - name: Commit and Push Docs
-        if: ${{ success() }}
+        if: success()
         continue-on-error: true
         run: |
           git config user.name "devops"
@@ -65,6 +65,7 @@ jobs:
           git push
 
       - name: Trigger Master Workflow
+        if: always()
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
