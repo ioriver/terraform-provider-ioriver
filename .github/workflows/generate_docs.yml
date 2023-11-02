@@ -1,10 +1,10 @@
-name: build+tests
+name: generate_docs
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,25 +48,21 @@ jobs:
         run: |
           golangci-lint run --fast
 
-      - name: Build
-        if: success()
+      - name: Generate docs
+        if: ${{ success() }}
         run: |
-          go build ./...
+          mkdir -p docs
+          go generate ./...
 
-      - name: Test
-        if: ${{ success() && !inputs.RUN_ACCEPTANCE_TESTS }}
+      - name: Commit and Push Docs
+        if: ${{ success() }}
+        continue-on-error: true
         run: |
-          go test ./...
-
-      - name: Versioning
-        id: semrel
-        uses: go-semantic-release/action@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          force-bump-patch-version: false
-          allow-initial-development-versions: true
-          changelog-file: true
-          changelog-generator-opt: "emojis=true"
+          git config user.name "devops"
+          git config user.email "devops@ioriver.io"
+          git add docs
+          git commit -m "Update docs"
+          git push
 
       - name: Trigger Master Workflow
         env:
@@ -75,5 +71,5 @@ jobs:
           # Use the GitHub API to trigger the target workflow
           curl -X POST -u $PAT_TOKEN: \
           -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+          https://api.github.com/repos/${{ github.repository }}/actions/workflows/master.yml/dispatches \
           -d '{"ref":"master"}'
