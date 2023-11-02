@@ -58,6 +58,11 @@ jobs:
         run: |
           go test ./...
 
+      - name: Generate docs
+        if: ${{ success() }}
+        run: |
+          go generate ./...
+
       - name: Versioning
         id: semrel
         uses: go-semantic-release/action@v1
