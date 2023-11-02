@@ -1,0 +1,59 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Add "id-token" with the intended permissions.
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      GOPROXY: "https://proxy.golang.org,direct"
+      GONOSUMDB: "github.com/ioriver/*"
+      GOPRIVATE: "github.com/ioriver"
+    steps:
+      - name: Source code checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        if: success()
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          cache: true
+
+      - name: Install dependencies
+        if: success()
+        run: |
+          go mod vendor
+
+      - name: Install golangci-lint
+        if: success()
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
+
+      - name: Lint code
+        if: success()
+        run: |
+          golangci-lint run --fast
+
+      - name: Build
+        if: success()
+        run: |
+          go build ./...
+
+      - name: Test
+        if: ${{ success() && !inputs.RUN_ACCEPTANCE_TESTS }}
+        run: |
+          go test ./...
