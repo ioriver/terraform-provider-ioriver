@@ -1,0 +1,4 @@
+Description: IO River provides a unified layer of security, traffic control and serverless compute services on top of Edge platforms. This provider includes management of CDN providers, certificates, services, traffic policies, behaviors, WAF, and more. More information: https://www.ioriver.io/
+Category: infrastructure
+Registry Link: https://registry.terraform.io/providers/ioriver/ioriver/latest
+Request by: michael@ioriver.io
