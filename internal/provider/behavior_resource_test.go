@@ -2,23 +2,27 @@ package provider
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
+	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"golang.org/x/exp/slices"
-	ioriver "github.com/ioriver/ioriver-go"
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 var behaviorResourceType string = "ioriver_behavior"
 
 func init() {
 	var testedObj TestedBehavior
+	excludeId := os.Getenv("IORIVER_TEST_DEFAULT_BEHAVIOR_ID")
 	resource.AddTestSweepers(behaviorResourceType, &resource.Sweeper{
 		Name: behaviorResourceType,
 		F: func(r string) error {
-			return testSweepResources[ioriver.Behavior](r, testedObj, []string{})
+			return testSweepResources[ioriver.Behavior](r, testedObj, []string{excludeId})
 		},
 	})
 }
@@ -83,50 +87,183 @@ func TestAccIORiverBehavior_Basic(t *testing.T) {
 	})
 }
 
+func TestAccIORiverBehavior_Default(t *testing.T) {
+	var behavior ioriver.Behavior
+	var testedObj TestedBehavior
+
+	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	defaultBehaviorId := os.Getenv("IORIVER_TEST_DEFAULT_BEHAVIOR_ID")
+	rndName := generateRandomResourceName()
+	rndTtl := rand.Intn(100100) + 100
+	resourceName := behaviorResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckBehaviorConfigDefault(rndName, serviceId, rndTtl),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ioriver.Behavior](resourceName, &behavior, testedObj),
+					testAccCheckActionExists(&behavior, "CACHE_TTL", "MaxTTL", strconv.Itoa(rndTtl)),
+				),
+			},
+			{
+				Config: testAccCheckBehaviorConfigDefault(rndName, serviceId, rndTtl+100),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ioriver.Behavior](resourceName, &behavior, testedObj),
+					testAccCheckActionExists(&behavior, "CACHE_TTL", "MaxTTL", strconv.Itoa(rndTtl+100)),
+				),
+			},
+			{
+				Config: " ",
+				Check: resource.ComposeTestCheckFunc(
+					// verify that default behavior is back with default values
+					testAccCheckActionDefaultValue(testedObj, defaultBehaviorId, "CACHE_TTL", "MaxTTL", "86400"),
+				),
+			},
+		},
+	})
+}
+
+func testAccCheckActionDefaultValue(testedObj TestedBehavior, id string, actionType string, actionField string, actionValue string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		behavior, err := testedObj.Get(testAccClient, id)
+		if err != nil {
+			return err
+		}
+		return verifyAction(behavior, actionType, actionField, actionValue)
+	}
+}
+
+func testAccCheckActionExists(behavior *ioriver.Behavior, actionType string, actionField string, actionValue string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		return verifyAction(behavior, actionType, actionField, actionValue)
+	}
+}
+
+func verifyAction(behavior *ioriver.Behavior, actionType string, actionField string, actionValue string) error {
+	for _, action := range behavior.Actions {
+		if action.Type == ioriver.ActionType(actionType) {
+			valueOfAction := reflect.ValueOf(action)
+			field := valueOfAction.FieldByName(actionField)
+			if field.IsValid() {
+				fieldStr := fmt.Sprintf("%v", field.Interface())
+				if fieldStr == actionValue {
+					return nil
+				} else {
+					return fmt.Errorf("Incorrect value of %s, expected: %s, got: %s", actionField, actionValue, field.String())
+				}
+			} else {
+				return fmt.Errorf("Invalid field %s", actionField)
+			}
+		}
+	}
+
+	return fmt.Errorf("Action of type %s not found", actionType)
+}
+
 func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_pattern string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_behavior" "%[1]s" {
 		service      = "%[2]s"
 		name         = "%[3]s"
 		path_pattern = "%[4]s"
+		
 		actions = [
-				{
-          type                  = "SET_RESPONSE_HEADER"
-          response_header_name  = "foo"
-          response_header_value = "bar"
-        },
-        {
-          type    = "CACHE_TTL"
-          max_ttl = 180
-        },
-        {
-          type    = "BROWSER_CACHE_TTL"
-          max_ttl = 120
-        },
-        {
-          type = "REDIRECT_HTTP_TO_HTTPS"
-        },
-        {
-          type                         = "ORIGIN_CACHE_CONTROL"
-          origin_cache_control_enabled = true
-        },
-        {
-          type   = "BYPASS_CACHE_ON_COOKIE"
-          cookie = "abcd"
-        },
-        {
-          type        = "HOST_HEADER_OVERRIDE"
-          host_header = "test.com"
-        },
-        {
-          type                  = "SET_CORS_HEADER"
-          response_header_name  = "Access-Control-Allow-Origin"
-          response_header_value = "*"
-        }
-#       {
-#          type    = "ORIGIN_ERRORS_PASS_THRU"
-#          enabled = true
-#       }
+      {
+				cache_behavior = "CACHE"
+			},
+			{
+				cache_ttl = 86400
+			},
+			{
+				browser_cache_ttl = 120
+			},
+			{
+				response_header = {
+					header_name  = "foo"
+					header_value = "bar"
+				}
+			},
+			{
+				response_header = {
+					header_name  = "foo2"
+					header_value = "bar2"
+				}
+			},
+			{
+				redirect_http_to_https = true
+			},
+			{
+				browser_cache_ttl = 120
+			},
+			{
+				origin_cache_control = true
+			},
+			{
+				bypass_cache_on_cookie = "abcd"
+			},
+			{
+				host_header = "test.com"
+			},
+			{
+				cors_header = {
+					header_name  = "Access-Control-Allow-Origin"
+					header_value = "*"
+				}
+			},
+			{
+				status_code_cache = {
+					status_code    = "204"
+					cache_behavior = "CACHE"
+					cache_ttl      = 60
+				}
+			},
+			{
+				status_code_cache = {
+					status_code    = "4xx"
+					cache_behavior = "CACHE"
+					cache_ttl      = 10
+				}
+			},
+			{
+				generate_preflight_response = {
+					allowed_methods = "GET,POST"
+					max_age         = 60
+				}
+			},
+			{
+				status_code_browser_cache = {
+					status_code        = "2xx"
+					browser_cache_ttl  = 20
+				}
+			}
 		]
 	}`, rndName, serviceId, rndName, path_pattern)
+}
+
+func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int) string {
+	return fmt.Sprintf(`
+	resource "ioriver_behavior" "%s" {
+		service      = "%s"
+		name         = "default"
+		path_pattern = "*"
+		is_default   = true
+		
+		actions = [
+      {
+				cache_behavior = "CACHE"
+			},
+			{
+				cache_ttl = %d
+			},
+			{
+				cache_key = "{\"headers\":[],\"cookies\":[],\"query_strings\":{\"type\":\"none\",\"list\":[]}}"
+			},			
+		]
+	}`, rndName, serviceId, ttl)
 }

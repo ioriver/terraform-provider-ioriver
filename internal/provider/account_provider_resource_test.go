@@ -8,8 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"golang.org/x/exp/slices"
-	ioriver "github.com/ioriver/ioriver-go"
-
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 var apResourceType string = "ioriver_account_provider"

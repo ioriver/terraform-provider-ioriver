@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "github.com/ioriver/ioriver-go"
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 // Ensure IORiverProvider satisfies various provider interfaces.
@@ -36,6 +36,7 @@ func (p *IORiverProvider) Metadata(ctx context.Context, req provider.MetadataReq
 
 func (p *IORiverProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "The IO River provider is used for managing resources supported by IO River. The provider needs to be configured with the proper API token before it can be used.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				MarkdownDescription: "IO River management endpoint URL",

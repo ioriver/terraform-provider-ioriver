@@ -3,14 +3,17 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "github.com/ioriver/ioriver-go"
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -87,6 +90,9 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 			"type": schema.StringAttribute{
 				MarkdownDescription: "TrafficPolicy type",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"Static", "Dynamic", "Cost based"}...),
+				},
 			},
 			"failover": schema.BoolAttribute{
 				MarkdownDescription: "Is automatic failover enabled",
@@ -136,6 +142,13 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 							MarkdownDescription: "Name of subdivision (state)",
 							Optional:            true,
 							Computed:            true,
+							Validators: []validator.String{
+								stringvalidator.ExactlyOneOf(path.Expressions{
+									path.MatchRelative().AtParent().AtName("continent"),
+									path.MatchRelative().AtParent().AtName("country"),
+									path.MatchRelative().AtParent().AtName("subdivision"),
+								}...),
+							},
 						},
 					},
 				},
@@ -182,7 +195,7 @@ func (r *TrafficPolicyResource) Create(ctx context.Context, req resource.CreateR
 	var data TrafficPolicyResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data)
+	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
 	if newData == nil {
 		return
 	}
@@ -286,6 +299,10 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 				Subdivision: geo.Subdivision.ValueString(),
 			})
 	}
+	if d.IsDefault.ValueBool() {
+		// default policy always includes entire world
+		trafficPolicyGeos = append(trafficPolicyGeos, ioriver.TrafficPolicyGeo{})
+	}
 
 	// convert health-checks
 	trafficPolicyHealthChecks := []ioriver.TrafficPolicyHealthCheck{}
@@ -334,13 +351,15 @@ func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{})
 
 	// convert geos
 	modelGeos := []GeoResourceModel{}
-	for _, geo := range trafficPolicy.Geos {
-		modelGeos = append(modelGeos,
-			GeoResourceModel{
-				Continent:   types.StringValue(geo.Continent),
-				Country:     types.StringValue(geo.Country),
-				Subdivision: types.StringValue(geo.Subdivision),
-			})
+	if !trafficPolicy.IsDefault {
+		for _, geo := range trafficPolicy.Geos {
+			modelGeos = append(modelGeos,
+				GeoResourceModel{
+					Continent:   types.StringValue(geo.Continent),
+					Country:     types.StringValue(geo.Country),
+					Subdivision: types.StringValue(geo.Subdivision),
+				})
+		}
 	}
 
 	// convert health-checks

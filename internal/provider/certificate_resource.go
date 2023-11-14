@@ -3,14 +3,16 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "github.com/ioriver/ioriver-go"
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -60,10 +62,13 @@ func (r *CertificateResource) Schema(ctx context.Context, req resource.SchemaReq
 				Required:            true,
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "Certificate type",
+				MarkdownDescription: "Certificate type (MANAGED/SELF_MANAGED/EXTERNAL)",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"MANAGED", "SELF_MANAGED", "EXTERNAL"}...),
 				},
 			},
 			"cn": schema.StringAttribute{
@@ -125,7 +130,7 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 	var data CertificateResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data)
+	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
 	if newData == nil {
 		return
 	}

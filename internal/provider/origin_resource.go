@@ -3,14 +3,16 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "github.com/ioriver/ioriver-go"
+	ioriver "ioriver.io/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -34,9 +36,9 @@ type OriginResourceModel struct {
 	Id       types.String `tfsdk:"id"`
 	Service  types.String `tfsdk:"service"`
 	Host     types.String `tfsdk:"host"`
-	Port     types.Int64  `tfsdk:"port"`
 	Protocol types.String `tfsdk:"protocol"`
 	Path     types.String `tfsdk:"path"`
+	IsS3     types.Bool   `tfsdk:"is_s3"`
 }
 
 func (r *OriginResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -66,22 +68,25 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "Origin host",
 				Required:            true,
 			},
-			"port": schema.Int64Attribute{
-				MarkdownDescription: "Origin port",
-				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(443),
-			},
 			"protocol": schema.StringAttribute{
 				MarkdownDescription: "Origin protocol scheme (HTTP/HTTPS)",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("HTTPS"),
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"HTTP", "HTTPS"}...),
+				},
 			},
 			"path": schema.StringAttribute{
 				MarkdownDescription: "Prefix path to be added to the origin request",
 				Optional:            true,
 				Computed:            true,
+			},
+			"is_s3": schema.BoolAttribute{
+				MarkdownDescription: "Is this origin a S3 bucket",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 		},
 	}
@@ -101,7 +106,7 @@ func (r *OriginResource) Create(ctx context.Context, req resource.CreateRequest,
 	var data OriginResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data)
+	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
 	if newData == nil {
 		return
 	}
@@ -189,9 +194,9 @@ func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (inte
 		Id:       d.Id.ValueString(),
 		Service:  d.Service.ValueString(),
 		Host:     d.Host.ValueString(),
-		Port:     int(d.Port.ValueInt64()),
 		Protocol: d.Protocol.ValueString(),
 		Path:     d.Path.ValueString(),
+		IsS3:     d.IsS3.ValueBool(),
 	}, nil
 }
 
@@ -203,8 +208,8 @@ func (OriginResource) objToResource(ctx context.Context, obj interface{}) (inter
 		Id:       types.StringValue(origin.Id),
 		Service:  types.StringValue(origin.Service),
 		Host:     types.StringValue(origin.Host),
-		Port:     types.Int64Value(int64(origin.Port)),
 		Protocol: types.StringValue(origin.Protocol),
 		Path:     types.StringValue(origin.Path),
+		IsS3:     types.BoolValue(origin.IsS3),
 	}, nil
 }
