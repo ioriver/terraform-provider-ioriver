@@ -31,7 +31,7 @@ type Resource interface {
 }
 
 func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req resource.CreateRequest,
-	resp *resource.CreateResponse, r Resource, data interface{}) interface{} {
+	resp *resource.CreateResponse, r Resource, data interface{}, doUpdate bool) interface{} {
 
 	if resp.Diagnostics.HasError() {
 		return nil
@@ -39,33 +39,30 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 
 	newObj, err := r.resourceToObj(ctx, data)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating object from ResourceData",
-			"Unexpected error: "+err.Error(),
-		)
+		resp.Diagnostics.AddError("Error creating object from ResourceData", "Unexpected error: "+err.Error())
 		return nil
 	}
 
 	tflog.Info(ctx, fmt.Sprintf("Creating IORiver object: %#v", newObj))
 
+	var obj interface{}
+
 	mutex.Lock()
-	obj, err := r.create(client, newObj)
+	if !doUpdate {
+		obj, err = r.create(client, newObj)
+	} else {
+		obj, err = r.update(client, newObj)
+	}
 	mutex.Unlock()
 
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating resource",
-			"Could not create resource, unexpected error: "+err.Error(),
-		)
+		resp.Diagnostics.AddError("Error creating resource", "Could not create resource, unexpected error: "+err.Error())
 		return nil
 	}
 
 	resourceModel, err := r.objToResource(ctx, obj)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating resource",
-			"Failed to convert IORiver object to resource: "+err.Error(),
-		)
+		resp.Diagnostics.AddError("Error creating resource", "Failed to convert IORiver object to resource: "+err.Error())
 	}
 	return resourceModel
 }
@@ -88,9 +85,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 			return nil
 		}
 
-		resp.Diagnostics.AddError(
-			"Client Error",
-			fmt.Sprintf("Unable to read resource, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read resource, got error: %s", err))
 		return nil
 	}
 
@@ -111,10 +106,7 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 
 	obj, err := r.resourceToObj(ctx, data)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating object from ResourceData",
-			"Unexpected error: "+err.Error(),
-		)
+		resp.Diagnostics.AddError("Error creating object from ResourceData", "Unexpected error: "+err.Error())
 		return nil
 	}
 	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object: %#v", obj))
@@ -124,16 +116,13 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 	mutex.Unlock()
 
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating resource",
-			"Could not update resource, unexpected error: "+err.Error(),
-		)
+		resp.Diagnostics.AddError("Error updating resource", "Could not update resource, unexpected error: "+err.Error())
 		return nil
 	}
 
 	resourceModel, err := r.objToResource(ctx, updatedObj)
 	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to convert IORiver object to resource, object: %#v", obj))
+		resp.Diagnostics.AddError("Error updating resource", "Failed to convert IORiver object to resource: "+err.Error())
 	}
 	return resourceModel
 }
@@ -153,9 +142,7 @@ func resourceDelete(client *ioriver.IORiverClient, ctx context.Context, req reso
 	mutex.Unlock()
 
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Client Error",
-			fmt.Sprintf("Unable to delete resource, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete resource, got error: %s", err))
 	}
 }
 

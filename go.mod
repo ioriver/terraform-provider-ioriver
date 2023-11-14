@@ -4,10 +4,11 @@ go 1.20
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.4.2
+	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-go v0.19.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.29.0
-	github.com/ioriver/ioriver-go v0.1.0
+	github.com/ioriver/ioriver-go v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )
 

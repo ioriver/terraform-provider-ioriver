@@ -113,7 +113,7 @@ func (r *ComputeResource) Create(ctx context.Context, req resource.CreateRequest
 	var data ComputeResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data)
+	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
 	if newData == nil {
 		return
 	}

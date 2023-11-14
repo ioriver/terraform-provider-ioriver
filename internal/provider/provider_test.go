@@ -32,6 +32,7 @@ func testAccPreCheck(t *testing.T) {
 	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_ORIGIN_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_SERVICE_PROVIDER_ID")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DEFAULT_BEHAVIOR_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_FASTLY_API_TOKEN")
 }

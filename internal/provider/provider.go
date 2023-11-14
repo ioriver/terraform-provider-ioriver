@@ -36,6 +36,7 @@ func (p *IORiverProvider) Metadata(ctx context.Context, req provider.MetadataReq
 
 func (p *IORiverProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "The IO River provider is used for managing resources supported by IO River. The provider needs to be configured with the proper API token before it can be used.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				MarkdownDescription: "IO River management endpoint URL",

@@ -132,7 +132,7 @@ func (r *ServiceProviderResource) Create(ctx context.Context, req resource.Creat
 	var data ServiceProviderResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data)
+	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
 	if newData == nil {
 		return
 	}
