@@ -29,8 +29,8 @@ resource "ioriver_origin" "example_origin" {
 
 ### Optional
 
+- `is_s3` (Boolean) Is this origin a S3 bucket
 - `path` (String) Prefix path to be added to the origin request
-- `port` (Number) Origin port
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
 
 ### Read-Only

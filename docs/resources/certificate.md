@@ -34,7 +34,7 @@ resource "ioriver_certificate" "managed_cert" {
 ### Required
 
 - `name` (String) Certificate name
-- `type` (String) Certificate type
+- `type` (String) Certificate type (MANAGED/SELF_MANAGED/EXTERNAL)
 
 ### Optional
 

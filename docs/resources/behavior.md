@@ -3,12 +3,12 @@
 page_title: "ioriver_behavior Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Behavior resource
+  Behavior resource which includes a list of behavior of actions to apply
 ---
 
 # ioriver_behavior (Resource)
 
-Behavior resource
+Behavior resource which includes a list of behavior of actions to apply
 
 ## Example Usage
 
@@ -39,10 +39,14 @@ resource "ioriver_behavior" "example_behavior" {
 
 ### Required
 
-- `actions` (Attributes List) List of actions to apply (see [below for nested schema](#nestedatt--actions))
+- `actions` (Attributes List) List of actions to apply on the path pattern. Each element in the list defines a single action. (see [below for nested schema](#nestedatt--actions))
 - `name` (String) Behavior name
 - `path_pattern` (String) Path pattern to apply the behavior
 - `service` (String) The id of the service this behavior belongs to
+
+### Optional
+
+- `is_default` (Boolean) Is this the default behavior
 
 ### Read-Only
 
@@ -51,27 +55,73 @@ resource "ioriver_behavior" "example_behavior" {
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`
 
-Required:
-
-- `type` (String) Type of the action
-
 Optional:
 
-- `action_disabled` (Boolean) Is this action disabled
-- `auto_minify` (String) Value of auto-minify
-- `cache_behavior_value` (String) Value of cache behavior (CACHE/BYPASS)
-- `cache_key` (String) Cache key configuration
-- `client_header_name` (String) Value of client header name
-- `cookie` (String) Value of cookie
-- `enabled` (Boolean) Is action the type of this action enabled
-- `host_header` (String) Value of Host header
-- `max_ttl` (Number) TTL value
-- `origin` (String) Value of origin id
-- `origin_cache_control_enabled` (Boolean) Value of origin cache control
-- `pattern` (String) Value of pattern
-- `redirect_url` (String) Value of redirect URL
-- `response_header_name` (String) Name of the header to be added in the response
-- `response_header_value` (String) Value of the header to be added in the response
+- `auto_minify` (String) Use the provided auto-minify configuration
+- `browser_cache_ttl` (Number) Set value of browser cache TTL
+- `bypass_cache_on_cookie` (String) Bypass cache if the provided cookie exists
+- `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
+- `cache_key` (String) Use custom cache key configuration
+- `cache_ttl` (Number) Set value of edge cache TTL
+- `cors_header` (Attributes) CORS header to be added within the response (see [below for nested schema](#nestedatt--actions--cors_header))
+- `follow_redirects` (Boolean) Enable follow redirect in case origin returns a redirect response
+- `forward_client_header` (String) Header to be forwarded to the origin
+- `generate_preflight_response` (Attributes) Define auto generate preflight response (see [below for nested schema](#nestedatt--actions--generate_preflight_response))
+- `host_header` (String) Override host header with the provided value
+- `origin_cache_control` (Boolean) Enable origin cache control
+- `origin_error_pass_through` (Boolean) Enable origin error pass through
+- `override_origin` (String) Value of origin id
+- `redirect` (String) Send redirect response
+- `redirect_http_to_https` (Boolean) Enable redirect of HTTP requests to HTTPS
+- `response_header` (Attributes) Header to be added within the response (see [below for nested schema](#nestedatt--actions--response_header))
+- `stale_ttl` (Number) Set value of stale TTL (in case of origin issue, the CDN will serve stale content for that period of time)
+- `status_code_browser_cache` (Attributes) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_browser_cache))
+- `status_code_cache` (Attributes) Define edge cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_cache))
+
+<a id="nestedatt--actions--cors_header"></a>
+### Nested Schema for `actions.cors_header`
+
+Required:
+
+- `header_name` (String) Name of the CORS header to be added in the response
+- `header_value` (String) Value of the header to be added in the response
+
+
+<a id="nestedatt--actions--generate_preflight_response"></a>
+### Nested Schema for `actions.generate_preflight_response`
+
+Required:
+
+- `allowed_methods` (String) Comma separated allowed methods (value of `Access-Control-Allow-Methods` response header)
+- `max_age` (Number) Response cache TTL (value of `Access-Control-Max-Age` response header)
+
+
+<a id="nestedatt--actions--response_header"></a>
+### Nested Schema for `actions.response_header`
+
+Required:
+
+- `header_name` (String) Name of the header to be added in the response
+- `header_value` (String) Value of the header to be added in the response
+
+
+<a id="nestedatt--actions--status_code_browser_cache"></a>
+### Nested Schema for `actions.status_code_browser_cache`
+
+Required:
+
+- `browser_cache_ttl` (Number) Value of browser cache TTL
+- `status_code` (String) Status code to apply the configuratoin for (1xx,2xx,.. can be used for ranges)
+
+
+<a id="nestedatt--actions--status_code_cache"></a>
+### Nested Schema for `actions.status_code_cache`
+
+Required:
+
+- `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
+- `cache_ttl` (Number) Value of edge cache TTL
+- `status_code` (String) Status code to apply the configuratoin for (1xx,2xx,.. can be used for ranges)
 
 ## Import
 

@@ -3,12 +3,12 @@
 page_title: "ioriver Provider"
 subcategory: ""
 description: |-
-  
+  The IO River provider is used for managing resources supported by IO River. The provider needs to be configured with the proper API token before it can be used.
 ---
 
 # ioriver Provider
 
-
+The IO River provider is used for managing resources supported by IO River. The provider needs to be configured with the proper API token before it can be used.
 
 ## Example Usage
 
