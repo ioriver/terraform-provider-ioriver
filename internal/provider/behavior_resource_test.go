@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"golang.org/x/exp/slices"
-	ioriver "ioriver.io/ioriver/ioriver-go"
+	ioriver "github.com/ioriver/ioriver-go"
 )
 
 var behaviorResourceType string = "ioriver_behavior"

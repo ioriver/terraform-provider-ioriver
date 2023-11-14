@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "ioriver.io/ioriver/ioriver-go"
+	ioriver "github.com/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

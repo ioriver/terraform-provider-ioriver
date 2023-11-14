@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	ioriver "ioriver.io/ioriver/ioriver-go"
+	ioriver "github.com/ioriver/ioriver-go"
 )
 
 func TestMain(m *testing.M) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	ioriver "ioriver.io/ioriver/ioriver-go"
+	ioriver "github.com/ioriver/ioriver-go"
 )
 
 var certResourceType string = "ioriver_certificate"

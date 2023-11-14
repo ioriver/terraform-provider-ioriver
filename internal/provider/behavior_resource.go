@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	ioriver "ioriver.io/ioriver/ioriver-go"
+	ioriver "github.com/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
