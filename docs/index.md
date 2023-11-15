@@ -13,6 +13,14 @@ The IO River provider is used for managing resources supported by IO River. The 
 ## Example Usage
 
 ```terraform
+terraform {
+  required_providers {
+    ioriver = {
+      source = "ioriver/ioriver"
+    }
+  }
+}
+
 provider "ioriver" {
   token = "abcefg1234567"
 }
