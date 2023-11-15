@@ -3,7 +3,7 @@ package provider
 const (
 	ServiceIdSchemaKey = "service_id"
 
-	TerraformUserAgent = "terraform/%s terraform-plugin-sdk/%s terraform-provider-ioriver/%s"
+	TerraformUserAgent = "terraform/%s terraform-plugin-framework/%s terraform-provider-ioriver/%s"
 
 	APIEndpointEnvVar = "IORIVER_API_ENDPOINT"
 

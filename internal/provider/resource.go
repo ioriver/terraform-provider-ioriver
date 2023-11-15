@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"unicode"
@@ -11,8 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -208,89 +206,4 @@ func isPremitive(target string) bool {
 		}
 	}
 	return false
-}
-
-func objToResourceBase(obj interface{}, d *schema.ResourceData) diag.Diagnostics {
-
-	objType := reflect.TypeOf(obj).Elem()
-	if objType.Kind() != reflect.Struct {
-		err := fmt.Errorf("Object type %s is not a struct", objType)
-		return diag.FromErr(err)
-	}
-
-	objValue := reflect.ValueOf(obj).Elem()
-
-	d.SetId(objValue.FieldByName("Id").String())
-
-	for i := 0; i < objType.NumField(); i++ {
-
-		objField := objType.Field(i)
-
-		if isPremitive(objField.Type.String()) {
-			fieldName := objField.Name
-			if fieldName == "Id" {
-				continue
-			}
-
-			resourceField := structFieldToResourceFieldName(fieldName)
-			if err := d.Set(resourceField, objValue.FieldByName(fieldName).Interface()); err != nil {
-				return diag.FromErr(err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// setObjField sets the value of a field in a struct.
-func setObjField(obj interface{}, fieldName string, value interface{}) error {
-	// Address optional resource fields
-	if value == nil {
-		return nil
-	}
-
-	val := reflect.ValueOf(obj).Elem()
-	field := val.FieldByName(fieldName)
-
-	// Check if the field is valid (exists and can be set)
-	if !field.IsValid() || !field.CanSet() {
-		return fmt.Errorf("Field %s not found or cannot be set", fieldName)
-	}
-
-	// Set the field value with the provided value
-	if field.Type() == reflect.TypeOf(value) {
-		field.Set(reflect.ValueOf(value))
-		return nil
-	}
-
-	return fmt.Errorf("Value type %T does not match field type %s", value, field.Type())
-}
-
-func baseResourceToObj(obj interface{}, d *schema.ResourceData) (interface{}, error) {
-
-	objType := reflect.TypeOf(obj).Elem()
-	if objType.Kind() != reflect.Struct {
-		err := fmt.Errorf("Object type %s is not a struct", objType)
-		return nil, err
-	}
-
-	// set each one of the object fields from the resource
-	for i := 0; i < objType.NumField(); i++ {
-
-		objField := objType.Field(i)
-
-		if isPremitive(objField.Type.String()) {
-			fieldName := objField.Name
-			if fieldName == "Id" {
-				continue
-			}
-
-			resourceField := structFieldToResourceFieldName(fieldName)
-			if err := setObjField(obj, fieldName, d.Get(resourceField)); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return obj, nil
 }

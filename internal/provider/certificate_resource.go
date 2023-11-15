@@ -137,9 +137,11 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 
 	// Certificate has couple of write-only fields which we need to preserve from original request
 	newCert := newData.(CertificateResourceModel)
-	newCert.Certificate = data.Certificate
-	newCert.PrivateKey = data.PrivateKey
-	newCert.CertificateChain = data.CertificateChain
+	if newCert.Type.ValueString() == "SELF_MANAGED" {
+		newCert.Certificate = data.Certificate
+		newCert.PrivateKey = data.PrivateKey
+		newCert.CertificateChain = data.CertificateChain
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newCert)...)
 }
@@ -157,9 +159,11 @@ func (r *CertificateResource) Read(ctx context.Context, req resource.ReadRequest
 
 	// Certificate has couple of write-only fields which we need to preserve from original request
 	newCert := newData.(CertificateResourceModel)
-	newCert.Certificate = data.Certificate
-	newCert.PrivateKey = data.PrivateKey
-	newCert.CertificateChain = data.CertificateChain
+	if newCert.Type.ValueString() == "SELF_MANAGED" {
+		newCert.Certificate = data.Certificate
+		newCert.PrivateKey = data.PrivateKey
+		newCert.CertificateChain = data.CertificateChain
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newCert)...)
 }
@@ -178,9 +182,11 @@ func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// Certificate has couple of write-only fields which we need to preserve from original request
 	updatedCert := newData.(CertificateResourceModel)
-	updatedCert.Certificate = data.Certificate
-	updatedCert.PrivateKey = data.PrivateKey
-	updatedCert.CertificateChain = data.CertificateChain
+	if updatedCert.Type.ValueString() == "SELF_MANAGED" {
+		updatedCert.Certificate = data.Certificate
+		updatedCert.PrivateKey = data.PrivateKey
+		updatedCert.CertificateChain = data.CertificateChain
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &updatedCert)...)
 }
@@ -247,9 +253,9 @@ func (CertificateResource) objToResource(ctx context.Context, obj interface{}) (
 		Type:             types.StringValue(string(cert.Type)),
 		Cn:               types.StringValue(cert.Cn),
 		NotValidAfter:    types.StringValue(cert.NotValidAfter),
-		Certificate:      types.StringValue(cert.Certificate),
-		PrivateKey:       types.StringValue(cert.PrivateKey),
-		CertificateChain: types.StringValue(cert.CertificateChain),
+		Certificate:      types.StringValue(""),
+		PrivateKey:       types.StringValue(""),
+		CertificateChain: types.StringValue(""),
 		Challenges:       types.StringValue(cert.Challenges),
 		Status:           types.StringValue(string(cert.Status)),
 	}, nil
