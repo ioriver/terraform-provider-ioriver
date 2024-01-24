@@ -32,6 +32,7 @@ resource "ioriver_origin" "example_origin" {
 - `is_s3` (Boolean) Is this origin a S3 bucket
 - `path` (String) Prefix path to be added to the origin request
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
+- `timeout_ms` (Number) Origin timeout
 
 ### Read-Only
 
