@@ -263,6 +263,20 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 			},
 			{
 				cache_key = "{\"headers\":[],\"cookies\":[],\"query_strings\":{\"type\":\"none\",\"list\":[]}}"
+			},
+			{
+				status_code_cache = {
+					status_code    = "4xx"
+					cache_behavior = "CACHE"
+					cache_ttl      = 1
+				}
+			},
+			{
+				status_code_cache = {
+					status_code    = "5xx"
+					cache_behavior = "CACHE"
+					cache_ttl      = 1
+				}
 			},			
 		]
 	}`, rndName, serviceId, ttl)

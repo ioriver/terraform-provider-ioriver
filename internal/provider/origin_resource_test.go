@@ -123,5 +123,6 @@ func testAccCheckOriginConfig(rndName string, serviceId string, host string) str
 	resource "ioriver_origin" "%s" {
 		service        = "%s"
 		host           = "%s"
+		timeout_ms     = 5000
 	}`, rndName, serviceId, host)
 }
