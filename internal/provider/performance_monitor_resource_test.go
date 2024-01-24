@@ -52,8 +52,9 @@ func TestAccIORiverPerformanceMonitor_Basic(t *testing.T) {
 	var testedObj TestedPerformanceMonitor
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
 	rndName := generateRandomResourceName()
-	url := rndName + ".example.com"
+	url := "https://tf-test-1." + testDomain + "/" + rndName
 	resourceName := performanceMonitorResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{
@@ -88,9 +89,10 @@ func TestAccIORiverPerformanceMonitor_Update(t *testing.T) {
 	var testedObj TestedPerformanceMonitor
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
 	rndName := generateRandomResourceName()
-	url := rndName + ".example.com"
-	updatedUrl := "updated-" + url
+	url := "https://tf-test-1." + testDomain + "/" + rndName
+	updatedUrl := url + "-updated"
 	resourceName := performanceMonitorResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{

@@ -52,8 +52,9 @@ func TestAccIORiverHealthMonitor_Basic(t *testing.T) {
 	var testedObj TestedHealthMonitor
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
 	rndName := generateRandomResourceName()
-	url := rndName + ".example.com"
+	url := "https://tf-test-1." + testDomain + "/" + rndName
 	resourceName := healthMonitorResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{
@@ -88,9 +89,10 @@ func TestAccIORiverHealthMonitor_Update(t *testing.T) {
 	var testedObj TestedHealthMonitor
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
 	rndName := generateRandomResourceName()
-	url := rndName + ".example.com"
-	updatedUrl := "updated-" + url
+	url := "https://tf-test-1." + testDomain + "/" + rndName
+	updatedUrl := url + "-updated"
 	resourceName := healthMonitorResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{

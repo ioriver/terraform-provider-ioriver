@@ -33,12 +33,13 @@ type OriginResource struct {
 }
 
 type OriginResourceModel struct {
-	Id       types.String `tfsdk:"id"`
-	Service  types.String `tfsdk:"service"`
-	Host     types.String `tfsdk:"host"`
-	Protocol types.String `tfsdk:"protocol"`
-	Path     types.String `tfsdk:"path"`
-	IsS3     types.Bool   `tfsdk:"is_s3"`
+	Id        types.String `tfsdk:"id"`
+	Service   types.String `tfsdk:"service"`
+	Host      types.String `tfsdk:"host"`
+	Protocol  types.String `tfsdk:"protocol"`
+	Path      types.String `tfsdk:"path"`
+	IsS3      types.Bool   `tfsdk:"is_s3"`
+	TimeoutMs types.Int64  `tfsdk:"timeout_ms"`
 }
 
 func (r *OriginResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -87,6 +88,11 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+			},
+			"timeout_ms": schema.Int64Attribute{
+				MarkdownDescription: "Origin timeout",
+				Optional:            true,
+				Computed:            true,
 			},
 		},
 	}
@@ -191,12 +197,13 @@ func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (inte
 	d := data.(OriginResourceModel)
 
 	return ioriver.Origin{
-		Id:       d.Id.ValueString(),
-		Service:  d.Service.ValueString(),
-		Host:     d.Host.ValueString(),
-		Protocol: d.Protocol.ValueString(),
-		Path:     d.Path.ValueString(),
-		IsS3:     d.IsS3.ValueBool(),
+		Id:        d.Id.ValueString(),
+		Service:   d.Service.ValueString(),
+		Host:      d.Host.ValueString(),
+		Protocol:  d.Protocol.ValueString(),
+		Path:      d.Path.ValueString(),
+		IsS3:      d.IsS3.ValueBool(),
+		TimeoutMs: int(d.TimeoutMs.ValueInt64()),
 	}, nil
 }
 
@@ -205,11 +212,12 @@ func (OriginResource) objToResource(ctx context.Context, obj interface{}) (inter
 	origin := obj.(*ioriver.Origin)
 
 	return OriginResourceModel{
-		Id:       types.StringValue(origin.Id),
-		Service:  types.StringValue(origin.Service),
-		Host:     types.StringValue(origin.Host),
-		Protocol: types.StringValue(origin.Protocol),
-		Path:     types.StringValue(origin.Path),
-		IsS3:     types.BoolValue(origin.IsS3),
+		Id:        types.StringValue(origin.Id),
+		Service:   types.StringValue(origin.Service),
+		Host:      types.StringValue(origin.Host),
+		Protocol:  types.StringValue(origin.Protocol),
+		Path:      types.StringValue(origin.Path),
+		IsS3:      types.BoolValue(origin.IsS3),
+		TimeoutMs: types.Int64Value((int64(origin.TimeoutMs))),
 	}, nil
 }
