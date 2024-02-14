@@ -88,7 +88,6 @@ func TestAccIORiverServiceProvider_Basic(t *testing.T) {
 func testAccCheckServiceProviderConfigBasic(rndName string, serviceId string, accountProviderToken string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "test_account_provider" {
-		provider_name = "fastly"
 		credentials = {
 		  fastly = "%s"
 		}

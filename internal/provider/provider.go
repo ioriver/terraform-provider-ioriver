@@ -93,6 +93,7 @@ func (p *IORiverProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewComputeResource,
 		NewHealthMonitorResource,
 		NewPerformanceMonitorResource,
+		NewOriginShieldResource,
 	}
 }
 

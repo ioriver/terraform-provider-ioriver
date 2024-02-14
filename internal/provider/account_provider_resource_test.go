@@ -63,7 +63,6 @@ func TestAccIORiverAccountProvider_Basic(t *testing.T) {
 				Config: testAccCheckAccountProviderConfigBasic(rndName, fastlyToken),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.AccountProvider](resourceName, &accountProvider, testedObj),
-					resource.TestCheckResourceAttr(resourceName, "provider_name", "fastly"),
 				),
 			},
 			{
@@ -82,7 +81,6 @@ func TestAccIORiverAccountProvider_Basic(t *testing.T) {
 func testAccCheckAccountProviderConfigBasic(rndName string, fastlyToken string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "%[1]s" {
-		provider_name = "fastly"
 		credentials = {
 		  fastly = "%[2]s"
 		}

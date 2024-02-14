@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -28,9 +29,19 @@ type AccountProviderResource struct {
 	client *ioriver.IORiverClient
 }
 
+type AwsAccessKeyModel struct {
+	AccessKey types.String `tfsdk:"access_key"`
+	SecretKey types.String `tfsdk:"secret_key"`
+}
+
+type AwsAssumeRoleModel struct {
+	RoleArn    types.String `tfsdk:"role_arn"`
+	ExternalId types.String `tfsdk:"external_id"`
+}
+
 type CloudfrontCredsModel struct {
-	AccessKey    types.String `tfsdk:"access_key"`
-	AccessSecret types.String `tfsdk:"access_secret"`
+	AccessKey  *AwsAccessKeyModel  `tfsdk:"access_key"`
+	AssumeRole *AwsAssumeRoleModel `tfsdk:"assume_role"`
 }
 
 type CredentialsModel struct {
@@ -40,9 +51,8 @@ type CredentialsModel struct {
 }
 
 type AccountProviderResourceModel struct {
-	Id           types.String      `tfsdk:"id"`
-	ProviderName types.String      `tfsdk:"provider_name"`
-	Credentials  *CredentialsModel `tfsdk:"credentials"`
+	Id          types.String      `tfsdk:"id"`
+	Credentials *CredentialsModel `tfsdk:"credentials"`
 }
 
 func (r *AccountProviderResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -61,16 +71,6 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"provider_name": schema.StringAttribute{
-				MarkdownDescription: "Account-Provider provider name",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-				Validators: []validator.String{
-					stringvalidator.OneOf([]string{"fastly", "cloudflare", "cloudfront", "azure_cdn", "akamai"}...),
-				},
-			},
 			"credentials": schema.SingleNestedAttribute{
 				MarkdownDescription: "Account-Provider credentials",
 				Required:            true,
@@ -78,6 +78,12 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 				Attributes: map[string]schema.Attribute{
 					"fastly": schema.StringAttribute{
 						Optional: true,
+						Validators: []validator.String{
+							stringvalidator.ExactlyOneOf(path.Expressions{
+								path.MatchRelative().AtParent().AtName("cloudflare"),
+								path.MatchRelative().AtParent().AtName("cloudfront"),
+							}...),
+						},
 					},
 					"cloudflare": schema.StringAttribute{
 						Optional: true,
@@ -85,11 +91,32 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 					"cloudfront": schema.SingleNestedAttribute{
 						Optional: true,
 						Attributes: map[string]schema.Attribute{
-							"access_key": schema.StringAttribute{
-								Required: true,
+							"access_key": schema.SingleNestedAttribute{
+								Optional: true,
+								Validators: []validator.Object{
+									objectvalidator.ExactlyOneOf(path.Expressions{
+										path.MatchRelative().AtParent().AtName("assume_role"),
+									}...),
+								},
+								Attributes: map[string]schema.Attribute{
+									"access_key": schema.StringAttribute{
+										Required: true,
+									},
+									"secret_key": schema.StringAttribute{
+										Required: true,
+									},
+								},
 							},
-							"access_secret": schema.StringAttribute{
-								Required: true,
+							"assume_role": schema.SingleNestedAttribute{
+								Optional: true,
+								Attributes: map[string]schema.Attribute{
+									"role_arn": schema.StringAttribute{
+										Required: true,
+									},
+									"external_id": schema.StringAttribute{
+										Required: true,
+									},
+								},
 							},
 						},
 					},
@@ -204,13 +231,13 @@ func (AccountProviderResource) getId(data interface{}) interface{} {
 // Convert AccountProvider resource to AccountProvider API object
 func (AccountProviderResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
 	d := data.(AccountProviderResourceModel)
-	providerName := d.ProviderName.ValueString()
 	credentials := d.Credentials
+	convertedCreds, providerName := convertCredentials(*credentials)
 
 	return ioriver.AccountProvider{
 		Id:          d.Id.ValueString(),
 		Provider:    convertProviderName(providerName),
-		Credentials: convertCredentials(providerName, *credentials),
+		Credentials: convertedCreds,
 	}, nil
 }
 
@@ -219,8 +246,7 @@ func (AccountProviderResource) objToResource(ctx context.Context, obj interface{
 	accountProvider := obj.(*ioriver.AccountProvider)
 
 	return AccountProviderResourceModel{
-		Id:           types.StringValue(accountProvider.Id),
-		ProviderName: types.StringValue(convertProviderId(accountProvider.Provider)),
+		Id: types.StringValue(accountProvider.Id),
 	}, nil
 }
 
@@ -258,19 +284,28 @@ func convertProviderId(id int) string {
 	return name
 }
 
-func convertCredentials(providerName string, credsMap CredentialsModel) (credentials interface{}) {
-	switch providerName {
-	case "fastly":
+func convertCredentials(credsMap CredentialsModel) (credentials interface{}, name string) {
+	credentials = nil
+	name = ""
+
+	if !credsMap.Fastly.IsNull() {
 		credentials = credsMap.Fastly.ValueString()
-	case "cloudflare":
+		name = "fastly"
+	} else if !credsMap.Cloudflare.IsNull() {
 		credentials = credsMap.Cloudflare.ValueString()
-	case "cloudfront":
-		credentials = fmt.Sprintf("{\"accessKey\":\"%s\",\"accessSecret\":\"%s\"}",
-			credsMap.Cloudfront.AccessKey.ValueString(),
-			credsMap.Cloudfront.AccessSecret.ValueString())
-	default:
-		credentials = nil
+		name = "cloudflare"
+	} else if credsMap.Cloudfront != nil {
+		name = "cloudfront"
+		if credsMap.Cloudfront.AccessKey != nil {
+			credentials = fmt.Sprintf("{\"accessKey\":\"%s\",\"accessSecret\":\"%s\"}",
+				credsMap.Cloudfront.AccessKey.AccessKey.ValueString(),
+				credsMap.Cloudfront.AccessKey.SecretKey.ValueString())
+		} else if credsMap.Cloudfront.AssumeRole != nil {
+			credentials = fmt.Sprintf("{\"assume_role_arn\":\"%s\",\"external_id\":\"%s\"}",
+				credsMap.Cloudfront.AssumeRole.RoleArn.ValueString(),
+				credsMap.Cloudfront.AssumeRole.ExternalId.ValueString())
+		}
 	}
 
-	return credentials
+	return credentials, name
 }

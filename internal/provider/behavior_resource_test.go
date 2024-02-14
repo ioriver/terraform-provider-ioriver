@@ -241,7 +241,10 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 					status_code        = "2xx"
 					browser_cache_ttl  = 20
 				}
-			}
+			},
+			{
+				allowed_methods = "GET,HEAD,OPTIONS"
+			},
 		]
 	}`, rndName, serviceId, rndName, path_pattern)
 }
@@ -277,7 +280,10 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 					cache_behavior = "CACHE"
 					cache_ttl      = 1
 				}
-			},			
+			},
+			{
+				allowed_methods = "GET,HEAD,OPTIONS"
+			},
 		]
 	}`, rndName, serviceId, ttl)
 }

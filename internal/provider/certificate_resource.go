@@ -240,7 +240,7 @@ func (CertificateResource) resourceToObj(ctx context.Context, data interface{}) 
 		Cn:               d.Cn.ValueString(),
 		Certificate:      d.Certificate.ValueString(),
 		PrivateKey:       d.PrivateKey.ValueString(),
-		CertificateChain: d.Certificate.ValueString()}, nil
+		CertificateChain: d.CertificateChain.ValueString()}, nil
 }
 
 // Convert Certificate API object to Certificate resource
