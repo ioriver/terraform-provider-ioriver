@@ -125,7 +125,6 @@ func TestAccIORiverTrafficPolicy_Update(t *testing.T) {
 func testAccCheckTrafficPolicyConfig(rndName string, serviceId string, accountProviderToken string, serviceProviderId string, country string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "traffic_policy_account_provider" {
-		provider_name = "fastly"
 		credentials = {
 		  fastly = "%s"
 		}

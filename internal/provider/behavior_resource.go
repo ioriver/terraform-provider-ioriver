@@ -59,6 +59,11 @@ type GeneratePreflightResponseModel struct {
 	MaxAge         types.Int64  `tfsdk:"max_age"`
 }
 
+type StreamLogsModel struct {
+	UnifiedLogDestination  types.String `tfsdk:"unified_log_destination"`
+	UnifiedLogSamplingRate types.Int64  `tfsdk:"unified_log_sampling_rate"`
+}
+
 type BehaviorResourceModel struct {
 	Id          types.String                  `tfsdk:"id"`
 	Service     types.String                  `tfsdk:"service"`
@@ -89,6 +94,10 @@ type BehaviorActionResourceModel struct {
 	StatusCodeBrowserCache    *StatusCodeBrowserCacheModel    `tfsdk:"status_code_browser_cache"`
 	GeneratePreflightResponse *GeneratePreflightResponseModel `tfsdk:"generate_preflight_response"`
 	StaleTtl                  types.Int64                     `tfsdk:"stale_ttl"`
+	StreamLogs                *StreamLogsModel                `tfsdk:"stream_logs"`
+	AllowedMethods            types.String                    `tfsdk:"allowed_methods"`
+	Compression               types.Bool                      `tfsdk:"compression"`
+	GenerateResponse          types.String                    `tfsdk:"generate_response"`
 }
 
 func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -185,6 +194,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("generate_preflight_response"),
 									path.MatchRelative().AtParent().AtName("status_code_browser_cache"),
 									path.MatchRelative().AtParent().AtName("stale_ttl"),
+									path.MatchRelative().AtParent().AtName("stream_logs"),
+									path.MatchRelative().AtParent().AtName("allowed_methods"),
+									path.MatchRelative().AtParent().AtName("compression"),
+									path.MatchRelative().AtParent().AtName("generate_response"),
 								}...),
 							},
 						},
@@ -330,6 +343,36 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							Validators: []validator.Int64{
 								int64validator.AtLeast(0),
 							},
+						},
+						"stream_logs": schema.SingleNestedAttribute{
+							MarkdownDescription: "Define streaming of unifield logs",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"unified_log_destination": schema.StringAttribute{
+									MarkdownDescription: "Destination for the logs streaming",
+									Required:            true,
+								},
+								"unified_log_sampling_rate": schema.Int64Attribute{
+									MarkdownDescription: "Sampling rate for the logs (1-100)",
+									Required:            true,
+									Validators: []validator.Int64{
+										int64validator.AtLeast(1),
+										int64validator.AtMost(100),
+									},
+								},
+							},
+						},
+						"allowed_methods": schema.StringAttribute{
+							MarkdownDescription: "Comma separated list of allowed methods",
+							Optional:            true,
+						},
+						"compression": schema.BoolAttribute{
+							MarkdownDescription: "Enable compression",
+							Optional:            true,
+						},
+						"generate_response": schema.StringAttribute{
+							MarkdownDescription: "Response page path for custom resonse",
+							Optional:            true,
 						},
 					},
 				},
@@ -652,6 +695,31 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			MaxTTL: int(action.StaleTtl.ValueInt64()),
 		}, nil
 	}
+	if action.StreamLogs != nil {
+		return &ioriver.BehaviorAction{
+			Type:                   ioriver.STREAM_LOGS,
+			UnifiedLogDestination:  action.StreamLogs.UnifiedLogDestination.ValueString(),
+			UnifiedLogSamplingRate: int(action.StreamLogs.UnifiedLogSamplingRate.ValueInt64()),
+		}, nil
+	}
+	if !action.AllowedMethods.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:           ioriver.ALLOWED_METHODS,
+			AllowedMethods: action.AllowedMethods.ValueString(),
+		}, nil
+	}
+	if !action.Compression.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:    ioriver.COMPRESSION,
+			Enabled: action.Compression.ValueBool(),
+		}, nil
+	}
+	if !action.GenerateResponse.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:             ioriver.GENERATE_RESPONSE,
+			ResponsePagePath: action.GenerateResponse.ValueString(),
+		}, nil
+	}
 
 	return nil, fmt.Errorf("Unsupported action type")
 }
@@ -775,6 +843,31 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 			StaleTtl: types.Int64Value(int64(behaviorAction.MaxTTL)),
 		}, nil
 	}
+	if behaviorAction.Type == ioriver.STREAM_LOGS {
+		streamLogs := &StreamLogsModel{
+			UnifiedLogDestination:  types.StringValue(behaviorAction.UnifiedLogDestination),
+			UnifiedLogSamplingRate: types.Int64Value(int64(behaviorAction.UnifiedLogSamplingRate)),
+		}
+		return &BehaviorActionResourceModel{
+			StreamLogs: streamLogs,
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.ALLOWED_METHODS {
+		return &BehaviorActionResourceModel{
+			AllowedMethods: types.StringValue(behaviorAction.AllowedMethods),
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.COMPRESSION {
+		return &BehaviorActionResourceModel{
+			Compression: types.BoolValue(behaviorAction.Enabled),
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
+		return &BehaviorActionResourceModel{
+			GenerateResponse: types.StringValue(behaviorAction.ResponsePagePath),
+		}, nil
+	}
+
 	return nil, fmt.Errorf("Unsupported action type %s", actionType)
 }
 
