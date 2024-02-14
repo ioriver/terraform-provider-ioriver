@@ -14,7 +14,6 @@ AccountProvider resource
 
 ```terraform
 resource "ioriver_account_provider" "fastly" {
-  provider_name = "fastly"
   credentials = {
     fastly = "ulMy_iABCh-6fzo6cvRblzEJ1auAlvu"
   }
@@ -27,7 +26,6 @@ resource "ioriver_account_provider" "fastly" {
 ### Required
 
 - `credentials` (Attributes, Sensitive) Account-Provider credentials (see [below for nested schema](#nestedatt--credentials))
-- `provider_name` (String) Account-Provider provider name
 
 ### Read-Only
 
@@ -45,10 +43,27 @@ Optional:
 <a id="nestedatt--credentials--cloudfront"></a>
 ### Nested Schema for `credentials.cloudfront`
 
+Optional:
+
+- `access_key` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
+- `assume_role` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
+
+<a id="nestedatt--credentials--cloudfront--access_key"></a>
+### Nested Schema for `credentials.cloudfront.access_key`
+
 Required:
 
 - `access_key` (String)
-- `access_secret` (String)
+- `secret_key` (String)
+
+
+<a id="nestedatt--credentials--cloudfront--assume_role"></a>
+### Nested Schema for `credentials.cloudfront.assume_role`
+
+Required:
+
+- `external_id` (String)
+- `role_arn` (String)
 
 ## Import
 

@@ -73,16 +73,19 @@ resource "ioriver_behavior" "example_behavior" {
 
 Optional:
 
+- `allowed_methods` (String) Comma separated list of allowed methods
 - `auto_minify` (String) Use the provided auto-minify configuration
 - `browser_cache_ttl` (Number) Set value of browser cache TTL
 - `bypass_cache_on_cookie` (String) Bypass cache if the provided cookie exists
 - `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
 - `cache_key` (String) Use custom cache key configuration
 - `cache_ttl` (Number) Set value of edge cache TTL
+- `compression` (Boolean) Enable compression
 - `cors_header` (Attributes) CORS header to be added within the response (see [below for nested schema](#nestedatt--actions--cors_header))
 - `follow_redirects` (Boolean) Enable follow redirect in case origin returns a redirect response
 - `forward_client_header` (String) Header to be forwarded to the origin
 - `generate_preflight_response` (Attributes) Define auto generate preflight response (see [below for nested schema](#nestedatt--actions--generate_preflight_response))
+- `generate_response` (String) Response page path for custom resonse
 - `host_header` (String) Override host header with the provided value
 - `origin_cache_control` (Boolean) Enable origin cache control
 - `origin_error_pass_through` (Boolean) Enable origin error pass through
@@ -93,6 +96,7 @@ Optional:
 - `stale_ttl` (Number) Set value of stale TTL (in case of origin issue, the CDN will serve stale content for that period of time)
 - `status_code_browser_cache` (Attributes) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_browser_cache))
 - `status_code_cache` (Attributes) Define edge cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_cache))
+- `stream_logs` (Attributes) Define streaming of unifield logs (see [below for nested schema](#nestedatt--actions--stream_logs))
 
 <a id="nestedatt--actions--cors_header"></a>
 ### Nested Schema for `actions.cors_header`
@@ -138,6 +142,15 @@ Required:
 - `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
 - `cache_ttl` (Number) Value of edge cache TTL
 - `status_code` (String) Status code to apply the configuratoin for (1xx,2xx,.. can be used for ranges)
+
+
+<a id="nestedatt--actions--stream_logs"></a>
+### Nested Schema for `actions.stream_logs`
+
+Required:
+
+- `unified_log_destination` (String) Destination for the logs streaming
+- `unified_log_sampling_rate` (Number) Sampling rate for the logs (1-100)
 
 ## Import
 
