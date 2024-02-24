@@ -42,6 +42,7 @@ resource "ioriver_certificate" "managed_cert" {
 - `certificate_chain` (String, Sensitive) Certificate chain
 - `cn` (String) Certificate CN
 - `private_key` (String, Sensitive) Certificate private key
+- `providers_certificates` (Attributes Set) Details of the certificate as it is deployed on each provider. This field is required only for EXTERNAL certificates. (see [below for nested schema](#nestedatt--providers_certificates))
 
 ### Read-Only
 
@@ -49,6 +50,20 @@ resource "ioriver_certificate" "managed_cert" {
 - `id` (String) Certificate identifier
 - `not_valid_after` (String) Certificate expiration date
 - `status` (String) Certificate status
+
+<a id="nestedatt--providers_certificates"></a>
+### Nested Schema for `providers_certificates`
+
+Required:
+
+- `account_provider` (String) The account provider of the provider certificate
+- `provider_certificate_id` (String) The id of the certificate within the provider:
+							aws - The certificate arn
+							fastly - key and certificate ids in the json format: {"private_key_id": "", "certificate_id": ""}
+
+Read-Only:
+
+- `not_valid_after` (String) Certificate expiration date
 
 ## Import
 

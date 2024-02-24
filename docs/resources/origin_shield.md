@@ -33,7 +33,7 @@ resource "ioriver_origin_shield" "example_shield" {
 ### Required
 
 - `location` (Attributes) Location of the origin (see [below for nested schema](#nestedatt--location))
-- `providers` (Attributes List) List of service provider within this policy (see [below for nested schema](#nestedatt--providers))
+- `providers` (Attributes List) List of service providers to enable origin-shield for (see [below for nested schema](#nestedatt--providers))
 - `service` (String) The id of the service this OriginShield belongs to
 
 ### Read-Only
@@ -45,11 +45,11 @@ resource "ioriver_origin_shield" "example_shield" {
 
 Required:
 
-- `country` (String)
+- `country` (String) The country in which the origin is located
 
 Optional:
 
-- `subdivision` (String)
+- `subdivision` (String) The subdivision in which the origin is located. It is required when the country is US in order to specify US state
 
 
 <a id="nestedatt--providers"></a>
@@ -61,7 +61,7 @@ Required:
 
 Read-Only:
 
-- `provider_location` (String) Origin-shield location for the provider
+- `provider_location` (String) Specific origin-shield location of the provider
 
 ## Import
 

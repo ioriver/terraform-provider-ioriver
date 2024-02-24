@@ -73,19 +73,20 @@ resource "ioriver_behavior" "example_behavior" {
 
 Optional:
 
-- `allowed_methods` (String) Comma separated list of allowed methods
+- `allowed_methods` (String) Comma separated list of allowed HTTP methods
 - `auto_minify` (String) Use the provided auto-minify configuration
 - `browser_cache_ttl` (Number) Set value of browser cache TTL
 - `bypass_cache_on_cookie` (String) Bypass cache if the provided cookie exists
 - `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
 - `cache_key` (String) Use custom cache key configuration
 - `cache_ttl` (Number) Set value of edge cache TTL
-- `compression` (Boolean) Enable compression
+- `cached_methods` (String) Comma separated list of HTTP methods which will be cached
+- `compression` (Boolean) Enable or disable compression
 - `cors_header` (Attributes) CORS header to be added within the response (see [below for nested schema](#nestedatt--actions--cors_header))
 - `follow_redirects` (Boolean) Enable follow redirect in case origin returns a redirect response
 - `forward_client_header` (String) Header to be forwarded to the origin
 - `generate_preflight_response` (Attributes) Define auto generate preflight response (see [below for nested schema](#nestedatt--actions--generate_preflight_response))
-- `generate_response` (String) Response page path for custom resonse
+- `generate_response` (Attributes) Generate a custome response for specific status code(s) (see [below for nested schema](#nestedatt--actions--generate_response))
 - `host_header` (String) Override host header with the provided value
 - `origin_cache_control` (Boolean) Enable origin cache control
 - `origin_error_pass_through` (Boolean) Enable origin error pass through
@@ -114,6 +115,15 @@ Required:
 
 - `allowed_methods` (String) Comma separated allowed methods (value of `Access-Control-Allow-Methods` response header)
 - `max_age` (Number) Response cache TTL (value of `Access-Control-Max-Age` response header)
+
+
+<a id="nestedatt--actions--generate_response"></a>
+### Nested Schema for `actions.generate_response`
+
+Required:
+
+- `response_page_path` (String) Path of the custom response page
+- `status_code` (String) Status code to generate custome response for (1xx,2xx,.. can be used for ranges)
 
 
 <a id="nestedatt--actions--response_header"></a>

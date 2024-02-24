@@ -38,6 +38,7 @@ Optional:
 
 - `cloudflare` (String)
 - `cloudfront` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront))
+- `edgio` (Attributes) (see [below for nested schema](#nestedatt--credentials--edgio))
 - `fastly` (String)
 
 <a id="nestedatt--credentials--cloudfront"></a>
@@ -64,6 +65,17 @@ Required:
 
 - `external_id` (String)
 - `role_arn` (String)
+
+
+
+<a id="nestedatt--credentials--edgio"></a>
+### Nested Schema for `credentials.edgio`
+
+Required:
+
+- `client_id` (String)
+- `client_secret` (String)
+- `organization_id` (String)
 
 ## Import
 
