@@ -64,6 +64,11 @@ type StreamLogsModel struct {
 	UnifiedLogSamplingRate types.Int64  `tfsdk:"unified_log_sampling_rate"`
 }
 
+type GenerateResponseModel struct {
+	StatusCode       types.String `tfsdk:"status_code"`
+	ResponsePagePath types.String `tfsdk:"response_page_path"`
+}
+
 type BehaviorResourceModel struct {
 	Id          types.String                  `tfsdk:"id"`
 	Service     types.String                  `tfsdk:"service"`
@@ -97,7 +102,8 @@ type BehaviorActionResourceModel struct {
 	StreamLogs                *StreamLogsModel                `tfsdk:"stream_logs"`
 	AllowedMethods            types.String                    `tfsdk:"allowed_methods"`
 	Compression               types.Bool                      `tfsdk:"compression"`
-	GenerateResponse          types.String                    `tfsdk:"generate_response"`
+	GenerateResponse          *GenerateResponseModel          `tfsdk:"generate_response"`
+	CachedMethods             types.String                    `tfsdk:"cached_methods"`
 }
 
 func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -198,6 +204,7 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("allowed_methods"),
 									path.MatchRelative().AtParent().AtName("compression"),
 									path.MatchRelative().AtParent().AtName("generate_response"),
+									path.MatchRelative().AtParent().AtName("cached_methods"),
 								}...),
 							},
 						},
@@ -363,15 +370,29 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							},
 						},
 						"allowed_methods": schema.StringAttribute{
-							MarkdownDescription: "Comma separated list of allowed methods",
+							MarkdownDescription: "Comma separated list of allowed HTTP methods",
 							Optional:            true,
 						},
 						"compression": schema.BoolAttribute{
-							MarkdownDescription: "Enable compression",
+							MarkdownDescription: "Enable or disable compression",
 							Optional:            true,
 						},
-						"generate_response": schema.StringAttribute{
-							MarkdownDescription: "Response page path for custom resonse",
+						"generate_response": schema.SingleNestedAttribute{
+							MarkdownDescription: "Generate a custome response for specific status code(s)",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"status_code": schema.StringAttribute{
+									MarkdownDescription: "Status code to generate custome response for (1xx,2xx,.. can be used for ranges)",
+									Required:            true,
+								},
+								"response_page_path": schema.StringAttribute{
+									MarkdownDescription: "Path of the custom response page",
+									Required:            true,
+								},
+							},
+						},
+						"cached_methods": schema.StringAttribute{
+							MarkdownDescription: "Comma separated list of HTTP methods which will be cached",
 							Optional:            true,
 						},
 					},
@@ -714,10 +735,21 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			Enabled: action.Compression.ValueBool(),
 		}, nil
 	}
-	if !action.GenerateResponse.IsNull() {
+	if action.GenerateResponse != nil {
+		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
+		if err != nil {
+			return nil, fmt.Errorf("Invalid status code %s", action.GenerateResponse.StatusCode.ValueString())
+		}
 		return &ioriver.BehaviorAction{
 			Type:             ioriver.GENERATE_RESPONSE,
-			ResponsePagePath: action.GenerateResponse.ValueString(),
+			StatusCode:       statusCode,
+			ResponsePagePath: action.GenerateResponse.ResponsePagePath.ValueString(),
+		}, nil
+	}
+	if !action.CachedMethods.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:             ioriver.CACHED_METHODS,
+			ResponsePagePath: action.CachedMethods.ValueString(),
 		}, nil
 	}
 
@@ -863,8 +895,17 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
+		generateResponse := &GenerateResponseModel{
+			StatusCode:       types.StringValue(statusCodeToString(behaviorAction.StatusCode)),
+			ResponsePagePath: types.StringValue(behaviorAction.ResponsePagePath),
+		}
 		return &BehaviorActionResourceModel{
-			GenerateResponse: types.StringValue(behaviorAction.ResponsePagePath),
+			GenerateResponse: generateResponse,
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.CACHED_METHODS {
+		return &BehaviorActionResourceModel{
+			CachedMethods: types.StringValue(behaviorAction.CachedMethods),
 		}, nil
 	}
 

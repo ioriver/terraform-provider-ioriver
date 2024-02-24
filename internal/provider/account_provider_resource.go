@@ -44,10 +44,17 @@ type CloudfrontCredsModel struct {
 	AssumeRole *AwsAssumeRoleModel `tfsdk:"assume_role"`
 }
 
+type EdgioCredsModel struct {
+	CliendId       types.String `tfsdk:"client_id"`
+	ClientSecret   types.String `tfsdk:"client_secret"`
+	OrganizationId types.String `tfsdk:"organization_id"`
+}
+
 type CredentialsModel struct {
 	Fastly     types.String          `tfsdk:"fastly"`
 	Cloudflare types.String          `tfsdk:"cloudflare"`
 	Cloudfront *CloudfrontCredsModel `tfsdk:"cloudfront"`
+	Edgio      *EdgioCredsModel      `tfsdk:"edgio"`
 }
 
 type AccountProviderResourceModel struct {
@@ -82,6 +89,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRelative().AtParent().AtName("cloudflare"),
 								path.MatchRelative().AtParent().AtName("cloudfront"),
+								path.MatchRelative().AtParent().AtName("edgio"),
 							}...),
 						},
 					},
@@ -117,6 +125,20 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 										Required: true,
 									},
 								},
+							},
+						},
+					},
+					"edgio": schema.SingleNestedAttribute{
+						Optional: true,
+						Attributes: map[string]schema.Attribute{
+							"client_id": schema.StringAttribute{
+								Required: true,
+							},
+							"client_secret": schema.StringAttribute{
+								Required: true,
+							},
+							"organization_id": schema.StringAttribute{
+								Required: true,
 							},
 						},
 					},
@@ -263,25 +285,10 @@ func convertProviderName(name string) int {
 		providerId = ioriver.AzureCDN
 	case "akamai":
 		providerId = ioriver.Akamai
+	case "edgio":
+		providerId = ioriver.Edgio
 	}
 	return providerId
-}
-
-func convertProviderId(id int) string {
-	name := ""
-	switch id {
-	case ioriver.Fastly:
-		name = "fastly"
-	case ioriver.Cloudflare:
-		name = "cloudflare"
-	case ioriver.Cloudfront:
-		name = "cloudfront"
-	case ioriver.AzureCDN:
-		name = "azure_cdn"
-	case ioriver.Akamai:
-		name = "akamai"
-	}
-	return name
 }
 
 func convertCredentials(credsMap CredentialsModel) (credentials interface{}, name string) {
@@ -305,6 +312,12 @@ func convertCredentials(credsMap CredentialsModel) (credentials interface{}, nam
 				credsMap.Cloudfront.AssumeRole.RoleArn.ValueString(),
 				credsMap.Cloudfront.AssumeRole.ExternalId.ValueString())
 		}
+	} else if credsMap.Edgio != nil {
+		name = "edgio"
+		credentials = fmt.Sprintf("{\"client_id\":\"%s\",\"client_secret\":\"%s\",\"organization_id\":\"%s\"}",
+			credsMap.Edgio.CliendId.ValueString(),
+			credsMap.Edgio.ClientSecret.ValueString(),
+			credsMap.Edgio.OrganizationId.ValueString())
 	}
 
 	return credentials, name

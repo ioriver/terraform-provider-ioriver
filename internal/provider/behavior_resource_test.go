@@ -245,6 +245,15 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 			{
 				allowed_methods = "GET,HEAD,OPTIONS"
 			},
+			{
+				compression = false
+			},
+			{
+				generate_response = {
+					status_code        = "403"
+					response_page_path  = "/custom_403"
+				}
+			},
 		]
 	}`, rndName, serviceId, rndName, path_pattern)
 }
@@ -283,6 +292,15 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 			},
 			{
 				allowed_methods = "GET,HEAD,OPTIONS"
+			},
+			{
+				compression = false
+			},
+			{
+				generate_response = {
+					status_code        = "403"
+					response_page_path  = "/custom_403"
+				}
 			},
 		]
 	}`, rndName, serviceId, ttl)
