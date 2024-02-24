@@ -73,16 +73,18 @@ func (r *OriginShieldResource) Schema(ctx context.Context, req resource.SchemaRe
 				Required:            true,
 				Attributes: map[string]schema.Attribute{
 					"country": schema.StringAttribute{
-						Required: true,
+						MarkdownDescription: "The country in which the origin is located",
+						Required:            true,
 					},
 					"subdivision": schema.StringAttribute{
-						Optional: true,
-						Computed: true,
+						MarkdownDescription: "The subdivision in which the origin is located. It is required when the country is US in order to specify US state",
+						Optional:            true,
+						Computed:            true,
 					},
 				},
 			},
 			"providers": schema.ListNestedAttribute{
-				MarkdownDescription: "List of service provider within this policy",
+				MarkdownDescription: "List of service providers to enable origin-shield for",
 				Required:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -91,7 +93,7 @@ func (r *OriginShieldResource) Schema(ctx context.Context, req resource.SchemaRe
 							Required:            true,
 						},
 						"provider_location": schema.StringAttribute{
-							MarkdownDescription: "Origin-shield location for the provider",
+							MarkdownDescription: "Specific origin-shield location of the provider",
 							Computed:            true,
 						},
 					},

@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -12,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	ioriver "github.com/ioriver/ioriver-go"
+	"github.com/ioriver/ioriver-go"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -28,17 +30,33 @@ type CertificateResource struct {
 	client *ioriver.IORiverClient
 }
 
+type ProviderCertificateModel struct {
+	AccountProvider       types.String `tfsdk:"account_provider"`
+	ProviderCertificateId types.String `tfsdk:"provider_certificate_id"`
+	NotValidAfter         types.String `tfsdk:"not_valid_after"`
+}
+
+// used for converting to ObjectValue
+func (m ProviderCertificateModel) AttributeTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"account_provider":        types.StringType,
+		"provider_certificate_id": types.StringType,
+		"not_valid_after":         types.StringType,
+	}
+}
+
 type CertificateResourceModel struct {
-	Id               types.String `tfsdk:"id"`
-	Name             types.String `tfsdk:"name"`
-	Type             types.String `tfsdk:"type"`
-	Cn               types.String `tfsdk:"cn"`
-	NotValidAfter    types.String `tfsdk:"not_valid_after"`
-	Certificate      types.String `tfsdk:"certificate"`
-	PrivateKey       types.String `tfsdk:"private_key"`
-	CertificateChain types.String `tfsdk:"certificate_chain"`
-	Challenges       types.String `tfsdk:"challenges"`
-	Status           types.String `tfsdk:"status"`
+	Id                    types.String `tfsdk:"id"`
+	Name                  types.String `tfsdk:"name"`
+	Type                  types.String `tfsdk:"type"`
+	Cn                    types.String `tfsdk:"cn"`
+	NotValidAfter         types.String `tfsdk:"not_valid_after"`
+	Certificate           types.String `tfsdk:"certificate"`
+	PrivateKey            types.String `tfsdk:"private_key"`
+	CertificateChain      types.String `tfsdk:"certificate_chain"`
+	Challenges            types.String `tfsdk:"challenges"`
+	Status                types.String `tfsdk:"status"`
+	ProvidersCertificates types.Set    `tfsdk:"providers_certificates"`
 }
 
 func (r *CertificateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -111,6 +129,29 @@ func (r *CertificateResource) Schema(ctx context.Context, req resource.SchemaReq
 			"status": schema.StringAttribute{
 				MarkdownDescription: "Certificate status",
 				Computed:            true,
+			},
+			"providers_certificates": schema.SetNestedAttribute{
+				MarkdownDescription: "Details of the certificate as it is deployed on each provider. This field is required only for EXTERNAL certificates.",
+				Optional:            true,
+				Computed:            true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"account_provider": schema.StringAttribute{
+							MarkdownDescription: "The account provider of the provider certificate",
+							Required:            true,
+						},
+						"provider_certificate_id": schema.StringAttribute{
+							MarkdownDescription: `The id of the certificate within the provider:
+							aws - The certificate arn
+							fastly - key and certificate ids in the json format: {"private_key_id": "", "certificate_id": ""}`,
+							Required: true,
+						},
+						"not_valid_after": schema.StringAttribute{
+							MarkdownDescription: "Certificate expiration date",
+							Computed:            true,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -232,31 +273,70 @@ func (CertificateResource) getId(data interface{}) interface{} {
 
 // Convert Certificate resource to Certificate API object
 func (CertificateResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
+
 	d := data.(CertificateResourceModel)
+
+	// convert providers certificates
+	providersCertsModel := make([]ProviderCertificateModel, 0, len(d.ProvidersCertificates.Elements()))
+	d.ProvidersCertificates.ElementsAs(ctx, &providersCertsModel, false)
+
+	providersCertificates := []ioriver.ProviderCertificate{}
+	for _, providerCert := range providersCertsModel {
+		providersCertificates = append(providersCertificates,
+			ioriver.ProviderCertificate{
+				AccountProvider:       providerCert.AccountProvider.ValueString(),
+				ProviderCertificateId: providerCert.ProviderCertificateId.ValueString(),
+			})
+	}
+
 	return ioriver.Certificate{
-		Id:               d.Id.ValueString(),
-		Name:             d.Name.ValueString(),
-		Type:             ioriver.CertificateType(d.Type.ValueString()),
-		Cn:               d.Cn.ValueString(),
-		Certificate:      d.Certificate.ValueString(),
-		PrivateKey:       d.PrivateKey.ValueString(),
-		CertificateChain: d.CertificateChain.ValueString()}, nil
+		Id:                    d.Id.ValueString(),
+		Name:                  d.Name.ValueString(),
+		Type:                  ioriver.CertificateType(d.Type.ValueString()),
+		Cn:                    d.Cn.ValueString(),
+		Certificate:           d.Certificate.ValueString(),
+		PrivateKey:            d.PrivateKey.ValueString(),
+		CertificateChain:      d.CertificateChain.ValueString(),
+		ProvidersCertificates: providersCertificates,
+	}, nil
 }
 
 // Convert Certificate API object to Certificate resource
 func (CertificateResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
 	cert := obj.(*ioriver.Certificate)
 
+	// convert providers certificates
+	modelProvidersCertificates := []attr.Value{}
+	for _, providerCert := range cert.ProvidersCertificates {
+		value := ProviderCertificateModel{
+			AccountProvider:       types.StringValue(providerCert.AccountProvider),
+			ProviderCertificateId: types.StringValue(providerCert.ProviderCertificateId),
+			NotValidAfter:         types.StringValue(providerCert.NotValidAfter),
+		}
+
+		objectValue, diags := types.ObjectValueFrom(ctx, value.AttributeTypes(), value)
+		if diags.HasError() {
+			return nil, fmt.Errorf("failed to set provider certificate object")
+		}
+		modelProvidersCertificates = append(modelProvidersCertificates, objectValue)
+	}
+	certsModelAttr := ProviderCertificateModel{}.AttributeTypes()
+	providersCertsValue, diags := types.SetValue(types.ObjectType{AttrTypes: certsModelAttr}, modelProvidersCertificates)
+	if diags.HasError() {
+		return nil, fmt.Errorf("failed to set providers certificates field")
+	}
+
 	return CertificateResourceModel{
-		Id:               types.StringValue(cert.Id),
-		Name:             types.StringValue(cert.Name),
-		Type:             types.StringValue(string(cert.Type)),
-		Cn:               types.StringValue(cert.Cn),
-		NotValidAfter:    types.StringValue(cert.NotValidAfter),
-		Certificate:      types.StringValue(""),
-		PrivateKey:       types.StringValue(""),
-		CertificateChain: types.StringValue(""),
-		Challenges:       types.StringValue(cert.Challenges),
-		Status:           types.StringValue(string(cert.Status)),
+		Id:                    types.StringValue(cert.Id),
+		Name:                  types.StringValue(cert.Name),
+		Type:                  types.StringValue(string(cert.Type)),
+		Cn:                    types.StringValue(cert.Cn),
+		NotValidAfter:         types.StringValue(cert.NotValidAfter),
+		Certificate:           types.StringValue(""),
+		PrivateKey:            types.StringValue(""),
+		CertificateChain:      types.StringValue(""),
+		Challenges:            types.StringValue(cert.Challenges),
+		Status:                types.StringValue(string(cert.Status)),
+		ProvidersCertificates: providersCertsValue,
 	}, nil
 }
