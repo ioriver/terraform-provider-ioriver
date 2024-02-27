@@ -84,7 +84,8 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 				Sensitive:           true,
 				Attributes: map[string]schema.Attribute{
 					"fastly": schema.StringAttribute{
-						Optional: true,
+						MarkdownDescription: "Fastly API access token",
+						Optional:            true,
 						Validators: []validator.String{
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRelative().AtParent().AtName("cloudflare"),
@@ -94,13 +95,16 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 						},
 					},
 					"cloudflare": schema.StringAttribute{
-						Optional: true,
+						MarkdownDescription: "Cloudflare API access token",
+						Optional:            true,
 					},
 					"cloudfront": schema.SingleNestedAttribute{
-						Optional: true,
+						MarkdownDescription: "Either AWS role or access-key credentials",
+						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"access_key": schema.SingleNestedAttribute{
-								Optional: true,
+								MarkdownDescription: "AWS access-key credentials",
+								Optional:            true,
 								Validators: []validator.Object{
 									objectvalidator.ExactlyOneOf(path.Expressions{
 										path.MatchRelative().AtParent().AtName("assume_role"),
@@ -108,37 +112,46 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 								},
 								Attributes: map[string]schema.Attribute{
 									"access_key": schema.StringAttribute{
-										Required: true,
+										MarkdownDescription: "AWS access-key ID",
+										Required:            true,
 									},
 									"secret_key": schema.StringAttribute{
-										Required: true,
+										MarkdownDescription: "AWS access-key secret",
+										Required:            true,
 									},
 								},
 							},
 							"assume_role": schema.SingleNestedAttribute{
-								Optional: true,
+								MarkdownDescription: "AWS role credentials",
+								Optional:            true,
 								Attributes: map[string]schema.Attribute{
 									"role_arn": schema.StringAttribute{
-										Required: true,
+										MarkdownDescription: "AWS role ARN",
+										Required:            true,
 									},
 									"external_id": schema.StringAttribute{
-										Required: true,
+										MarkdownDescription: "AWS role external ID",
+										Required:            true,
 									},
 								},
 							},
 						},
 					},
 					"edgio": schema.SingleNestedAttribute{
-						Optional: true,
+						MarkdownDescription: "Edgio API credentials",
+						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"client_id": schema.StringAttribute{
-								Required: true,
+								MarkdownDescription: "Edgio API client ID",
+								Required:            true,
 							},
 							"client_secret": schema.StringAttribute{
-								Required: true,
+								MarkdownDescription: "Edgio API client secret",
+								Required:            true,
 							},
 							"organization_id": schema.StringAttribute{
-								Required: true,
+								MarkdownDescription: "Edgio organization ID",
+								Required:            true,
 							},
 						},
 					},

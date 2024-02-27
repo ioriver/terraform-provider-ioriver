@@ -13,15 +13,12 @@ resource "ioriver_traffic_policy" "default_traffic_policy" {
       weight           = 50
     }
   ]
-  geos = [
-    {
-    },
-  ]
+  geos = []
 
   health_monitors = [
-    ioriver_health_monitor.availability_monitor.id
+    {
+      health_monitor = ioriver_health_monitor.availability_monitor.id
+    }
   ]
-  performance_monitors = [
-    ioriver_health_monitor.perf_mon.id
-  ]
+  performance_monitors = []
 }
