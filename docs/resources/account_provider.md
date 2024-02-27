@@ -36,26 +36,26 @@ resource "ioriver_account_provider" "fastly" {
 
 Optional:
 
-- `cloudflare` (String)
-- `cloudfront` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront))
-- `edgio` (Attributes) (see [below for nested schema](#nestedatt--credentials--edgio))
-- `fastly` (String)
+- `cloudflare` (String) Cloudflare API access token
+- `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
+- `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
+- `fastly` (String) Fastly API access token
 
 <a id="nestedatt--credentials--cloudfront"></a>
 ### Nested Schema for `credentials.cloudfront`
 
 Optional:
 
-- `access_key` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
-- `assume_role` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
+- `access_key` (Attributes) AWS access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
+- `assume_role` (Attributes) AWS role credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
 
 <a id="nestedatt--credentials--cloudfront--access_key"></a>
 ### Nested Schema for `credentials.cloudfront.access_key`
 
 Required:
 
-- `access_key` (String)
-- `secret_key` (String)
+- `access_key` (String) AWS access-key ID
+- `secret_key` (String) AWS access-key secret
 
 
 <a id="nestedatt--credentials--cloudfront--assume_role"></a>
@@ -63,8 +63,8 @@ Required:
 
 Required:
 
-- `external_id` (String)
-- `role_arn` (String)
+- `external_id` (String) AWS role external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -73,9 +73,9 @@ Required:
 
 Required:
 
-- `client_id` (String)
-- `client_secret` (String)
-- `organization_id` (String)
+- `client_id` (String) Edgio API client ID
+- `client_secret` (String) Edgio API client secret
+- `organization_id` (String) Edgio organization ID
 
 ## Import
 
