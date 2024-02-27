@@ -30,6 +30,7 @@ type ServiceResourceModel struct {
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
 	Certificate types.String `tfsdk:"certificate"`
+	Cname       types.String `tfsdk:"cname"`
 }
 
 func (r *ServiceResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -65,6 +66,10 @@ func (r *ServiceResource) Schema(ctx context.Context, req resource.SchemaRequest
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"cname": schema.StringAttribute{
+				MarkdownDescription: "CNAME for the IO River service",
+				Computed:            true,
 			},
 		},
 	}
@@ -181,5 +186,6 @@ func (ServiceResource) objToResource(ctx context.Context, obj interface{}) (inte
 		Name:        types.StringValue(service.Name),
 		Description: types.StringValue(service.Description),
 		Certificate: types.StringValue(service.Certificate),
+		Cname:       types.StringValue(service.Cname),
 	}, nil
 }

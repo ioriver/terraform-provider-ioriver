@@ -124,7 +124,7 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 				},
 			},
 			"geos": schema.SetNestedAttribute{
-				MarkdownDescription: "List of geos to apply this policy on",
+				MarkdownDescription: "List of geos to apply this policy on (leave empty for entire world)",
 				Required:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
