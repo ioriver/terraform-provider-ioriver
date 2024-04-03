@@ -14,7 +14,6 @@ AccountProvider resource
 
 ```terraform
 resource "ioriver_account_provider" "fastly" {
-  provider_name = "fastly"
   credentials = {
     fastly = "ulMy_iABCh-6fzo6cvRblzEJ1auAlvu"
   }
@@ -27,7 +26,6 @@ resource "ioriver_account_provider" "fastly" {
 ### Required
 
 - `credentials` (Attributes, Sensitive) Account-Provider credentials (see [below for nested schema](#nestedatt--credentials))
-- `provider_name` (String) Account-Provider provider name
 
 ### Read-Only
 
@@ -38,17 +36,46 @@ resource "ioriver_account_provider" "fastly" {
 
 Optional:
 
-- `cloudflare` (String)
-- `cloudfront` (Attributes) (see [below for nested schema](#nestedatt--credentials--cloudfront))
-- `fastly` (String)
+- `cloudflare` (String) Cloudflare API access token
+- `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
+- `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
+- `fastly` (String) Fastly API access token
 
 <a id="nestedatt--credentials--cloudfront"></a>
 ### Nested Schema for `credentials.cloudfront`
 
+Optional:
+
+- `access_key` (Attributes) AWS access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
+- `assume_role` (Attributes) AWS role credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
+
+<a id="nestedatt--credentials--cloudfront--access_key"></a>
+### Nested Schema for `credentials.cloudfront.access_key`
+
 Required:
 
-- `access_key` (String)
-- `access_secret` (String)
+- `access_key` (String) AWS access-key ID
+- `secret_key` (String) AWS access-key secret
+
+
+<a id="nestedatt--credentials--cloudfront--assume_role"></a>
+### Nested Schema for `credentials.cloudfront.assume_role`
+
+Required:
+
+- `external_id` (String) AWS role external ID
+- `role_arn` (String) AWS role ARN
+
+
+
+<a id="nestedatt--credentials--edgio"></a>
+### Nested Schema for `credentials.edgio`
+
+Required:
+
+- `client_id` (String) Edgio API client ID
+- `client_secret` (String) Edgio API client secret
+- `organization_id` (String) Edgio organization ID
 
 ## Import
 

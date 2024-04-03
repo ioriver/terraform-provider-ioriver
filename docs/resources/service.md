@@ -34,6 +34,7 @@ resource "ioriver_service" "service" {
 
 ### Read-Only
 
+- `cname` (String) CNAME for the IO River service
 - `id` (String) Service identifier
 
 ## Import

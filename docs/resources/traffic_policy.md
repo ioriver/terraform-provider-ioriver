@@ -28,17 +28,14 @@ resource "ioriver_traffic_policy" "default_traffic_policy" {
       weight           = 50
     }
   ]
-  geos = [
-    {
-    },
-  ]
+  geos = []
 
   health_monitors = [
-    ioriver_health_monitor.availability_monitor.id
+    {
+      health_monitor = ioriver_health_monitor.availability_monitor.id
+    }
   ]
-  performance_monitors = [
-    ioriver_health_monitor.perf_mon.id
-  ]
+  performance_monitors = []
 }
 ```
 
@@ -48,7 +45,7 @@ resource "ioriver_traffic_policy" "default_traffic_policy" {
 ### Required
 
 - `failover` (Boolean) Is automatic failover enabled
-- `geos` (Attributes Set) List of geos to apply this policy on (see [below for nested schema](#nestedatt--geos))
+- `geos` (Attributes Set) List of geos to apply this policy on (leave empty for entire world) (see [below for nested schema](#nestedatt--geos))
 - `health_monitors` (Attributes Set) TrafficPolicy list of health monitors (see [below for nested schema](#nestedatt--health_monitors))
 - `performance_monitors` (Attributes Set) TrafficPolicy list of performance monitors (see [below for nested schema](#nestedatt--performance_monitors))
 - `providers` (Attributes Set) List of service provider within this policy (see [below for nested schema](#nestedatt--providers))
