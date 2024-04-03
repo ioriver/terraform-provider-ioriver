@@ -32,11 +32,36 @@ resource "ioriver_origin" "example_origin" {
 - `is_s3` (Boolean) Is this origin a S3 bucket
 - `path` (String) Prefix path to be added to the origin request
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
+- `shield_location` (Attributes) Location of the origin shield (see [below for nested schema](#nestedatt--shield_location))
+- `shield_providers` (Attributes List) List of service providers to enable origin-shield for (see [below for nested schema](#nestedatt--shield_providers))
 - `timeout_ms` (Number) Origin timeout
 
 ### Read-Only
 
 - `id` (String) Origin identifier
+
+<a id="nestedatt--shield_location"></a>
+### Nested Schema for `shield_location`
+
+Required:
+
+- `country` (String) The country in which the origin shield is located
+
+Optional:
+
+- `subdivision` (String) The subdivision in which the origin shield is located. It is required when the country is US in order to specify US state
+
+
+<a id="nestedatt--shield_providers"></a>
+### Nested Schema for `shield_providers`
+
+Required:
+
+- `service_provider` (String) Service provider Id
+
+Read-Only:
+
+- `provider_location` (String) Specific origin-shield location of the provider
 
 ## Import
 
