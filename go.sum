@@ -109,8 +109,8 @@ github.com/huandu/xstrings v1.3.3/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq
 github.com/imdario/mergo v0.3.11/go.mod h1:jmQim1M+e3UYxmgPu/WyfjB3N3VflVyUjjjwH0dnCYA=
 github.com/imdario/mergo v0.3.15 h1:M8XP7IuFNsqUx6VPK2P9OSmsYsI/YFaGil0uD21V3dM=
 github.com/imdario/mergo v0.3.15/go.mod h1:WBLT9ZmE3lPoWsEzCh9LPo3TiwVN+ZKEjmz+hD27ysY=
-github.com/ioriver/ioriver-go v0.6.0 h1:+QaPQ/qsi+ReyNv+iCuWJ6olkX9nxsOkQQ9qFx3AEe8=
-github.com/ioriver/ioriver-go v0.6.0/go.mod h1:UUKJjSqR0U4w3nT9uynOiuqRKcV/rlSoNXDz913q3zU=
+github.com/ioriver/ioriver-go v0.7.0 h1:Ol+bLjNFBkcycnsBAzrjyuvgj+JaPh+rPBYXUaP8fzA=
+github.com/ioriver/ioriver-go v0.7.0/go.mod h1:UUKJjSqR0U4w3nT9uynOiuqRKcV/rlSoNXDz913q3zU=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=
 github.com/jhump/protoreflect v1.15.1 h1:HUMERORf3I3ZdX05WaQ6MIpd/NJ434hTp5YiKgfCL6c=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
