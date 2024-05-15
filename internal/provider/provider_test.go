@@ -85,7 +85,7 @@ func testAccCheckResourceDestroy[T interface{}](s *terraform.State, testedObj Te
 
 		// If the error is equivalent to 404 not found, the object is destroyed.
 		// Otherwise return the error
-		if !strings.Contains(err.Error(), "Not found") {
+		if !strings.Contains(err.Error(), "404") {
 			return err
 		}
 	}

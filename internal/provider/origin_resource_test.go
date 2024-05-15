@@ -53,8 +53,10 @@ func TestAccIORiverOrigin_Basic(t *testing.T) {
 	var testedObj TestedOrigin
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	rndName := generateRandomResourceName()
 	originHost := rndName + ".example.com"
+	shieldSubdivision := "VA"
 	resourceName := originResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{
@@ -65,7 +67,7 @@ func TestAccIORiverOrigin_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, originHost),
+				Config: testAccCheckOriginConfig(rndName, serviceId, originHost, fastlyToken, shieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "host", originHost),
@@ -89,9 +91,12 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 	var testedObj TestedOrigin
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	rndName := generateRandomResourceName()
 	originHost := rndName + ".example.com"
 	updatedOriginHost := "updated-" + originHost
+	shieldSubdivision := "VA"
+	updatedShieldSubdivision := "OR"
 	resourceName := originResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{
@@ -102,13 +107,13 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, originHost),
+				Config: testAccCheckOriginConfig(rndName, serviceId, originHost, fastlyToken, shieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 				),
 			},
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, updatedOriginHost),
+				Config: testAccCheckOriginConfig(rndName, serviceId, updatedOriginHost, fastlyToken, updatedShieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "host", updatedOriginHost),
@@ -118,11 +123,32 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 	})
 }
 
-func testAccCheckOriginConfig(rndName string, serviceId string, host string) string {
+func testAccCheckOriginConfig(rndName string, serviceId string, host string, fastlyToken string,
+	shieldSubdivision string) string {
 	return fmt.Sprintf(`
+	resource "ioriver_account_provider" "tf_test_account_provider" {
+		credentials = {
+		  fastly = "%s"
+		}
+	}
+
+	resource "ioriver_service_provider" "tf_test_service_provider" {
+		service          = "%s"
+		account_provider = ioriver_account_provider.tf_test_account_provider.id
+	}
+	
 	resource "ioriver_origin" "%s" {
 		service        = "%s"
 		host           = "%s"
 		timeout_ms     = 5000
-	}`, rndName, serviceId, host)
+		shield_location = {
+			country = "US"
+			subdivision = "%s"
+		}
+		shield_providers = [
+			{
+				service_provider = ioriver_service_provider.tf_test_service_provider.id
+			}
+		]
+	}`, fastlyToken, serviceId, rndName, serviceId, host, shieldSubdivision)
 }
