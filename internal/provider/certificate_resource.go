@@ -305,20 +305,24 @@ func (CertificateResource) resourceToObj(ctx context.Context, data interface{}) 
 func (CertificateResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
 	cert := obj.(*ioriver.Certificate)
 
-	// convert providers certificates
+	// convert providers certificates only for EXTERNAL certificates, otherwise it should be empty.
+	// We have to ignore it for non EXTERNAL, otherwise since this optional terraform field, terraform will try to set it
+	// to an empty set.
 	modelProvidersCertificates := []attr.Value{}
-	for _, providerCert := range cert.ProvidersCertificates {
-		value := ProviderCertificateModel{
-			AccountProvider:       types.StringValue(providerCert.AccountProvider),
-			ProviderCertificateId: types.StringValue(providerCert.ProviderCertificateId),
-			NotValidAfter:         types.StringValue(providerCert.NotValidAfter),
-		}
+	if cert.Type == "EXTERNAL" {
+		for _, providerCert := range cert.ProvidersCertificates {
+			value := ProviderCertificateModel{
+				AccountProvider:       types.StringValue(providerCert.AccountProvider),
+				ProviderCertificateId: types.StringValue(providerCert.ProviderCertificateId),
+				NotValidAfter:         types.StringValue(providerCert.NotValidAfter),
+			}
 
-		objectValue, diags := types.ObjectValueFrom(ctx, value.AttributeTypes(), value)
-		if diags.HasError() {
-			return nil, fmt.Errorf("failed to set provider certificate object")
+			objectValue, diags := types.ObjectValueFrom(ctx, value.AttributeTypes(), value)
+			if diags.HasError() {
+				return nil, fmt.Errorf("failed to set provider certificate object")
+			}
+			modelProvidersCertificates = append(modelProvidersCertificates, objectValue)
 		}
-		modelProvidersCertificates = append(modelProvidersCertificates, objectValue)
 	}
 	certsModelAttr := ProviderCertificateModel{}.AttributeTypes()
 	providersCertsValue, diags := types.SetValue(types.ObjectType{AttrTypes: certsModelAttr}, modelProvidersCertificates)
