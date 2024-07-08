@@ -25,7 +25,7 @@ resource "ioriver_account_provider" "fastly" {
 
 ### Required
 
-- `credentials` (Attributes, Sensitive) Account-Provider credentials (see [below for nested schema](#nestedatt--credentials))
+- `credentials` (Attributes) Account-Provider credentials (see [below for nested schema](#nestedatt--credentials))
 
 ### Read-Only
 
@@ -36,18 +36,18 @@ resource "ioriver_account_provider" "fastly" {
 
 Optional:
 
-- `cloudflare` (String) Cloudflare API access token
+- `cloudflare` (String, Sensitive) Cloudflare API access token
 - `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
-- `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
-- `fastly` (String) Fastly API access token
+- `edgio` (Attributes, Sensitive) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
+- `fastly` (String, Sensitive) Fastly API access token
 
 <a id="nestedatt--credentials--cloudfront"></a>
 ### Nested Schema for `credentials.cloudfront`
 
 Optional:
 
-- `access_key` (Attributes) AWS access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
-- `assume_role` (Attributes) AWS role credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
+- `access_key` (Attributes, Sensitive) AWS access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--access_key))
+- `assume_role` (Attributes, Sensitive) AWS role credentials (see [below for nested schema](#nestedatt--credentials--cloudfront--assume_role))
 
 <a id="nestedatt--credentials--cloudfront--access_key"></a>
 ### Nested Schema for `credentials.cloudfront.access_key`
