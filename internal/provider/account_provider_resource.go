@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -81,11 +82,11 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 			"credentials": schema.SingleNestedAttribute{
 				MarkdownDescription: "Account-Provider credentials",
 				Required:            true,
-				Sensitive:           true,
 				Attributes: map[string]schema.Attribute{
 					"fastly": schema.StringAttribute{
 						MarkdownDescription: "Fastly API access token",
 						Optional:            true,
+						Sensitive:           true,
 						Validators: []validator.String{
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRelative().AtParent().AtName("cloudflare"),
@@ -97,6 +98,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 					"cloudflare": schema.StringAttribute{
 						MarkdownDescription: "Cloudflare API access token",
 						Optional:            true,
+						Sensitive:           true,
 					},
 					"cloudfront": schema.SingleNestedAttribute{
 						MarkdownDescription: "Either AWS role or access-key credentials",
@@ -105,6 +107,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							"access_key": schema.SingleNestedAttribute{
 								MarkdownDescription: "AWS access-key credentials",
 								Optional:            true,
+								Sensitive:           true,
 								Validators: []validator.Object{
 									objectvalidator.ExactlyOneOf(path.Expressions{
 										path.MatchRelative().AtParent().AtName("assume_role"),
@@ -124,6 +127,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							"assume_role": schema.SingleNestedAttribute{
 								MarkdownDescription: "AWS role credentials",
 								Optional:            true,
+								Sensitive:           true,
 								Attributes: map[string]schema.Attribute{
 									"role_arn": schema.StringAttribute{
 										MarkdownDescription: "AWS role ARN",
@@ -140,6 +144,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 					"edgio": schema.SingleNestedAttribute{
 						MarkdownDescription: "Edgio API credentials",
 						Optional:            true,
+						Sensitive:           true,
 						Attributes: map[string]schema.Attribute{
 							"client_id": schema.StringAttribute{
 								MarkdownDescription: "Edgio API client ID",
@@ -201,6 +206,8 @@ func (r *AccountProviderResource) Read(ctx context.Context, req resource.ReadReq
 	// AccountProvider credential field is write-only which we need to preserve from original request
 	newAC := newData.(AccountProviderResourceModel)
 	newAC.Credentials = data.Credentials
+
+	tflog.Warn(ctx, fmt.Sprintf("Object: %#v", data.Credentials))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newAC)...)
 }
