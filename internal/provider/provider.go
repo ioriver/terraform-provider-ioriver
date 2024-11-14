@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -9,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -73,9 +75,12 @@ func (p *IORiverProvider) Configure(ctx context.Context, req provider.ConfigureR
 		endpoint = "https://manage.ioriver.io/api/v1/"
 	}
 
+	tflog.Info(ctx, fmt.Sprintf("IORiver version: %s", p.version))
+
 	// client configuration for data sources and resources
 	client := ioriver.NewClient(apiToken)
 	client.EndpointUrl = endpoint
+	client.TerraformVersion = p.version
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
