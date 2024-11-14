@@ -22,7 +22,41 @@ resource "ioriver_behavior" "example_behavior" {
       cache_behavior = "CACHE"
     },
     {
+      cached_methods = [
+        {
+          method = "GET"
+        },
+        {
+          method = "HEAD"
+        },
+      ]
+    },
+    {
       cache_ttl = 86400
+    },
+    {
+      cache_key = {
+        headers = [
+          {
+            header = "host"
+          },
+          {
+            header = "origin"
+          },
+        ],
+        cookies = [],
+        query_strings = {
+          type = "include"
+          list = [
+            {
+              param = "p1"
+            },
+            {
+              param = "p2"
+            },
+          ]
+        },
+      },
     },
     {
       browser_cache_ttl = 120
@@ -55,7 +89,7 @@ resource "ioriver_behavior" "example_behavior" {
 
 ### Required
 
-- `actions` (Attributes List) List of actions to apply on the path pattern. Each element in the list defines a single action. (see [below for nested schema](#nestedatt--actions))
+- `actions` (Attributes Set) Sert of actions to apply on the path pattern. Each element in the set defines a single action. (see [below for nested schema](#nestedatt--actions))
 - `name` (String) Behavior name
 - `path_pattern` (String) Path pattern to apply the behavior
 - `service` (String) The id of the service this behavior belongs to
@@ -73,14 +107,14 @@ resource "ioriver_behavior" "example_behavior" {
 
 Optional:
 
-- `allowed_methods` (String) Comma separated list of allowed HTTP methods
+- `allowed_methods` (Attributes Set) Set of allowed HTTP methods (see [below for nested schema](#nestedatt--actions--allowed_methods))
 - `auto_minify` (String) Use the provided auto-minify configuration
 - `browser_cache_ttl` (Number) Set value of browser cache TTL
 - `bypass_cache_on_cookie` (String) Bypass cache if the provided cookie exists
 - `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
-- `cache_key` (String) Use custom cache key configuration
+- `cache_key` (Attributes) Custom cache key configuration (see [below for nested schema](#nestedatt--actions--cache_key))
 - `cache_ttl` (Number) Set value of edge cache TTL
-- `cached_methods` (String) Comma separated list of HTTP methods which will be cached
+- `cached_methods` (Attributes Set) Set of HTTP methods which will be cached (see [below for nested schema](#nestedatt--actions--cached_methods))
 - `compression` (Boolean) Enable or disable compression
 - `cors_header` (Attributes) CORS header to be added within the response (see [below for nested schema](#nestedatt--actions--cors_header))
 - `follow_redirects` (Boolean) Enable follow redirect in case origin returns a redirect response
@@ -99,6 +133,65 @@ Optional:
 - `status_code_cache` (Attributes) Define edge cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_cache))
 - `stream_logs` (Attributes) Define streaming of unifield logs (see [below for nested schema](#nestedatt--actions--stream_logs))
 
+<a id="nestedatt--actions--allowed_methods"></a>
+### Nested Schema for `actions.allowed_methods`
+
+Required:
+
+- `method` (String) Allowed HTTP Method
+
+
+<a id="nestedatt--actions--cache_key"></a>
+### Nested Schema for `actions.cache_key`
+
+Required:
+
+- `cookies` (Attributes Set) Set of cookies to include in the cache key (see [below for nested schema](#nestedatt--actions--cache_key--cookies))
+- `headers` (Attributes Set) Set of headers to include in the cache key (see [below for nested schema](#nestedatt--actions--cache_key--headers))
+- `query_strings` (Attributes) Cache key query strings configuration (see [below for nested schema](#nestedatt--actions--cache_key--query_strings))
+
+<a id="nestedatt--actions--cache_key--cookies"></a>
+### Nested Schema for `actions.cache_key.cookies`
+
+Required:
+
+- `cookie` (String) Cookie name
+
+
+<a id="nestedatt--actions--cache_key--headers"></a>
+### Nested Schema for `actions.cache_key.headers`
+
+Required:
+
+- `header` (String) Header name
+
+
+<a id="nestedatt--actions--cache_key--query_strings"></a>
+### Nested Schema for `actions.cache_key.query_strings`
+
+Required:
+
+- `list` (Attributes Set) Set of query strings to include or exclude in the cache key (see [below for nested schema](#nestedatt--actions--cache_key--query_strings--list))
+- `type` (String) Type of the set: include, exclude, all or none
+
+<a id="nestedatt--actions--cache_key--query_strings--list"></a>
+### Nested Schema for `actions.cache_key.query_strings.type`
+
+Required:
+
+- `param` (String) Query param to include/exclude
+
+
+
+
+<a id="nestedatt--actions--cached_methods"></a>
+### Nested Schema for `actions.cached_methods`
+
+Required:
+
+- `method` (String) Method to be cached
+
+
 <a id="nestedatt--actions--cors_header"></a>
 ### Nested Schema for `actions.cors_header`
 
@@ -113,8 +206,19 @@ Required:
 
 Required:
 
-- `allowed_methods` (String) Comma separated allowed methods (value of `Access-Control-Allow-Methods` response header)
 - `max_age` (Number) Response cache TTL (value of `Access-Control-Max-Age` response header)
+
+Optional:
+
+- `allowed_methods` (Attributes Set) Set of allowed HTTP methods (see [below for nested schema](#nestedatt--actions--generate_preflight_response--allowed_methods))
+
+<a id="nestedatt--actions--generate_preflight_response--allowed_methods"></a>
+### Nested Schema for `actions.generate_preflight_response.allowed_methods`
+
+Required:
+
+- `method` (String) Allowed HTTP Method
+
 
 
 <a id="nestedatt--actions--generate_response"></a>
