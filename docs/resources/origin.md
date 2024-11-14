@@ -41,12 +41,15 @@ resource "ioriver_origin" "example_origin" {
 
 ### Optional
 
+- `http_port` (Number) Origin HTTP port
+- `https_port` (Number) Origin HTTPS port
 - `is_s3` (Boolean) Is this origin a S3 bucket
 - `path` (String) Prefix path to be added to the origin request
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
 - `shield_location` (Attributes) Location of the origin shield (see [below for nested schema](#nestedatt--shield_location))
 - `shield_providers` (Attributes List) List of service providers to enable origin-shield for (see [below for nested schema](#nestedatt--shield_providers))
 - `timeout_ms` (Number) Origin timeout
+- `verify_tls` (Boolean) Should verify origin TLS certificate
 
 ### Read-Only
 

@@ -144,19 +144,21 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 					"edgio": schema.SingleNestedAttribute{
 						MarkdownDescription: "Edgio API credentials",
 						Optional:            true,
-						Sensitive:           true,
 						Attributes: map[string]schema.Attribute{
 							"client_id": schema.StringAttribute{
 								MarkdownDescription: "Edgio API client ID",
 								Required:            true,
+								Sensitive:           true,
 							},
 							"client_secret": schema.StringAttribute{
 								MarkdownDescription: "Edgio API client secret",
 								Required:            true,
+								Sensitive:           true,
 							},
 							"organization_id": schema.StringAttribute{
 								MarkdownDescription: "Edgio organization ID",
 								Required:            true,
+								Sensitive:           true,
 							},
 						},
 					},

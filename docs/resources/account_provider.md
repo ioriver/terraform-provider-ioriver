@@ -38,7 +38,7 @@ Optional:
 
 - `cloudflare` (String, Sensitive) Cloudflare API access token
 - `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
-- `edgio` (Attributes, Sensitive) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
+- `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
 - `fastly` (String, Sensitive) Fastly API access token
 
 <a id="nestedatt--credentials--cloudfront"></a>
@@ -73,9 +73,9 @@ Required:
 
 Required:
 
-- `client_id` (String) Edgio API client ID
-- `client_secret` (String) Edgio API client secret
-- `organization_id` (String) Edgio organization ID
+- `client_id` (String, Sensitive) Edgio API client ID
+- `client_secret` (String, Sensitive) Edgio API client secret
+- `organization_id` (String, Sensitive) Edgio organization ID
 
 ## Import
 

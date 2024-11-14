@@ -18,7 +18,13 @@ func generateRandomResourceName() string {
 	return acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
 }
 
-var testAccClient *ioriver.IORiverClient = ioriver.NewClient(os.Getenv(APITokenEvnVar))
+func createTestClient() *ioriver.IORiverClient {
+	var client *ioriver.IORiverClient = ioriver.NewClient(os.Getenv(APITokenEvnVar))
+	client.TerraformVersion = "test"
+	return client
+}
+
+var testAccClient *ioriver.IORiverClient = createTestClient()
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"ioriver": providerserver.NewProtocol6WithError(New("test")()),

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -47,9 +48,12 @@ type OriginResourceModel struct {
 	Service         types.String                `tfsdk:"service"`
 	Host            types.String                `tfsdk:"host"`
 	Protocol        types.String                `tfsdk:"protocol"`
+	HttpsPort       types.Int64                 `tfsdk:"https_port"`
+	HttpPort        types.Int64                 `tfsdk:"http_port"`
 	Path            types.String                `tfsdk:"path"`
 	IsS3            types.Bool                  `tfsdk:"is_s3"`
 	TimeoutMs       types.Int64                 `tfsdk:"timeout_ms"`
+	VerifyTLS       types.Bool                  `tfsdk:"verify_tls"`
 	ShieldLocation  *OriginShieldLocationModel  `tfsdk:"shield_location"`
 	ShieldProviders []OriginShieldProviderModel `tfsdk:"shield_providers"`
 }
@@ -90,6 +94,24 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					stringvalidator.OneOf([]string{"HTTP", "HTTPS"}...),
 				},
 			},
+			"https_port": schema.Int64Attribute{
+				MarkdownDescription: "Origin HTTPS port",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+					int64validator.AtMost(65535),
+				},
+			},
+			"http_port": schema.Int64Attribute{
+				MarkdownDescription: "Origin HTTP port",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+					int64validator.AtMost(65535),
+				},
+			},
 			"path": schema.StringAttribute{
 				MarkdownDescription: "Prefix path to be added to the origin request",
 				Optional:            true,
@@ -105,6 +127,12 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "Origin timeout",
 				Optional:            true,
 				Computed:            true,
+			},
+			"verify_tls": schema.BoolAttribute{
+				MarkdownDescription: "Should verify origin TLS certificate",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(true),
 			},
 			"shield_location": schema.SingleNestedAttribute{
 				MarkdownDescription: "Location of the origin shield",
@@ -262,9 +290,12 @@ func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (inte
 		Service:         d.Service.ValueString(),
 		Host:            d.Host.ValueString(),
 		Protocol:        d.Protocol.ValueString(),
+		HttpsPort:       int(d.HttpsPort.ValueInt64()),
+		HttpPort:        int(d.HttpPort.ValueInt64()),
 		Path:            d.Path.ValueString(),
 		IsS3:            d.IsS3.ValueBool(),
 		TimeoutMs:       int(d.TimeoutMs.ValueInt64()),
+		VerifyTLS:       d.VerifyTLS.ValueBool(),
 		ShieldLocation:  shieldLocation,
 		ShieldProviders: shieldProviders,
 	}, nil
@@ -297,9 +328,12 @@ func (OriginResource) objToResource(ctx context.Context, obj interface{}) (inter
 		Service:         types.StringValue(origin.Service),
 		Host:            types.StringValue(origin.Host),
 		Protocol:        types.StringValue(origin.Protocol),
+		HttpsPort:       types.Int64Value((int64(origin.HttpsPort))),
+		HttpPort:        types.Int64Value((int64(origin.HttpPort))),
 		Path:            types.StringValue(origin.Path),
 		IsS3:            types.BoolValue(origin.IsS3),
 		TimeoutMs:       types.Int64Value((int64(origin.TimeoutMs))),
+		VerifyTLS:       types.BoolValue(origin.VerifyTLS),
 		ShieldLocation:  shieldLocation,
 		ShieldProviders: modelShieldProviders,
 	}, nil

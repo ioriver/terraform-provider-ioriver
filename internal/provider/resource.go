@@ -78,7 +78,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 
 	if err != nil {
 		if strings.Contains(err.Error(), "404 Not Found") {
-			tflog.Info(ctx, fmt.Sprintf("Object not found"))
+			tflog.Info(ctx, "Object not found")
 			resp.State.RemoveResource(ctx)
 			return nil
 		}

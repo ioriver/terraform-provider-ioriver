@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -55,8 +57,8 @@ type StatusCodeBrowserCacheModel struct {
 }
 
 type GeneratePreflightResponseModel struct {
-	AllowedMethods types.String `tfsdk:"allowed_methods"`
-	MaxAge         types.Int64  `tfsdk:"max_age"`
+	AllowedMethods *[]MethodModel `tfsdk:"allowed_methods"`
+	MaxAge         types.Int64    `tfsdk:"max_age"`
 }
 
 type StreamLogsModel struct {
@@ -78,6 +80,43 @@ type BehaviorResourceModel struct {
 	Actions     []BehaviorActionResourceModel `tfsdk:"actions"`
 }
 
+type MethodModel struct {
+	Method types.String `tfsdk:"method"`
+}
+
+type HeaderModel struct {
+	Header types.String `tfsdk:"header"`
+}
+
+type CookieModel struct {
+	Cookie types.String `tfsdk:"cookie"`
+}
+
+type ParamModel struct {
+	Param types.String `tfsdk:"param"`
+}
+type QueryStringsModel struct {
+	ParamsList []ParamModel `tfsdk:"list"`
+	ListType   types.String `tfsdk:"type"`
+}
+
+type CacheKeyModel struct {
+	Headers      []HeaderModel     `tfsdk:"headers"`
+	Cookies      []CookieModel     `tfsdk:"cookies"`
+	QueryStrings QueryStringsModel `tfsdk:"query_strings"`
+}
+
+type QueryStringsData struct {
+	ParamsList []string `json:"list"`
+	ListType   string   `json:"type"`
+}
+
+type CacheKeyData struct {
+	Headers      []string         `json:"headers"`
+	Cookies      []string         `json:"cookies"`
+	QueryStrings QueryStringsData `json:"query_strings"`
+}
+
 type BehaviorActionResourceModel struct {
 	ResponseHeader            *ResponseHeaderModel            `tfsdk:"response_header"`
 	CacheTTL                  types.Int64                     `tfsdk:"cache_ttl"`
@@ -87,7 +126,7 @@ type BehaviorActionResourceModel struct {
 	Redirect                  types.String                    `tfsdk:"redirect"`
 	OriginCacheControl        types.Bool                      `tfsdk:"origin_cache_control"`
 	BypassCacheOnCookie       types.String                    `tfsdk:"bypass_cache_on_cookie"`
-	CacheKey                  types.String                    `tfsdk:"cache_key"`
+	CacheKey                  *CacheKeyModel                  `tfsdk:"cache_key"`
 	AutoMinify                types.String                    `tfsdk:"auto_minify"`
 	HostHeader                types.String                    `tfsdk:"host_header"`
 	CorsHeader                *ResponseHeaderModel            `tfsdk:"cors_header"`
@@ -100,10 +139,10 @@ type BehaviorActionResourceModel struct {
 	GeneratePreflightResponse *GeneratePreflightResponseModel `tfsdk:"generate_preflight_response"`
 	StaleTtl                  types.Int64                     `tfsdk:"stale_ttl"`
 	StreamLogs                *StreamLogsModel                `tfsdk:"stream_logs"`
-	AllowedMethods            types.String                    `tfsdk:"allowed_methods"`
+	AllowedMethods            *[]MethodModel                  `tfsdk:"allowed_methods"`
 	Compression               types.Bool                      `tfsdk:"compression"`
 	GenerateResponse          *GenerateResponseModel          `tfsdk:"generate_response"`
-	CachedMethods             types.String                    `tfsdk:"cached_methods"`
+	CachedMethods             *[]MethodModel                  `tfsdk:"cached_methods"`
 }
 
 func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -146,8 +185,8 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
-			"actions": schema.ListNestedAttribute{
-				MarkdownDescription: "List of actions to apply on the path pattern. Each element in the list defines a single action.",
+			"actions": schema.SetNestedAttribute{
+				MarkdownDescription: "Sert of actions to apply on the path pattern. Each element in the set defines a single action.",
 				Required:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -158,10 +197,12 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 								"header_name": schema.StringAttribute{
 									MarkdownDescription: "Name of the header to be added in the response",
 									Required:            true,
+									Sensitive:           false,
 								},
 								"header_value": schema.StringAttribute{
 									MarkdownDescription: "Value of the header to be added in the response",
 									Required:            true,
+									Sensitive:           false,
 								},
 							},
 						},
@@ -234,9 +275,60 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Bypass cache if the provided cookie exists",
 							Optional:            true,
 						},
-						"cache_key": schema.StringAttribute{
-							MarkdownDescription: "Use custom cache key configuration",
+						"cache_key": schema.SingleNestedAttribute{
+							MarkdownDescription: "Custom cache key configuration",
 							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"headers": schema.SetNestedAttribute{
+									MarkdownDescription: "Set of headers to include in the cache key",
+									Required:            true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"header": schema.StringAttribute{
+												MarkdownDescription: "Header name",
+												Required:            true,
+											},
+										},
+									},
+								},
+								"cookies": schema.SetNestedAttribute{
+									MarkdownDescription: "Set of cookies to include in the cache key",
+									Required:            true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"cookie": schema.StringAttribute{
+												MarkdownDescription: "Cookie name",
+												Required:            true,
+											},
+										},
+									},
+								},
+								"query_strings": schema.SingleNestedAttribute{
+									MarkdownDescription: "Cache key query strings configuration",
+									Required:            true,
+									Attributes: map[string]schema.Attribute{
+										"list": schema.SetNestedAttribute{
+											MarkdownDescription: "Set of query strings to include or exclude in the cache key",
+											Required:            true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"param": schema.StringAttribute{
+														MarkdownDescription: "Query param to include/exclude",
+														Required:            true,
+													},
+												},
+											},
+										},
+										"type": schema.StringAttribute{
+											MarkdownDescription: "Type of the set: include, exclude, all or none",
+											Required:            true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"include", "exclude", "all", "none"}...),
+											},
+										},
+									},
+								},
+							},
 						},
 						"auto_minify": schema.StringAttribute{
 							MarkdownDescription: "Use the provided auto-minify configuration",
@@ -314,9 +406,20 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Define auto generate preflight response",
 							Optional:            true,
 							Attributes: map[string]schema.Attribute{
-								"allowed_methods": schema.StringAttribute{
-									MarkdownDescription: "Comma separated allowed methods (value of `Access-Control-Allow-Methods` response header)",
-									Required:            true,
+								"allowed_methods": schema.SetNestedAttribute{
+									MarkdownDescription: "Set of allowed HTTP methods",
+									Optional:            true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"method": schema.StringAttribute{
+												MarkdownDescription: "Allowed HTTP Method",
+												Required:            true,
+												Validators: []validator.String{
+													stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+												},
+											},
+										},
+									},
 								},
 								"max_age": schema.Int64Attribute{
 									MarkdownDescription: "Response cache TTL (value of `Access-Control-Max-Age` response header)",
@@ -369,9 +472,20 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 								},
 							},
 						},
-						"allowed_methods": schema.StringAttribute{
-							MarkdownDescription: "Comma separated list of allowed HTTP methods",
+						"allowed_methods": schema.SetNestedAttribute{
+							MarkdownDescription: "Set of allowed HTTP methods",
 							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"method": schema.StringAttribute{
+										MarkdownDescription: "Allowed HTTP Method",
+										Required:            true,
+										Validators: []validator.String{
+											stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+										},
+									},
+								},
+							},
 						},
 						"compression": schema.BoolAttribute{
 							MarkdownDescription: "Enable or disable compression",
@@ -391,9 +505,20 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 								},
 							},
 						},
-						"cached_methods": schema.StringAttribute{
-							MarkdownDescription: "Comma separated list of HTTP methods which will be cached",
+						"cached_methods": schema.SetNestedAttribute{
+							MarkdownDescription: "Set of HTTP methods which will be cached",
 							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"method": schema.StringAttribute{
+										MarkdownDescription: "Method to be cached",
+										Required:            true,
+										Validators: []validator.String{
+											stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -431,7 +556,7 @@ func (r *BehaviorResource) Create(ctx context.Context, req resource.CreateReques
 
 	newData := resourceCreate(r.client, ctx, req, resp, r, data, doUpdate)
 	if newData == nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to create IORiver object"))
+		tflog.Error(ctx, "Failed to create IORiver object")
 		return
 	}
 
@@ -632,10 +757,30 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			Cookie: action.BypassCacheOnCookie.ValueString(),
 		}, nil
 	}
-	if !action.CacheKey.IsNull() {
+	if action.CacheKey != nil {
+		headers := []string{}
+		for _, h := range action.CacheKey.Headers {
+			headers = append(headers, h.Header.ValueString())
+		}
+		cookies := []string{}
+		for _, c := range action.CacheKey.Cookies {
+			cookies = append(cookies, c.Cookie.ValueString())
+		}
+		params := []string{}
+		for _, p := range action.CacheKey.QueryStrings.ParamsList {
+			params = append(params, p.Param.ValueString())
+		}
+
+		paramsListType := convertQueryStringListTypeToBehaviorAction(action.CacheKey.QueryStrings.ListType.ValueString())
+		queryStringData := QueryStringsData{ListType: paramsListType, ParamsList: params}
+		cacheKey, err := json.Marshal(CacheKeyData{Headers: headers, Cookies: cookies, QueryStrings: queryStringData})
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize cache key")
+		}
+
 		return &ioriver.BehaviorAction{
 			Type:     ioriver.CACHE_KEY,
-			CacheKey: action.CacheKey.ValueString(),
+			CacheKey: string(cacheKey),
 		}, nil
 	}
 	if !action.AutoMinify.IsNull() {
@@ -664,9 +809,10 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 		}, nil
 	}
 	if !action.OriginErrorPassThrough.IsNull() {
+		enabled := action.OriginErrorPassThrough.ValueBool()
 		return &ioriver.BehaviorAction{
 			Type:    ioriver.ORIGIN_ERRORS_PASS_THRU,
-			Enabled: action.OriginErrorPassThrough.ValueBool(),
+			Enabled: &enabled,
 		}, nil
 	}
 	if !action.ForwardClientHeader.IsNull() {
@@ -683,7 +829,7 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 	if action.StatusCodeCache != nil {
 		statusCode, err := statusCodeToInt(action.StatusCodeCache.StatusCode.ValueString())
 		if err != nil {
-			return nil, fmt.Errorf("Invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
+			return nil, fmt.Errorf("invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
 		}
 		return &ioriver.BehaviorAction{
 			Type:               ioriver.STATUS_CODE_CACHE,
@@ -693,16 +839,20 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 		}, nil
 	}
 	if action.GeneratePreflightResponse != nil {
+		var methods []string
+		for _, m := range *action.GeneratePreflightResponse.AllowedMethods {
+			methods = append(methods, m.Method.ValueString())
+		}
 		return &ioriver.BehaviorAction{
 			Type:                ioriver.GENERATE_PREFLIGHT_RESPONSE,
-			ResponseHeaderValue: action.GeneratePreflightResponse.AllowedMethods.ValueString(),
+			ResponseHeaderValue: strings.Join(methods, ","),
 			MaxTTL:              int(action.GeneratePreflightResponse.MaxAge.ValueInt64()),
 		}, nil
 	}
 	if action.StatusCodeBrowserCache != nil {
 		statusCode, err := statusCodeToInt(action.StatusCodeBrowserCache.StatusCode.ValueString())
 		if err != nil {
-			return nil, fmt.Errorf("Invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
+			return nil, fmt.Errorf("invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
 		}
 		return &ioriver.BehaviorAction{
 			Type:       ioriver.STATUS_CODE_BROWSER_CACHE,
@@ -723,22 +873,27 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			UnifiedLogSamplingRate: int(action.StreamLogs.UnifiedLogSamplingRate.ValueInt64()),
 		}, nil
 	}
-	if !action.AllowedMethods.IsNull() {
+	if action.AllowedMethods != nil {
+		var methods []string
+		for _, m := range *action.AllowedMethods {
+			methods = append(methods, m.Method.ValueString())
+		}
 		return &ioriver.BehaviorAction{
 			Type:           ioriver.ALLOWED_METHODS,
-			AllowedMethods: action.AllowedMethods.ValueString(),
+			AllowedMethods: strings.Join(methods, ","),
 		}, nil
 	}
 	if !action.Compression.IsNull() {
+		enabled := action.Compression.ValueBool()
 		return &ioriver.BehaviorAction{
 			Type:    ioriver.COMPRESSION,
-			Enabled: action.Compression.ValueBool(),
+			Enabled: &enabled,
 		}, nil
 	}
 	if action.GenerateResponse != nil {
 		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
 		if err != nil {
-			return nil, fmt.Errorf("Invalid status code %s", action.GenerateResponse.StatusCode.ValueString())
+			return nil, fmt.Errorf("invalid status code %s", action.GenerateResponse.StatusCode.ValueString())
 		}
 		return &ioriver.BehaviorAction{
 			Type:             ioriver.GENERATE_RESPONSE,
@@ -746,14 +901,18 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			ResponsePagePath: action.GenerateResponse.ResponsePagePath.ValueString(),
 		}, nil
 	}
-	if !action.CachedMethods.IsNull() {
+	if action.CachedMethods != nil {
+		var methods []string
+		for _, m := range *action.CachedMethods {
+			methods = append(methods, m.Method.ValueString())
+		}
 		return &ioriver.BehaviorAction{
-			Type:             ioriver.CACHED_METHODS,
-			ResponsePagePath: action.CachedMethods.ValueString(),
+			Type:          ioriver.CACHED_METHODS,
+			CachedMethods: strings.Join(methods, ","),
 		}, nil
 	}
 
-	return nil, fmt.Errorf("Unsupported action type")
+	return nil, fmt.Errorf("unsupported action type")
 }
 
 func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActionResourceModel, error) {
@@ -804,8 +963,29 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.CACHE_KEY {
+		var cacheKeyData CacheKeyData
+		err := json.Unmarshal([]byte(behaviorAction.CacheKey), &cacheKeyData)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshalling cache-key JSON: %v", err)
+		}
+
+		modelHeaders := []HeaderModel{}
+		for _, h := range cacheKeyData.Headers {
+			modelHeaders = append(modelHeaders, HeaderModel{Header: types.StringValue(h)})
+		}
+		modelCookies := []CookieModel{}
+		for _, c := range cacheKeyData.Cookies {
+			modelCookies = append(modelCookies, CookieModel{Cookie: types.StringValue(c)})
+		}
+		paramList := []ParamModel{}
+		for _, p := range cacheKeyData.QueryStrings.ParamsList {
+			paramList = append(paramList, ParamModel{Param: types.StringValue(p)})
+		}
+		listType := convertQueryStringListTypeFromBehaviorAction(cacheKeyData.QueryStrings.ListType)
+		modelQueryString := QueryStringsModel{ParamsList: paramList, ListType: types.StringValue(listType)}
+
 		return &BehaviorActionResourceModel{
-			CacheKey: types.StringValue(behaviorAction.CacheKey),
+			CacheKey: &CacheKeyModel{Headers: modelHeaders, Cookies: modelCookies, QueryStrings: modelQueryString},
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.AUTO_MINIFY {
@@ -829,7 +1009,7 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 	}
 	if behaviorAction.Type == ioriver.ORIGIN_ERRORS_PASS_THRU {
 		return &BehaviorActionResourceModel{
-			OriginErrorPassThrough: types.BoolValue(behaviorAction.Enabled),
+			OriginErrorPassThrough: types.BoolValue(*behaviorAction.Enabled),
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.FORWARD_CLIENT_HEADER {
@@ -853,8 +1033,13 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.GENERATE_PREFLIGHT_RESPONSE {
+		methods := strings.Split(behaviorAction.ResponseHeaderValue, ",")
+		modelMethods := []MethodModel{}
+		for _, m := range methods {
+			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
+		}
 		genPreflightResp := &GeneratePreflightResponseModel{
-			AllowedMethods: types.StringValue(behaviorAction.ResponseHeaderValue),
+			AllowedMethods: &modelMethods,
 			MaxAge:         types.Int64Value(int64(behaviorAction.MaxTTL)),
 		}
 		return &BehaviorActionResourceModel{
@@ -885,13 +1070,18 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.ALLOWED_METHODS {
+		methods := strings.Split(behaviorAction.AllowedMethods, ",")
+		modelMethods := []MethodModel{}
+		for _, m := range methods {
+			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
+		}
 		return &BehaviorActionResourceModel{
-			AllowedMethods: types.StringValue(behaviorAction.AllowedMethods),
+			AllowedMethods: &modelMethods,
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.COMPRESSION {
 		return &BehaviorActionResourceModel{
-			Compression: types.BoolValue(behaviorAction.Enabled),
+			Compression: types.BoolValue(*behaviorAction.Enabled),
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
@@ -904,12 +1094,17 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.CACHED_METHODS {
+		methods := strings.Split(behaviorAction.CachedMethods, ",")
+		modelMethods := []MethodModel{}
+		for _, m := range methods {
+			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
+		}
 		return &BehaviorActionResourceModel{
-			CachedMethods: types.StringValue(behaviorAction.CachedMethods),
+			CachedMethods: &modelMethods,
 		}, nil
 	}
 
-	return nil, fmt.Errorf("Unsupported action type %s", actionType)
+	return nil, fmt.Errorf("unsupported action type %s", actionType)
 }
 
 func statusCodeToInt(statusCode string) (int, error) {
@@ -942,4 +1137,24 @@ func statusCodeToString(statusCode int) string {
 		return "5xx"
 	}
 	return fmt.Sprintf("%d", statusCode)
+}
+
+func convertQueryStringListTypeToBehaviorAction(listType string) string {
+	if listType == "include" {
+		return "whitelist"
+	}
+	if listType == "exclude" {
+		return "blacklist"
+	}
+	return listType
+}
+
+func convertQueryStringListTypeFromBehaviorAction(listType string) string {
+	if listType == "whitelist" {
+		return "include"
+	}
+	if listType == "blacklist" {
+		return "exclude"
+	}
+	return listType
 }

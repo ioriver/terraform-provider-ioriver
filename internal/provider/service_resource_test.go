@@ -7,8 +7,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"golang.org/x/exp/slices"
 	ioriver "github.com/ioriver/ioriver-go"
+	"golang.org/x/exp/slices"
 )
 
 var serviceResourceType string = "ioriver_service"

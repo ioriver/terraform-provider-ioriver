@@ -10,8 +10,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"golang.org/x/exp/slices"
 	ioriver "github.com/ioriver/ioriver-go"
+	"golang.org/x/exp/slices"
 )
 
 var behaviorResourceType string = "ioriver_behavior"
@@ -174,8 +174,42 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 		path_pattern = "%[4]s"
 		
 		actions = [
-      {
+			{
+				cache_key = {
+					headers = [
+						{
+							header = "host"
+						},
+						{
+							header = "origin"
+						},
+					],
+					cookies = [],
+					query_strings = {
+						type = "include"
+						list = [
+							{
+								param = "p1"
+							},
+							{
+								param = "p2"
+							},
+						]
+					},
+				},
+			},
+			{
 				cache_behavior = "CACHE"
+			},
+			{
+				cached_methods = [
+					{
+						method = "GET"
+					},
+					{
+						method = "HEAD"
+					},
+				]
 			},
 			{
 				cache_ttl = 86400
@@ -196,16 +230,10 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 				}
 			},
 			{
-				redirect_http_to_https = true
-			},
-			{
 				browser_cache_ttl = 120
 			},
 			{
 				origin_cache_control = true
-			},
-			{
-				bypass_cache_on_cookie = "abcd"
 			},
 			{
 				host_header = "test.com"
@@ -232,18 +260,35 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 			},
 			{
 				generate_preflight_response = {
-					allowed_methods = "GET,POST"
-					max_age         = 60
+					allowed_methods = [
+						{
+							method = "OPTIONS"
+						},
+						{
+							method = "GET"
+						},
+					],
+					max_age = 60
 				}
 			},
 			{
 				status_code_browser_cache = {
-					status_code        = "2xx"
-					browser_cache_ttl  = 20
+					status_code       = "2xx"
+					browser_cache_ttl = 20
 				}
 			},
 			{
-				allowed_methods = "GET,HEAD,OPTIONS"
+				allowed_methods = [
+					{
+						method = "GET"
+					},
+					{
+						method = "OPTIONS"
+					},
+					{
+						method = "HEAD"
+					},
+				]
 			},
 			{
 				compression = false
@@ -251,7 +296,7 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 			{
 				generate_response = {
 					status_code        = "403"
-					response_page_path  = "/custom_403"
+					response_page_path = "/custom_403"
 				}
 			},
 		]
@@ -267,14 +312,38 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 		is_default   = true
 		
 		actions = [
-      {
+			{
 				cache_behavior = "CACHE"
+			},		
+			{
+				cached_methods = [
+					{
+						method = "OPTIONS"
+					},
+					{
+						method = "GET"
+					},
+					{
+						method = "HEAD"
+					},
+				]
 			},
 			{
 				cache_ttl = %d
 			},
 			{
-				cache_key = "{\"headers\":[],\"cookies\":[],\"query_strings\":{\"type\":\"none\",\"list\":[]}}"
+				cache_key = {
+					headers = [
+						{
+							header = "host"
+						},
+					],
+					cookies = [],
+					query_strings = {
+						type = "all"
+						list = []
+					},
+				},
 			},
 			{
 				status_code_cache = {
@@ -291,7 +360,14 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 				}
 			},
 			{
-				allowed_methods = "GET,HEAD,OPTIONS"
+				allowed_methods = [
+					{
+						method = "GET"
+					},
+					{
+						method = "HEAD"
+					},
+				]
 			},
 			{
 				compression = false
@@ -299,7 +375,7 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 			{
 				generate_response = {
 					status_code        = "403"
-					response_page_path  = "/custom_403"
+					response_page_path = "/custom_403"
 				}
 			},
 		]

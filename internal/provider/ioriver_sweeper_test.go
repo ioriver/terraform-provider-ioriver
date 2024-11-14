@@ -15,12 +15,11 @@ func TestMain(m *testing.M) {
 func sharedClient() (*ioriver.IORiverClient, error) {
 	client := ioriver.NewClient(os.Getenv("IORIVER_API_TOKEN"))
 
-	// apiEndpoint := GetDefaultFromEnv(APIEndpointEnvVar, "")
-
 	apiEndpoint := ""
 	if apiEndpoint != "" {
 		client.EndpointUrl = apiEndpoint
 	}
+	client.TerraformVersion = "test"
 
 	return client, nil
 }

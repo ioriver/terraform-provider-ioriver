@@ -7,7 +7,41 @@ resource "ioriver_behavior" "example_behavior" {
       cache_behavior = "CACHE"
     },
     {
+      cached_methods = [
+        {
+          method = "GET"
+        },
+        {
+          method = "HEAD"
+        },
+      ]
+    },
+    {
       cache_ttl = 86400
+    },
+    {
+      cache_key = {
+        headers = [
+          {
+            header = "host"
+          },
+          {
+            header = "origin"
+          },
+        ],
+        cookies = [],
+        query_strings = {
+          type = "include"
+          list = [
+            {
+              param = "p1"
+            },
+            {
+              param = "p2"
+            },
+          ]
+        },
+      },
     },
     {
       browser_cache_ttl = 120

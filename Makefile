@@ -27,7 +27,7 @@ testacc:
 	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m   
 
 update:
-	export GOPROXY="github.com/ioriver/ioriver-go@v0.4.0,https://proxy.golang.org,direct"
+	export GOPROXY="github.com/ioriver/ioriver-go@v0.9.0,https://proxy.golang.org,direct"
 	go get -u
 
 sweep:
