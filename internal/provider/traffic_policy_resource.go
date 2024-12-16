@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -34,8 +36,10 @@ type TrafficPolicyResource struct {
 }
 
 type ProviderResourceModel struct {
-	ServiceProvider types.String `tfsdk:"service_provider"`
-	Weight          types.Int64  `tfsdk:"weight"`
+	ServiceProvider      types.String `tfsdk:"service_provider"`
+	Weight               types.Int64  `tfsdk:"weight"`
+	Priority             types.Int64  `tfsdk:"priority"`
+	IsCommitmentPriority types.Bool   `tfsdk:"is_commitment_priority"`
 }
 
 type GeoResourceModel struct {
@@ -58,6 +62,7 @@ type TrafficPolicyResourceModel struct {
 	Type                types.String                            `tfsdk:"type"`
 	Failover            types.Bool                              `tfsdk:"failover"`
 	IsDefault           types.Bool                              `tfsdk:"is_default"`
+	PerformancePenalty  types.Int64                             `tfsdk:"performance_penalty"`
 	Providers           []ProviderResourceModel                 `tfsdk:"providers"`
 	Geos                []GeoResourceModel                      `tfsdk:"geos"`
 	HealthMonitors      []PolicyHealthMonitorResourceModel      `tfsdk:"health_monitors"`
@@ -91,7 +96,7 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 				MarkdownDescription: "TrafficPolicy type",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf([]string{"Static", "Dynamic", "Cost based"}...),
+					stringvalidator.OneOf([]string{"Static", "Dynamic", "Cost"}...),
 				},
 			},
 			"failover": schema.BoolAttribute{
@@ -107,6 +112,15 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
+			"performance_penalty": schema.Int64Attribute{
+				MarkdownDescription: "Performance penalty (percentage) for cost based policy",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+					int64validator.AtMost(100),
+				},
+			},
 			"providers": schema.SetNestedAttribute{
 				MarkdownDescription: "List of service provider within this policy",
 				Required:            true,
@@ -118,7 +132,22 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 						},
 						"weight": schema.Int64Attribute{
 							MarkdownDescription: "Service provider weight",
-							Required:            true,
+							Optional:            true,
+							Computed:            true,
+							Validators: []validator.Int64{
+								int64validator.AtLeast(1),
+								int64validator.AtMost(100),
+							},
+						},
+						"priority": schema.Int64Attribute{
+							MarkdownDescription: "Service provider pririty for cost based policy",
+							Optional:            true,
+							Computed:            true,
+						},
+						"is_commitment_priority": schema.BoolAttribute{
+							MarkdownDescription: "Priority for utilizing the service provider’s commitment",
+							Optional:            true,
+							Computed:            true,
 						},
 					},
 				},
@@ -282,10 +311,30 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 	// convert providers
 	trafficPolicyProviders := []ioriver.TrafficPolicyProvider{}
 	for _, provider := range d.Providers {
+		var weight *int = nil
+		if !provider.Weight.IsUnknown() {
+			value := int(provider.Weight.ValueInt64())
+			weight = &value
+		}
+
+		var priority *int = nil
+		if !provider.Priority.IsUnknown() {
+			value := int(provider.Priority.ValueInt64())
+			priority = &value
+		}
+
+		var isCommitmentPriority *bool = nil
+		if !provider.IsCommitmentPriority.IsUnknown() {
+			value := (provider.IsCommitmentPriority.ValueBool())
+			isCommitmentPriority = &value
+		}
+
 		trafficPolicyProviders = append(trafficPolicyProviders,
 			ioriver.TrafficPolicyProvider{
-				ServiceProvider: provider.ServiceProvider.ValueString(),
-				Weight:          int(provider.Weight.ValueInt64()),
+				ServiceProvider:      provider.ServiceProvider.ValueString(),
+				Weight:               weight,
+				Priority:             priority,
+				IsCommitmentPriority: isCommitmentPriority,
 			})
 	}
 
@@ -322,16 +371,38 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 			})
 	}
 
+	var performancePenalty *int
+	var enablePerformancePenalty *bool
+	if !d.PerformancePenalty.IsUnknown() {
+		value := int(d.PerformancePenalty.ValueInt64())
+		valueBool := true
+		performancePenalty = &value
+		enablePerformancePenalty = &valueBool
+	}
+
+	var trafficPolicyType ioriver.TrafficPolicyType
+	if d.Type.ValueString() == "Static" {
+		trafficPolicyType = ioriver.TRAFFIC_POLICY_STATIC
+	} else if d.Type.ValueString() == "Dynamic" {
+		trafficPolicyType = ioriver.TRAFFIC_POLICY_DYNAMIC
+	} else if d.Type.ValueString() == "Cost" {
+		trafficPolicyType = ioriver.TRAFFIC_POLICY_COST_BASED
+	} else {
+		return nil, fmt.Errorf("unsupported traffic policy type")
+	}
+
 	return ioriver.TrafficPolicy{
-		Id:           d.Id.ValueString(),
-		Service:      d.Service.ValueString(),
-		Type:         d.Type.ValueString(),
-		Failover:     d.Failover.ValueBool(),
-		IsDefault:    d.IsDefault.ValueBool(),
-		Providers:    trafficPolicyProviders,
-		Geos:         trafficPolicyGeos,
-		HealthChecks: trafficPolicyHealthChecks,
-		PerfChecks:   trafficPolicyPerfChecks,
+		Id:                       d.Id.ValueString(),
+		Service:                  d.Service.ValueString(),
+		Type:                     trafficPolicyType,
+		Failover:                 d.Failover.ValueBool(),
+		IsDefault:                d.IsDefault.ValueBool(),
+		PerformancePenalty:       performancePenalty,
+		EnablePerformancePenalty: enablePerformancePenalty,
+		Providers:                trafficPolicyProviders,
+		Geos:                     trafficPolicyGeos,
+		HealthChecks:             trafficPolicyHealthChecks,
+		PerfChecks:               trafficPolicyPerfChecks,
 	}, nil
 }
 
@@ -342,11 +413,17 @@ func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{})
 	// convert providers
 	modelProviders := []ProviderResourceModel{}
 	for _, provider := range trafficPolicy.Providers {
-		modelProviders = append(modelProviders,
-			ProviderResourceModel{
-				ServiceProvider: types.StringValue(provider.ServiceProvider),
-				Weight:          types.Int64Value(int64(provider.Weight)),
-			})
+		p := ProviderResourceModel{ServiceProvider: types.StringValue(provider.ServiceProvider)}
+		if provider.Weight != nil {
+			p.Weight = types.Int64Value(int64(*provider.Weight))
+		}
+		if provider.Priority != nil {
+			p.Priority = types.Int64Value(int64(*provider.Priority))
+		}
+		if provider.IsCommitmentPriority != nil {
+			p.IsCommitmentPriority = types.BoolValue(*provider.IsCommitmentPriority)
+		}
+		modelProviders = append(modelProviders, p)
 	}
 
 	// convert geos
@@ -380,15 +457,32 @@ func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{})
 			})
 	}
 
-	return TrafficPolicyResourceModel{
+	var trafficPolicyType string
+	if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_STATIC {
+		trafficPolicyType = "Static"
+	} else if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_DYNAMIC {
+		trafficPolicyType = "Dynamic"
+	} else if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_COST_BASED {
+		trafficPolicyType = "Cost"
+	} else {
+		return nil, fmt.Errorf("unsupported traffic policy type %s", trafficPolicy.Type)
+	}
+
+	model := TrafficPolicyResourceModel{
 		Id:                  types.StringValue(trafficPolicy.Id),
 		Service:             types.StringValue(trafficPolicy.Service),
-		Type:                types.StringValue(trafficPolicy.Type),
+		Type:                types.StringValue(trafficPolicyType),
 		Failover:            types.BoolValue(trafficPolicy.Failover),
 		IsDefault:           types.BoolValue(trafficPolicy.IsDefault),
 		Providers:           modelProviders,
 		Geos:                modelGeos,
 		HealthMonitors:      modelHealthChecks,
 		PerformanceMonitors: modelPerfChecks,
-	}, nil
+	}
+
+	if trafficPolicy.EnablePerformancePenalty != nil && *trafficPolicy.EnablePerformancePenalty && trafficPolicy.PerformancePenalty != nil {
+		model.PerformancePenalty = types.Int64Value(int64(*trafficPolicy.PerformancePenalty))
+	}
+
+	return model, nil
 }

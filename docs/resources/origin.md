@@ -13,9 +13,19 @@ Origin resource
 ## Example Usage
 
 ```terraform
+// example 1 - simple origin
 resource "ioriver_origin" "example_origin" {
   service = ioriver_service.service.id
   host    = "origin.example.com"
+}
+
+
+// example 2 - s3 bucket origin with origin shield
+resource "ioriver_origin" "example_origin_s3" {
+  service = ioriver_service.service.id
+  host    = "example.s3.us-east-1.amazonaws.com"
+  is_s3   = true
+
   shield_location = {
     country     = "US"
     subdivision = "VA"
@@ -28,6 +38,21 @@ resource "ioriver_origin" "example_origin" {
       service_provider = ioriver_service_provider.cloudfront.id
     }
   ]
+}
+
+// example 3 - private s3 bucket origin
+resource "ioriver_origin" "example_origin_private_s3" {
+  service = ioriver_service.service.id
+  host    = "example.s3.us-east-1.amazonaws.com"
+  is_s3   = true
+  private_s3 = {
+    bucket_name   = "example"
+    bucket_region = "us-east-1"
+    credentials = {
+      access_key = "your_bucket_access_key"
+      secret_key = "your_bucket_secret_key"
+    }
+  }
 }
 ```
 
@@ -45,6 +70,7 @@ resource "ioriver_origin" "example_origin" {
 - `https_port` (Number) Origin HTTPS port
 - `is_s3` (Boolean) Is this origin a S3 bucket
 - `path` (String) Prefix path to be added to the origin request
+- `private_s3` (Attributes) Attributes for a private S3 bucket (see [below for nested schema](#nestedatt--private_s3))
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
 - `shield_location` (Attributes) Location of the origin shield (see [below for nested schema](#nestedatt--shield_location))
 - `shield_providers` (Attributes List) List of service providers to enable origin-shield for (see [below for nested schema](#nestedatt--shield_providers))
@@ -55,16 +81,35 @@ resource "ioriver_origin" "example_origin" {
 
 - `id` (String) Origin identifier
 
+<a id="nestedatt--private_s3"></a>
+### Nested Schema for `private_s3`
+
+Required:
+
+- `bucket_name` (String) Name of the S3 bucket
+- `bucket_region` (String) Region of the S3 bucket
+- `credentials` (Attributes) AWS access-key credentials for accessing the private bucket (see [below for nested schema](#nestedatt--private_s3--credentials))
+
+<a id="nestedatt--private_s3--credentials"></a>
+### Nested Schema for `private_s3.credentials`
+
+Required:
+
+- `access_key` (String, Sensitive) AWS access-key ID
+- `secret_key` (String, Sensitive) AWS access-key secret
+
+
+
 <a id="nestedatt--shield_location"></a>
 ### Nested Schema for `shield_location`
 
 Required:
 
-- `country` (String) The country in which the origin shield is located
+- `country` (String) The country code in which the origin shield is located
 
 Optional:
 
-- `subdivision` (String) The subdivision in which the origin shield is located. It is required when the country is US in order to specify US state
+- `subdivision` (String) The subdivision code in which the origin shield is located. It is required when the country is US in order to specify US state
 
 
 <a id="nestedatt--shield_providers"></a>

@@ -7,8 +7,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"golang.org/x/exp/slices"
 	ioriver "github.com/ioriver/ioriver-go"
+	"golang.org/x/exp/slices"
 )
 
 var originResourceType string = "ioriver_origin"
@@ -123,6 +123,43 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 	})
 }
 
+func TestAccIORiverPrivateS3Origin_Basic(t *testing.T) {
+	var origin ioriver.Origin
+	var testedObj TestedOrigin
+
+	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	rndName := generateRandomResourceName()
+	originHost := rndName + ".s3.us-east-1.amazonaws.com"
+	resourceName := originResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ioriver.Origin](s, testedObj, originResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckPrivateS3OriginConfig(rndName, serviceId, originHost),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "host", originHost),
+				),
+			},
+			{
+				ResourceName:            "ioriver_origin." + rndName,
+				ImportStateIdPrefix:     fmt.Sprintf("%s,", serviceId),
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"private_s3.credentials"}, // ignore since this field cannot be read
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckOriginConfig(rndName string, serviceId string, host string, fastlyToken string,
 	shieldSubdivision string) string {
 	return fmt.Sprintf(`
@@ -151,4 +188,21 @@ func testAccCheckOriginConfig(rndName string, serviceId string, host string, fas
 			}
 		]
 	}`, fastlyToken, serviceId, rndName, serviceId, host, shieldSubdivision)
+}
+
+func testAccCheckPrivateS3OriginConfig(rndName string, serviceId string, host string) string {
+	return fmt.Sprintf(`
+	resource "ioriver_origin" "%s" {
+		service        = "%s"
+		host           = "%s"
+		is_s3          = true
+		private_s3     = {
+		  bucket_name   = "%s"
+			bucket_region = "us-east-1"
+			credentials = {
+			  access_key = "abc"
+				secret_key = "123"
+			}
+		}
+	}`, rndName, serviceId, host, rndName)
 }
