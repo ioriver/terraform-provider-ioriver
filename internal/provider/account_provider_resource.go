@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -30,21 +29,6 @@ type AccountProviderResource struct {
 	client *ioriver.IORiverClient
 }
 
-type AwsAccessKeyModel struct {
-	AccessKey types.String `tfsdk:"access_key"`
-	SecretKey types.String `tfsdk:"secret_key"`
-}
-
-type AwsAssumeRoleModel struct {
-	RoleArn    types.String `tfsdk:"role_arn"`
-	ExternalId types.String `tfsdk:"external_id"`
-}
-
-type CloudfrontCredsModel struct {
-	AccessKey  *AwsAccessKeyModel  `tfsdk:"access_key"`
-	AssumeRole *AwsAssumeRoleModel `tfsdk:"assume_role"`
-}
-
 type EdgioCredsModel struct {
 	CliendId       types.String `tfsdk:"client_id"`
 	ClientSecret   types.String `tfsdk:"client_secret"`
@@ -52,10 +36,10 @@ type EdgioCredsModel struct {
 }
 
 type CredentialsModel struct {
-	Fastly     types.String          `tfsdk:"fastly"`
-	Cloudflare types.String          `tfsdk:"cloudflare"`
-	Cloudfront *CloudfrontCredsModel `tfsdk:"cloudfront"`
-	Edgio      *EdgioCredsModel      `tfsdk:"edgio"`
+	Fastly     types.String     `tfsdk:"fastly"`
+	Cloudflare types.String     `tfsdk:"cloudflare"`
+	Cloudfront *AwsCredsModel   `tfsdk:"cloudfront"`
+	Edgio      *EdgioCredsModel `tfsdk:"edgio"`
 }
 
 type AccountProviderResourceModel struct {
@@ -208,8 +192,6 @@ func (r *AccountProviderResource) Read(ctx context.Context, req resource.ReadReq
 	// AccountProvider credential field is write-only which we need to preserve from original request
 	newAC := newData.(AccountProviderResourceModel)
 	newAC.Credentials = data.Credentials
-
-	tflog.Warn(ctx, fmt.Sprintf("Object: %#v", data.Credentials))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newAC)...)
 }
