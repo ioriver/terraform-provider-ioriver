@@ -115,7 +115,6 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 			"performance_penalty": schema.Int64Attribute{
 				MarkdownDescription: "Performance penalty (percentage) for cost based policy",
 				Optional:            true,
-				Computed:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
 					int64validator.AtMost(100),
@@ -133,7 +132,6 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 						"weight": schema.Int64Attribute{
 							MarkdownDescription: "Service provider weight",
 							Optional:            true,
-							Computed:            true,
 							Validators: []validator.Int64{
 								int64validator.AtLeast(1),
 								int64validator.AtMost(100),
@@ -142,12 +140,10 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 						"priority": schema.Int64Attribute{
 							MarkdownDescription: "Service provider pririty for cost based policy",
 							Optional:            true,
-							Computed:            true,
 						},
 						"is_commitment_priority": schema.BoolAttribute{
 							MarkdownDescription: "Priority for utilizing the service provider’s commitment",
 							Optional:            true,
-							Computed:            true,
 						},
 					},
 				},
@@ -312,19 +308,19 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 	trafficPolicyProviders := []ioriver.TrafficPolicyProvider{}
 	for _, provider := range d.Providers {
 		var weight *int = nil
-		if !provider.Weight.IsUnknown() {
+		if !provider.Weight.IsUnknown() && !provider.Weight.IsNull() {
 			value := int(provider.Weight.ValueInt64())
 			weight = &value
 		}
 
 		var priority *int = nil
-		if !provider.Priority.IsUnknown() {
+		if !provider.Priority.IsUnknown() && !provider.Priority.IsNull() {
 			value := int(provider.Priority.ValueInt64())
 			priority = &value
 		}
 
 		var isCommitmentPriority *bool = nil
-		if !provider.IsCommitmentPriority.IsUnknown() {
+		if !provider.IsCommitmentPriority.IsUnknown() && !provider.IsCommitmentPriority.IsNull() {
 			value := (provider.IsCommitmentPriority.ValueBool())
 			isCommitmentPriority = &value
 		}
@@ -373,7 +369,7 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 
 	var performancePenalty *int
 	var enablePerformancePenalty *bool
-	if !d.PerformancePenalty.IsUnknown() {
+	if !d.PerformancePenalty.IsUnknown() && !d.PerformancePenalty.IsNull() {
 		value := int(d.PerformancePenalty.ValueInt64())
 		valueBool := true
 		performancePenalty = &value
