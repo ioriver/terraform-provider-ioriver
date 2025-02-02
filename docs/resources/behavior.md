@@ -68,6 +68,15 @@ resource "ioriver_behavior" "example_behavior" {
       }
     },
     {
+      delete_response_header = "server"
+    },
+    {
+      request_header = {
+        header_name  = "foo-1"
+        header_value = "bar-1"
+      }
+    },
+    {
       cors_header = {
         header_name  = "Access-Control-Allow-Origin"
         header_value = "*"
@@ -79,7 +88,15 @@ resource "ioriver_behavior" "example_behavior" {
         cache_behavior = "CACHE"
         cache_ttl      = 60
       }
-    }
+    },
+    {
+      host_header = {
+        use_origin_host = true
+      }
+    },
+    {
+      viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
+    },
   ]
 }
 ```
@@ -89,7 +106,7 @@ resource "ioriver_behavior" "example_behavior" {
 
 ### Required
 
-- `actions` (Attributes Set) Sert of actions to apply on the path pattern. Each element in the set defines a single action. (see [below for nested schema](#nestedatt--actions))
+- `actions` (Attributes Set) Set of actions to apply on the path pattern. Each element in the set defines a single action. (see [below for nested schema](#nestedatt--actions))
 - `name` (String) Behavior name
 - `path_pattern` (String) Path pattern to apply the behavior
 - `service` (String) The id of the service this behavior belongs to
@@ -109,29 +126,33 @@ Optional:
 
 - `allowed_methods` (Attributes Set) Set of allowed HTTP methods (see [below for nested schema](#nestedatt--actions--allowed_methods))
 - `auto_minify` (String) Use the provided auto-minify configuration
-- `browser_cache_ttl` (Number) Set value of browser cache TTL
+- `browser_cache_ttl` (Number) Set the value of the browser cache TTL (Cache-Control)
 - `bypass_cache_on_cookie` (String) Bypass cache if the provided cookie exists
 - `cache_behavior` (String) Cache behavior type: CACHE or BYPASS
 - `cache_key` (Attributes) Custom cache key configuration (see [below for nested schema](#nestedatt--actions--cache_key))
-- `cache_ttl` (Number) Set value of edge cache TTL
+- `cache_ttl` (Number) Set the value of the edge cache TTL
 - `cached_methods` (Attributes Set) Set of HTTP methods which will be cached (see [below for nested schema](#nestedatt--actions--cached_methods))
 - `compression` (Boolean) Enable or disable compression
 - `cors_header` (Attributes) CORS header to be added within the response (see [below for nested schema](#nestedatt--actions--cors_header))
+- `delete_request_header` (String) Header name to be deleted from the request
+- `delete_response_header` (String) Header name to be deleted from the response
 - `follow_redirects` (Boolean) Enable follow redirect in case origin returns a redirect response
 - `forward_client_header` (String) Header to be forwarded to the origin
 - `generate_preflight_response` (Attributes) Define auto generate preflight response (see [below for nested schema](#nestedatt--actions--generate_preflight_response))
 - `generate_response` (Attributes) Generate a custome response for specific status code(s) (see [below for nested schema](#nestedatt--actions--generate_response))
-- `host_header` (String) Override host header with the provided value
+- `host_header` (Attributes) Override the Host header sent to the origin with the specified value (see [below for nested schema](#nestedatt--actions--host_header))
+- `large_files_optimization` (Boolean) Enable cache optimization for large files. This is required for files larger than 20MB
 - `origin_cache_control` (Boolean) Enable origin cache control
 - `origin_error_pass_through` (Boolean) Enable origin error pass through
 - `override_origin` (String) Value of origin id
-- `redirect` (String) Send redirect response
-- `redirect_http_to_https` (Boolean) Enable redirect of HTTP requests to HTTPS
-- `response_header` (Attributes) Header to be added within the response (see [below for nested schema](#nestedatt--actions--response_header))
+- `redirect` (String) Send a redirect response
+- `request_header` (Attributes) Header to be added to the request sent to the origin (see [below for nested schema](#nestedatt--actions--request_header))
+- `response_header` (Attributes) Header to be added to the response (see [below for nested schema](#nestedatt--actions--response_header))
 - `stale_ttl` (Number) Set value of stale TTL (in case of origin issue, the CDN will serve stale content for that period of time)
 - `status_code_browser_cache` (Attributes) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_browser_cache))
 - `status_code_cache` (Attributes) Define edge cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_cache))
 - `stream_logs` (Attributes) Define streaming of unifield logs (see [below for nested schema](#nestedatt--actions--stream_logs))
+- `viewer_protocol` (String) Allowed viewer protocol - can be one of the following: HTTPS_ONLY, HTTP_AND_HTTPS, or REDIRECT_HTTP_TO_HTTPS.
 
 <a id="nestedatt--actions--allowed_methods"></a>
 ### Nested Schema for `actions.allowed_methods`
@@ -230,13 +251,31 @@ Required:
 - `status_code` (String) Status code to generate custome response for (1xx,2xx,.. can be used for ranges)
 
 
+<a id="nestedatt--actions--host_header"></a>
+### Nested Schema for `actions.host_header`
+
+Optional:
+
+- `header_value` (String) Value of the host header
+- `use_origin_host` (Boolean) Use the origin domain name as the Host header for the origin
+
+
+<a id="nestedatt--actions--request_header"></a>
+### Nested Schema for `actions.request_header`
+
+Required:
+
+- `header_name` (String) Name of the header to be added to the request
+- `header_value` (String) Value of the header to be added to the request
+
+
 <a id="nestedatt--actions--response_header"></a>
 ### Nested Schema for `actions.response_header`
 
 Required:
 
-- `header_name` (String) Name of the header to be added in the response
-- `header_value` (String) Value of the header to be added in the response
+- `header_name` (String) Name of the header to be added to the response
+- `header_value` (String) Value of the header to be added to the response
 
 
 <a id="nestedatt--actions--status_code_browser_cache"></a>

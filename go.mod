@@ -14,7 +14,6 @@ require (
 	github.com/hashicorp/hcl/v2 v2.21.0 // indirect
 	github.com/hashicorp/terraform-plugin-go v0.25.0
 	github.com/hashicorp/yamux v0.1.1 // indirect
-	github.com/ioriver/ioriver-go v0.11.0
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -22,7 +21,7 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/zclconf/go-cty v1.15.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )
@@ -33,6 +32,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.10.0
+	github.com/ioriver/ioriver-go v0.12.0
 	golang.org/x/exp v0.0.0-20230809150735-7b3493d9a819
 )
 
