@@ -53,6 +53,7 @@ func TestAccIORiverServiceProvider_Basic(t *testing.T) {
 	var testedObj TestedServiceProvider
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	rndName := generateRandomResourceName()
 	resourceName := spResourceType + "." + rndName
@@ -65,7 +66,7 @@ func TestAccIORiverServiceProvider_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckServiceProviderConfigBasic(rndName, serviceId, fastlyToken),
+				Config: testAccCheckServiceProviderConfigBasic(rndName, serviceId, fastlyToken, domainId),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.ServiceProvider](resourceName, &serviceProvider, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "service", serviceId),
@@ -85,7 +86,7 @@ func TestAccIORiverServiceProvider_Basic(t *testing.T) {
 	})
 }
 
-func testAccCheckServiceProviderConfigBasic(rndName string, serviceId string, accountProviderToken string) string {
+func testAccCheckServiceProviderConfigBasic(rndName string, serviceId string, accountProviderToken string, domainId string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "test_account_provider" {
 		credentials = {
@@ -96,5 +97,6 @@ func testAccCheckServiceProviderConfigBasic(rndName string, serviceId string, ac
 	resource "ioriver_service_provider" "%s" {
 		service          = "%s"
 		account_provider = ioriver_account_provider.test_account_provider.id
-	  }`, accountProviderToken, rndName, serviceId)
+		service_domain   = "%s"
+	  }`, accountProviderToken, rndName, serviceId, domainId)
 }

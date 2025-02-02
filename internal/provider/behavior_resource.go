@@ -159,7 +159,7 @@ func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRe
 
 func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Behavior resource which includes a list of behavior of actions to apply",
+		MarkdownDescription: "Behavior resource that includes a list of actions to apply",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
