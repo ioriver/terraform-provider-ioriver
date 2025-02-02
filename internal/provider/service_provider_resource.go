@@ -34,6 +34,7 @@ type ServiceProviderResourceModel struct {
 	Id              types.String `tfsdk:"id"`
 	Service         types.String `tfsdk:"service"`
 	AccountProvider types.String `tfsdk:"account_provider"`
+	ServiceDomain   types.String `tfsdk:"service_domain"`
 	IsUnmanaged     types.Bool   `tfsdk:"is_unmanaged"`
 	CName           types.String `tfsdk:"cname"`
 	DisplayName     types.String `tfsdk:"display_name"`
@@ -68,12 +69,16 @@ func (r *ServiceProviderResource) Schema(ctx context.Context, req resource.Schem
 				},
 			},
 			"account_provider": schema.StringAttribute{
-				MarkdownDescription: "ServiceProvider associated account provider",
+				MarkdownDescription: "The account provider to be assigned to this service",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"service_domain": schema.StringAttribute{
+				MarkdownDescription: "Before creating a service provider, the service must have at least one domain",
+				Required:            true,
 			},
 			"is_unmanaged": schema.BoolAttribute{
 				MarkdownDescription: "Is this an unmanaged ServiceProvider",
@@ -137,9 +142,10 @@ func (r *ServiceProviderResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// is_unamanged is a write-only field which we need to preserve from original request
+	// is_unamanged & service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
+	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -155,9 +161,10 @@ func (r *ServiceProviderResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// is_unamanged is a write-only field which we need to preserve from original request
+	// is_unamanged & service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
+	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -174,9 +181,10 @@ func (r *ServiceProviderResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// is_unamanged is a write-only field which we need to preserve from original request
+	// is_unamanged & service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
+	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }

@@ -16,6 +16,7 @@ Service Provider resource
 resource "ioriver_service_provider" "fastly" {
   service          = ioriver_service.service.id
   account_provider = ioriver_account_provider.fastly.id
+  service_domain   = ioriver_domain.domain.id
 }
 ```
 
@@ -25,10 +26,11 @@ resource "ioriver_service_provider" "fastly" {
 ### Required
 
 - `service` (String) The id of the service this service provider belongs to
+- `service_domain` (String) Before creating a service provider, the service must have at least one domain
 
 ### Optional
 
-- `account_provider` (String) ServiceProvider associated account provider
+- `account_provider` (String) The account provider to be assigned to this service
 - `cname` (String) CName for the ServiceProvider
 - `display_name` (String) Display name for the ServiceProvider
 - `is_unmanaged` (Boolean) Is this an unmanaged ServiceProvider

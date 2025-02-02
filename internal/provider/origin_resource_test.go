@@ -53,6 +53,7 @@ func TestAccIORiverOrigin_Basic(t *testing.T) {
 	var testedObj TestedOrigin
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	rndName := generateRandomResourceName()
 	originHost := rndName + ".example.com"
@@ -67,7 +68,7 @@ func TestAccIORiverOrigin_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, originHost, fastlyToken, shieldSubdivision),
+				Config: testAccCheckOriginConfig(rndName, serviceId, domainId, originHost, fastlyToken, shieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "host", originHost),
@@ -91,6 +92,7 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 	var testedObj TestedOrigin
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
+	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	rndName := generateRandomResourceName()
 	originHost := rndName + ".example.com"
@@ -107,13 +109,13 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, originHost, fastlyToken, shieldSubdivision),
+				Config: testAccCheckOriginConfig(rndName, serviceId, domainId, originHost, fastlyToken, shieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 				),
 			},
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, updatedOriginHost, fastlyToken, updatedShieldSubdivision),
+				Config: testAccCheckOriginConfig(rndName, serviceId, domainId, updatedOriginHost, fastlyToken, updatedShieldSubdivision),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "host", updatedOriginHost),
@@ -160,7 +162,7 @@ func TestAccIORiverPrivateS3Origin_Basic(t *testing.T) {
 	})
 }
 
-func testAccCheckOriginConfig(rndName string, serviceId string, host string, fastlyToken string,
+func testAccCheckOriginConfig(rndName string, serviceId string, domainId string, host string, fastlyToken string,
 	shieldSubdivision string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "tf_test_account_provider" {
@@ -172,6 +174,7 @@ func testAccCheckOriginConfig(rndName string, serviceId string, host string, fas
 	resource "ioriver_service_provider" "tf_test_service_provider" {
 		service          = "%s"
 		account_provider = ioriver_account_provider.tf_test_account_provider.id
+		service_domain   = "%s"
 	}
 	
 	resource "ioriver_origin" "%s" {
@@ -187,7 +190,7 @@ func testAccCheckOriginConfig(rndName string, serviceId string, host string, fas
 				service_provider = ioriver_service_provider.tf_test_service_provider.id
 			}
 		]
-	}`, fastlyToken, serviceId, rndName, serviceId, host, shieldSubdivision)
+	}`, fastlyToken, serviceId, domainId, rndName, serviceId, host, shieldSubdivision)
 }
 
 func testAccCheckPrivateS3OriginConfig(rndName string, serviceId string, host string) string {

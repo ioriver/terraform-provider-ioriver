@@ -3,12 +3,12 @@
 page_title: "ioriver_behavior Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Behavior resource which includes a list of behavior of actions to apply
+  Behavior resource that includes a list of actions to apply
 ---
 
 # ioriver_behavior (Resource)
 
-Behavior resource which includes a list of behavior of actions to apply
+Behavior resource that includes a list of actions to apply
 
 ## Example Usage
 
