@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -40,7 +39,7 @@ type BehaviorResource struct {
 	client *ioriver.IORiverClient
 }
 
-type ResponseHeaderModel struct {
+type HeaderNameValueModel struct {
 	HeaderName  types.String `tfsdk:"header_name"`
 	HeaderValue types.String `tfsdk:"header_value"`
 }
@@ -88,6 +87,11 @@ type HeaderModel struct {
 	Header types.String `tfsdk:"header"`
 }
 
+type HostHeaderModel struct {
+	HeaderValue   types.String `tfsdk:"header_value"`
+	UseOriginHost types.Bool   `tfsdk:"use_origin_host"`
+}
+
 type CookieModel struct {
 	Cookie types.String `tfsdk:"cookie"`
 }
@@ -118,18 +122,21 @@ type CacheKeyData struct {
 }
 
 type BehaviorActionResourceModel struct {
-	ResponseHeader            *ResponseHeaderModel            `tfsdk:"response_header"`
+	ResponseHeader            *HeaderNameValueModel           `tfsdk:"response_header"`
+	DeleteResponseHeader      types.String                    `tfsdk:"delete_response_header"`
+	RequestHeader             *HeaderNameValueModel           `tfsdk:"request_header"`
+	DeleteRequestHeader       types.String                    `tfsdk:"delete_request_header"`
 	CacheTTL                  types.Int64                     `tfsdk:"cache_ttl"`
-	RedirectHttpToHttps       types.Bool                      `tfsdk:"redirect_http_to_https"`
 	CacheBehavior             types.String                    `tfsdk:"cache_behavior"`
 	BrowserCacheTtl           types.Int64                     `tfsdk:"browser_cache_ttl"`
+	ViewerProtocol            types.String                    `tfsdk:"viewer_protocol"`
 	Redirect                  types.String                    `tfsdk:"redirect"`
 	OriginCacheControl        types.Bool                      `tfsdk:"origin_cache_control"`
 	BypassCacheOnCookie       types.String                    `tfsdk:"bypass_cache_on_cookie"`
 	CacheKey                  *CacheKeyModel                  `tfsdk:"cache_key"`
 	AutoMinify                types.String                    `tfsdk:"auto_minify"`
-	HostHeader                types.String                    `tfsdk:"host_header"`
-	CorsHeader                *ResponseHeaderModel            `tfsdk:"cors_header"`
+	HostHeader                *HostHeaderModel                `tfsdk:"host_header"`
+	CorsHeader                *HeaderNameValueModel           `tfsdk:"cors_header"`
 	OverrideOrigin            types.String                    `tfsdk:"override_origin"`
 	OriginErrorPassThrough    types.Bool                      `tfsdk:"origin_error_pass_through"`
 	ForwardClientHeader       types.String                    `tfsdk:"forward_client_header"`
@@ -141,6 +148,7 @@ type BehaviorActionResourceModel struct {
 	StreamLogs                *StreamLogsModel                `tfsdk:"stream_logs"`
 	AllowedMethods            *[]MethodModel                  `tfsdk:"allowed_methods"`
 	Compression               types.Bool                      `tfsdk:"compression"`
+	LargeFilesOptimization    types.Bool                      `tfsdk:"large_files_optimization"`
 	GenerateResponse          *GenerateResponseModel          `tfsdk:"generate_response"`
 	CachedMethods             *[]MethodModel                  `tfsdk:"cached_methods"`
 }
@@ -186,44 +194,91 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"actions": schema.SetNestedAttribute{
-				MarkdownDescription: "Sert of actions to apply on the path pattern. Each element in the set defines a single action.",
+				MarkdownDescription: "Set of actions to apply on the path pattern. Each element in the set defines a single action.",
 				Required:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"response_header": schema.SingleNestedAttribute{
-							MarkdownDescription: "Header to be added within the response",
+							MarkdownDescription: "Header to be added to the response",
 							Optional:            true,
 							Attributes: map[string]schema.Attribute{
 								"header_name": schema.StringAttribute{
-									MarkdownDescription: "Name of the header to be added in the response",
+									MarkdownDescription: "Name of the header to be added to the response",
 									Required:            true,
 									Sensitive:           false,
 								},
 								"header_value": schema.StringAttribute{
-									MarkdownDescription: "Value of the header to be added in the response",
+									MarkdownDescription: "Value of the header to be added to the response",
 									Required:            true,
 									Sensitive:           false,
 								},
 							},
 						},
+						"delete_response_header": schema.StringAttribute{
+							MarkdownDescription: "Header name to be deleted from the response",
+							Optional:            true,
+						},
+						"request_header": schema.SingleNestedAttribute{
+							MarkdownDescription: "Header to be added to the request sent to the origin",
+							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"header_name": schema.StringAttribute{
+									MarkdownDescription: "Name of the header to be added to the request",
+									Required:            true,
+									Sensitive:           false,
+								},
+								"header_value": schema.StringAttribute{
+									MarkdownDescription: "Value of the header to be added to the request",
+									Required:            true,
+									Sensitive:           false,
+								},
+							},
+						},
+						"delete_request_header": schema.StringAttribute{
+							MarkdownDescription: "Header name to be deleted from the request",
+							Optional:            true,
+						},
 						"cache_ttl": schema.Int64Attribute{
-							MarkdownDescription: "Set value of edge cache TTL",
+							MarkdownDescription: "Set the value of the edge cache TTL",
 							Optional:            true,
 							Validators: []validator.Int64{
 								int64validator.AtLeast(0),
 							},
 						},
-						"redirect_http_to_https": schema.BoolAttribute{
-							MarkdownDescription: "Enable redirect of HTTP requests to HTTPS",
+						"cache_behavior": schema.StringAttribute{
+							MarkdownDescription: "Cache behavior type: CACHE or BYPASS",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.OneOf([]string{"CACHE", "BYPASS"}...),
+							},
+						},
+						"browser_cache_ttl": schema.Int64Attribute{
+							MarkdownDescription: "Set the value of the browser cache TTL (Cache-Control)",
+							Optional:            true,
+							Validators: []validator.Int64{
+								int64validator.AtLeast(0),
+							},
+						},
+						"viewer_protocol": schema.StringAttribute{
+							MarkdownDescription: "Allowed viewer protocol - can be one of the following: HTTPS_ONLY, HTTP_AND_HTTPS, or REDIRECT_HTTP_TO_HTTPS.",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.OneOf([]string{"HTTPS_ONLY", "HTTP_AND_HTTPS", "REDIRECT_HTTP_TO_HTTPS"}...),
+							},
+						},
+						"redirect": schema.StringAttribute{
+							MarkdownDescription: "Send a redirect response",
 							Optional:            true,
 							// The validation below makes sure each action contains only single type. It needs to be applied on each
 							// action seperately. I could not find a way to place this validator in the list element scope, since then
 							// AtAnyListIndex() should be used and that validates all elements together instead of each one sperately
-							Validators: []validator.Bool{
-								boolvalidator.ExactlyOneOf(path.Expressions{
+							Validators: []validator.String{
+								stringvalidator.ExactlyOneOf(path.Expressions{
 									path.MatchRelative().AtParent().AtName("response_header"),
+									path.MatchRelative().AtParent().AtName("delete_response_header"),
+									path.MatchRelative().AtParent().AtName("request_header"),
+									path.MatchRelative().AtParent().AtName("delete_request_header"),
 									path.MatchRelative().AtParent().AtName("cache_ttl"),
-									path.MatchRelative().AtParent().AtName("redirect_http_to_https"),
 									path.MatchRelative().AtParent().AtName("cache_behavior"),
 									path.MatchRelative().AtParent().AtName("browser_cache_ttl"),
 									path.MatchRelative().AtParent().AtName("redirect"),
@@ -244,28 +299,12 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("stream_logs"),
 									path.MatchRelative().AtParent().AtName("allowed_methods"),
 									path.MatchRelative().AtParent().AtName("compression"),
+									path.MatchRelative().AtParent().AtName("large_files_optimization"),
 									path.MatchRelative().AtParent().AtName("generate_response"),
 									path.MatchRelative().AtParent().AtName("cached_methods"),
+									path.MatchRelative().AtParent().AtName("viewer_protocol"),
 								}...),
 							},
-						},
-						"cache_behavior": schema.StringAttribute{
-							MarkdownDescription: "Cache behavior type: CACHE or BYPASS",
-							Optional:            true,
-							Validators: []validator.String{
-								stringvalidator.OneOf([]string{"CACHE", "BYPASS"}...),
-							},
-						},
-						"browser_cache_ttl": schema.Int64Attribute{
-							MarkdownDescription: "Set value of browser cache TTL",
-							Optional:            true,
-							Validators: []validator.Int64{
-								int64validator.AtLeast(0),
-							},
-						},
-						"redirect": schema.StringAttribute{
-							MarkdownDescription: "Send redirect response",
-							Optional:            true,
 						},
 						"origin_cache_control": schema.BoolAttribute{
 							MarkdownDescription: "Enable origin cache control",
@@ -334,9 +373,19 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Use the provided auto-minify configuration",
 							Optional:            true,
 						},
-						"host_header": schema.StringAttribute{
-							MarkdownDescription: "Override host header with the provided value",
+						"host_header": schema.SingleNestedAttribute{
+							MarkdownDescription: "Override the Host header sent to the origin with the specified value",
 							Optional:            true,
+							Attributes: map[string]schema.Attribute{
+								"header_value": schema.StringAttribute{
+									MarkdownDescription: "Value of the host header",
+									Optional:            true,
+								},
+								"use_origin_host": schema.BoolAttribute{
+									MarkdownDescription: "Use the origin domain name as the Host header for the origin",
+									Optional:            true,
+								},
+							},
 						},
 						"cors_header": schema.SingleNestedAttribute{
 							MarkdownDescription: "CORS header to be added within the response",
@@ -489,6 +538,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 						},
 						"compression": schema.BoolAttribute{
 							MarkdownDescription: "Enable or disable compression",
+							Optional:            true,
+						},
+						"large_files_optimization": schema.BoolAttribute{
+							MarkdownDescription: "Enable cache optimization for large files. This is required for files larger than 20MB",
 							Optional:            true,
 						},
 						"generate_response": schema.SingleNestedAttribute{
@@ -716,15 +769,29 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			ResponseHeaderValue: action.ResponseHeader.HeaderValue.ValueString(),
 		}, nil
 	}
+	if !action.DeleteResponseHeader.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:               ioriver.DELETE_RESPONSE_HEADER,
+			ResponseHeaderName: action.DeleteResponseHeader.ValueString(),
+		}, nil
+	}
+	if action.RequestHeader != nil {
+		return &ioriver.BehaviorAction{
+			Type:               ioriver.SET_REQUEST_HEADER,
+			RequestHeaderName:  action.RequestHeader.HeaderName.ValueString(),
+			RequestHeaderValue: action.RequestHeader.HeaderValue.ValueString(),
+		}, nil
+	}
+	if !action.DeleteRequestHeader.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:              ioriver.DELETE_REQUEST_HEADER,
+			RequestHeaderName: action.DeleteRequestHeader.ValueString(),
+		}, nil
+	}
 	if !action.CacheTTL.IsNull() {
 		return &ioriver.BehaviorAction{
 			Type:   ioriver.CACHE_TTL,
 			MaxTTL: int(action.CacheTTL.ValueInt64()),
-		}, nil
-	}
-	if !action.RedirectHttpToHttps.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type: ioriver.REDIRECT_HTTP_TO_HTTPS,
 		}, nil
 	}
 	if !action.CacheBehavior.IsNull() {
@@ -737,6 +804,12 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 		return &ioriver.BehaviorAction{
 			Type:   ioriver.BROWSER_CACHE_TTL,
 			MaxTTL: int(action.BrowserCacheTtl.ValueInt64()),
+		}, nil
+	}
+	if !action.ViewerProtocol.IsNull() {
+		return &ioriver.BehaviorAction{
+			Type:           ioriver.VIEWER_PROTOCOL,
+			ViewerProtocol: action.ViewerProtocol.ValueString(),
 		}, nil
 	}
 	if !action.Redirect.IsNull() {
@@ -789,10 +862,17 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			AutoMinify: action.AutoMinify.ValueString(),
 		}, nil
 	}
-	if !action.HostHeader.IsNull() {
+	if action.HostHeader != nil {
+		var useOriginHost *bool = nil
+		if !action.HostHeader.UseOriginHost.IsNull() {
+			value := action.HostHeader.UseOriginHost.ValueBool()
+			useOriginHost = &value
+		}
+
 		return &ioriver.BehaviorAction{
-			Type:       ioriver.HOST_HEADER_OVERRIDE,
-			HostHeader: action.HostHeader.ValueString(),
+			Type:          ioriver.HOST_HEADER_OVERRIDE,
+			HostHeader:    action.HostHeader.HeaderValue.ValueString(),
+			UseOriginHost: useOriginHost,
 		}, nil
 	}
 	if action.CorsHeader != nil {
@@ -890,6 +970,13 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			Enabled: &enabled,
 		}, nil
 	}
+	if !action.LargeFilesOptimization.IsNull() {
+		enabled := action.LargeFilesOptimization.ValueBool()
+		return &ioriver.BehaviorAction{
+			Type:    ioriver.LARGE_FILES_OPTIMIZATION,
+			Enabled: &enabled,
+		}, nil
+	}
 	if action.GenerateResponse != nil {
 		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
 		if err != nil {
@@ -924,7 +1011,7 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.SET_RESPONSE_HEADER {
-		responseHeader := &ResponseHeaderModel{
+		responseHeader := &HeaderNameValueModel{
 			HeaderName:  types.StringValue(behaviorAction.ResponseHeaderName),
 			HeaderValue: types.StringValue(behaviorAction.ResponseHeaderValue),
 		}
@@ -932,9 +1019,23 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 			ResponseHeader: responseHeader,
 		}, nil
 	}
-	if behaviorAction.Type == ioriver.REDIRECT_HTTP_TO_HTTPS {
+	if behaviorAction.Type == ioriver.DELETE_RESPONSE_HEADER {
 		return &BehaviorActionResourceModel{
-			RedirectHttpToHttps: types.BoolValue(true),
+			DeleteResponseHeader: types.StringValue(behaviorAction.ResponseHeaderName),
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.SET_REQUEST_HEADER {
+		requestHeader := &HeaderNameValueModel{
+			HeaderName:  types.StringValue(behaviorAction.RequestHeaderName),
+			HeaderValue: types.StringValue(behaviorAction.RequestHeaderValue),
+		}
+		return &BehaviorActionResourceModel{
+			RequestHeader: requestHeader,
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.DELETE_REQUEST_HEADER {
+		return &BehaviorActionResourceModel{
+			DeleteRequestHeader: types.StringValue(behaviorAction.RequestHeaderName),
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.CACHE_BEHAVIOR {
@@ -945,6 +1046,11 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 	if behaviorAction.Type == ioriver.BROWSER_CACHE_TTL {
 		return &BehaviorActionResourceModel{
 			BrowserCacheTtl: types.Int64Value(int64(behaviorAction.MaxTTL)),
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.VIEWER_PROTOCOL {
+		return &BehaviorActionResourceModel{
+			ViewerProtocol: types.StringValue(behaviorAction.ViewerProtocol),
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.REDIRECT {
@@ -994,12 +1100,19 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.HOST_HEADER_OVERRIDE {
+		hostHeader := &HostHeaderModel{}
+		if behaviorAction.HostHeader != "" {
+			hostHeader.HeaderValue = types.StringValue(behaviorAction.HostHeader)
+		}
+		if behaviorAction.UseOriginHost != nil {
+			hostHeader.UseOriginHost = types.BoolValue(*behaviorAction.UseOriginHost)
+		}
 		return &BehaviorActionResourceModel{
-			HostHeader: types.StringValue(behaviorAction.HostHeader),
+			HostHeader: hostHeader,
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.SET_CORS_HEADER {
-		responseHeader := &ResponseHeaderModel{
+		responseHeader := &HeaderNameValueModel{
 			HeaderName:  types.StringValue(behaviorAction.ResponseHeaderName),
 			HeaderValue: types.StringValue(behaviorAction.ResponseHeaderValue),
 		}
@@ -1082,6 +1195,11 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 	if behaviorAction.Type == ioriver.COMPRESSION {
 		return &BehaviorActionResourceModel{
 			Compression: types.BoolValue(*behaviorAction.Enabled),
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.LARGE_FILES_OPTIMIZATION {
+		return &BehaviorActionResourceModel{
+			LargeFilesOptimization: types.BoolValue(*behaviorAction.Enabled),
 		}, nil
 	}
 	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {

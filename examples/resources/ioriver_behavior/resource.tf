@@ -53,6 +53,15 @@ resource "ioriver_behavior" "example_behavior" {
       }
     },
     {
+      delete_response_header = "server"
+    },
+    {
+      request_header = {
+        header_name  = "foo-1"
+        header_value = "bar-1"
+      }
+    },
+    {
       cors_header = {
         header_name  = "Access-Control-Allow-Origin"
         header_value = "*"
@@ -64,6 +73,14 @@ resource "ioriver_behavior" "example_behavior" {
         cache_behavior = "CACHE"
         cache_ttl      = 60
       }
-    }
+    },
+    {
+      host_header = {
+        use_origin_host = true
+      }
+    },
+    {
+      viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
+    },
   ]
 }

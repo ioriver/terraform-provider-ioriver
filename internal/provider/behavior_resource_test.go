@@ -230,13 +230,24 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 				}
 			},
 			{
-				browser_cache_ttl = 120
+				delete_response_header = "del-foo-resp"
+			},
+			{
+				request_header = {
+					header_name  = "req-foo"
+					header_value = "req-bar"
+				}
+			},
+			{
+				delete_request_header = "del-foo-req"
 			},
 			{
 				origin_cache_control = true
 			},
 			{
-				host_header = "test.com"
+				host_header = {
+				  header_value = "test.com"
+				}
 			},
 			{
 				cors_header = {
@@ -294,10 +305,16 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 				compression = false
 			},
 			{
+				viewer_protocol = "HTTPS_ONLY"
+			},
+			{
 				generate_response = {
 					status_code        = "403"
 					response_page_path = "/custom_403"
 				}
+			},
+			{
+				large_files_optimization = true
 			},
 		]
 	}`, rndName, serviceId, rndName, path_pattern)
@@ -378,6 +395,14 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 					response_page_path = "/custom_403"
 				}
 			},
+			{
+				host_header = {
+					use_origin_host = true
+				}
+			},
+			{
+				viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
+			},		
 		]
 	}`, rndName, serviceId, ttl)
 }
