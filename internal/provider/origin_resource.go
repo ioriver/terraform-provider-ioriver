@@ -34,16 +34,6 @@ type OriginResource struct {
 	client *ioriver.IORiverClient
 }
 
-type OriginShieldLocationModel struct {
-	Country     types.String `tfsdk:"country"`
-	Subdivision types.String `tfsdk:"subdivision"`
-}
-
-type OriginShieldProviderModel struct {
-	ServiceProvider  types.String `tfsdk:"service_provider"`
-	ProviderLocation types.String `tfsdk:"provider_location"`
-}
-
 type PrivateS3BucketCredentialsModel struct {
 	AccessKey types.String `tfsdk:"access_key"`
 	SecretKey types.String `tfsdk:"secret_key"`
@@ -56,19 +46,17 @@ type PrivateS3BucketModel struct {
 }
 
 type OriginResourceModel struct {
-	Id              types.String                `tfsdk:"id"`
-	Service         types.String                `tfsdk:"service"`
-	Host            types.String                `tfsdk:"host"`
-	Protocol        types.String                `tfsdk:"protocol"`
-	HttpsPort       types.Int64                 `tfsdk:"https_port"`
-	HttpPort        types.Int64                 `tfsdk:"http_port"`
-	Path            types.String                `tfsdk:"path"`
-	IsS3            types.Bool                  `tfsdk:"is_s3"`
-	PrivateS3       *PrivateS3BucketModel       `tfsdk:"private_s3"`
-	TimeoutMs       types.Int64                 `tfsdk:"timeout_ms"`
-	VerifyTLS       types.Bool                  `tfsdk:"verify_tls"`
-	ShieldLocation  *OriginShieldLocationModel  `tfsdk:"shield_location"`
-	ShieldProviders []OriginShieldProviderModel `tfsdk:"shield_providers"`
+	Id        types.String          `tfsdk:"id"`
+	Service   types.String          `tfsdk:"service"`
+	Host      types.String          `tfsdk:"host"`
+	Protocol  types.String          `tfsdk:"protocol"`
+	HttpsPort types.Int64           `tfsdk:"https_port"`
+	HttpPort  types.Int64           `tfsdk:"http_port"`
+	Path      types.String          `tfsdk:"path"`
+	IsS3      types.Bool            `tfsdk:"is_s3"`
+	PrivateS3 *PrivateS3BucketModel `tfsdk:"private_s3"`
+	TimeoutMs types.Int64           `tfsdk:"timeout_ms"`
+	VerifyTLS types.Bool            `tfsdk:"verify_tls"`
 }
 
 func (r *OriginResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -179,37 +167,6 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
-			},
-			"shield_location": schema.SingleNestedAttribute{
-				MarkdownDescription: "Location of the origin shield",
-				Optional:            true,
-				Attributes: map[string]schema.Attribute{
-					"country": schema.StringAttribute{
-						MarkdownDescription: "The country code in which the origin shield is located",
-						Required:            true,
-					},
-					"subdivision": schema.StringAttribute{
-						MarkdownDescription: "The subdivision code in which the origin shield is located. It is required when the country is US in order to specify US state",
-						Optional:            true,
-						Computed:            true,
-					},
-				},
-			},
-			"shield_providers": schema.ListNestedAttribute{
-				MarkdownDescription: "List of service providers to enable origin-shield for",
-				Optional:            true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"service_provider": schema.StringAttribute{
-							MarkdownDescription: "Service provider Id",
-							Required:            true,
-						},
-						"provider_location": schema.StringAttribute{
-							MarkdownDescription: "Specific origin-shield location of the provider",
-							Computed:            true,
-						},
-					},
-				},
 			},
 		},
 	}
@@ -331,24 +288,6 @@ func (OriginResource) getId(data interface{}) interface{} {
 func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
 	d := data.(OriginResourceModel)
 
-	// convert shield-location
-	var shieldLocation *ioriver.OriginShieldLocation
-	if d.ShieldLocation != nil {
-		shieldLocation = &ioriver.OriginShieldLocation{
-			Country:     d.ShieldLocation.Country.ValueString(),
-			Subdivision: d.ShieldLocation.Subdivision.ValueString(),
-		}
-	}
-
-	// convert shield-providers
-	shieldProviders := []ioriver.OriginShieldProvider{}
-	for _, provider := range d.ShieldProviders {
-		shieldProviders = append(shieldProviders,
-			ioriver.OriginShieldProvider{
-				ServiceProvider: provider.ServiceProvider.ValueString(),
-			})
-	}
-
 	// convert private-s3
 	isPrivateS3 := false
 	s3BucketName := ""
@@ -364,47 +303,27 @@ func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (inte
 	}
 
 	return ioriver.Origin{
-		Id:              d.Id.ValueString(),
-		Service:         d.Service.ValueString(),
-		Host:            d.Host.ValueString(),
-		Protocol:        d.Protocol.ValueString(),
-		HttpsPort:       int(d.HttpsPort.ValueInt64()),
-		HttpPort:        int(d.HttpPort.ValueInt64()),
-		Path:            d.Path.ValueString(),
-		IsS3:            d.IsS3.ValueBool(),
-		IsPrivateS3:     isPrivateS3,
-		S3BucketName:    s3BucketName,
-		S3AwsRegion:     s3BucketRegion,
-		S3AwsKey:        s3AwsKey,
-		S3AwsSecret:     s3AwsSecret,
-		TimeoutMs:       int(d.TimeoutMs.ValueInt64()),
-		VerifyTLS:       d.VerifyTLS.ValueBool(),
-		ShieldLocation:  shieldLocation,
-		ShieldProviders: shieldProviders,
+		Id:           d.Id.ValueString(),
+		Service:      d.Service.ValueString(),
+		Host:         d.Host.ValueString(),
+		Protocol:     d.Protocol.ValueString(),
+		HttpsPort:    int(d.HttpsPort.ValueInt64()),
+		HttpPort:     int(d.HttpPort.ValueInt64()),
+		Path:         d.Path.ValueString(),
+		IsS3:         d.IsS3.ValueBool(),
+		IsPrivateS3:  isPrivateS3,
+		S3BucketName: s3BucketName,
+		S3AwsRegion:  s3BucketRegion,
+		S3AwsKey:     s3AwsKey,
+		S3AwsSecret:  s3AwsSecret,
+		TimeoutMs:    int(d.TimeoutMs.ValueInt64()),
+		VerifyTLS:    d.VerifyTLS.ValueBool(),
 	}, nil
 }
 
 // Convert Origin API object to Origin resource
 func (OriginResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
 	origin := obj.(*ioriver.Origin)
-
-	// convert providers
-	var modelShieldProviders []OriginShieldProviderModel
-	for _, provider := range origin.ShieldProviders {
-		modelShieldProviders = append(modelShieldProviders,
-			OriginShieldProviderModel{
-				ServiceProvider:  types.StringValue(provider.ServiceProvider),
-				ProviderLocation: types.StringValue(provider.ProviderLocation),
-			})
-	}
-
-	var shieldLocation *OriginShieldLocationModel
-	if origin.ShieldLocation != nil {
-		shieldLocation = &OriginShieldLocationModel{
-			Country:     types.StringValue(origin.ShieldLocation.Country),
-			Subdivision: types.StringValue(origin.ShieldLocation.Subdivision),
-		}
-	}
 
 	var privateS3 *PrivateS3BucketModel
 	if origin.IsPrivateS3 {
@@ -419,19 +338,17 @@ func (OriginResource) objToResource(ctx context.Context, obj interface{}) (inter
 	}
 
 	return OriginResourceModel{
-		Id:              types.StringValue(origin.Id),
-		Service:         types.StringValue(origin.Service),
-		Host:            types.StringValue(origin.Host),
-		Protocol:        types.StringValue(origin.Protocol),
-		HttpsPort:       types.Int64Value((int64(origin.HttpsPort))),
-		HttpPort:        types.Int64Value((int64(origin.HttpPort))),
-		Path:            types.StringValue(origin.Path),
-		IsS3:            types.BoolValue(origin.IsS3),
-		PrivateS3:       privateS3,
-		TimeoutMs:       types.Int64Value((int64(origin.TimeoutMs))),
-		VerifyTLS:       types.BoolValue(origin.VerifyTLS),
-		ShieldLocation:  shieldLocation,
-		ShieldProviders: modelShieldProviders,
+		Id:        types.StringValue(origin.Id),
+		Service:   types.StringValue(origin.Service),
+		Host:      types.StringValue(origin.Host),
+		Protocol:  types.StringValue(origin.Protocol),
+		HttpsPort: types.Int64Value((int64(origin.HttpsPort))),
+		HttpPort:  types.Int64Value((int64(origin.HttpPort))),
+		Path:      types.StringValue(origin.Path),
+		IsS3:      types.BoolValue(origin.IsS3),
+		PrivateS3: privateS3,
+		TimeoutMs: types.Int64Value((int64(origin.TimeoutMs))),
+		VerifyTLS: types.BoolValue(origin.VerifyTLS),
 	}, nil
 }
 
