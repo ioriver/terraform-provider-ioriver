@@ -1,10 +1,12 @@
 name: generate_docs
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
-  workflow_dispatch:
+    paths:
+      - 'docs/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -1,12 +1,10 @@
 name: build+tests
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
-    paths:
-      - 'docs/**'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
