@@ -656,7 +656,13 @@ func (r *BehaviorResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	// in case this is a default behavior, it needs to be udpated to default instead of deleted
 	if data.IsDefault.ValueBool() {
-		err := r.client.ResetDefaultBehavior(data.Service.ValueString())
+
+		// the reset operation must be called under the global mutex
+		resetOp := func() (interface{}, error) {
+			return nil, r.client.ResetDefaultBehavior(data.Service.ValueString())
+		}
+		_, err := performOperation(func() (interface{}, error) { return resetOp() })
+
 		if err != nil {
 			resp.Diagnostics.AddError("Error deleting default behavior", "Unexpected error: "+err.Error())
 		}

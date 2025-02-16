@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"unicode"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -43,15 +42,13 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 
 	tflog.Info(ctx, fmt.Sprintf("Creating IORiver object: %#v", newObj))
 
-	var obj interface{}
-
-	mutex.Lock()
+	var operation func() (interface{}, error)
 	if !doUpdate {
-		obj, err = r.create(client, newObj)
+		operation = func() (interface{}, error) { return r.create(client, newObj) }
 	} else {
-		obj, err = r.update(client, newObj)
+		operation = func() (interface{}, error) { return r.update(client, newObj) }
 	}
-	mutex.Unlock()
+	obj, err := performOperation(func() (interface{}, error) { return operation() })
 
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating resource", "Could not create resource, unexpected error: "+err.Error())
@@ -109,9 +106,8 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 	}
 	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object: %#v", obj))
 
-	mutex.Lock()
-	updatedObj, err := r.update(client, obj)
-	mutex.Unlock()
+	updateOp := func() (interface{}, error) { return r.update(client, obj) }
+	updatedObj, err := performOperation(func() (interface{}, error) { return updateOp() })
 
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating resource", "Could not update resource, unexpected error: "+err.Error())
@@ -135,9 +131,9 @@ func resourceDelete(client *ioriver.IORiverClient, ctx context.Context, req reso
 	id := r.getId(data)
 	tflog.Info(ctx, fmt.Sprintf("Deleting IORiver object: id %d", id))
 
-	mutex.Lock()
-	err := r.delete(client, id)
-	mutex.Unlock()
+	// perform the delete operation
+	deleteOp := func() (interface{}, error) { return nil, r.delete(client, id) }
+	_, err := performOperation(func() (interface{}, error) { return deleteOp() })
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete resource, got error: %s", err))
@@ -178,32 +174,9 @@ func ConfigureBase(ctx context.Context, req resource.ConfigureRequest, resp *res
 	return client
 }
 
-// converts pascal case to snake case
-func structFieldToResourceFieldName(input string) string {
-	var result []rune
-
-	for i, char := range input {
-		if unicode.IsUpper(char) {
-			if i > 0 && input[i-1] != '_' {
-				// Insert underscore before uppercase letter if not at the beginning
-				result = append(result, '_')
-			}
-			// Convert uppercase letter to lowercase
-			char = unicode.ToLower(char)
-		}
-		result = append(result, char)
-	}
-
-	return string(result)
-}
-
-func isPremitive(target string) bool {
-	premitiveTypes := []string{"string", "int", "boolean"}
-
-	for _, item := range premitiveTypes {
-		if item == target {
-			return true
-		}
-	}
-	return false
+// ensures that IO River operations are done sequentially
+func performOperation(operation func() (interface{}, error)) (interface{}, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	return operation()
 }
