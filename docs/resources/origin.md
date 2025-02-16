@@ -20,24 +20,11 @@ resource "ioriver_origin" "example_origin" {
 }
 
 
-// example 2 - s3 bucket origin with origin shield
+// example 2 - s3 bucket origin
 resource "ioriver_origin" "example_origin_s3" {
   service = ioriver_service.service.id
   host    = "example.s3.us-east-1.amazonaws.com"
   is_s3   = true
-
-  shield_location = {
-    country     = "US"
-    subdivision = "VA"
-  }
-  shield_providers = [
-    {
-      service_provider = ioriver_service_provider.fastly.id
-    },
-    {
-      service_provider = ioriver_service_provider.cloudfront.id
-    }
-  ]
 }
 
 // example 3 - private s3 bucket origin
@@ -72,8 +59,6 @@ resource "ioriver_origin" "example_origin_private_s3" {
 - `path` (String) Prefix path to be added to the origin request
 - `private_s3` (Attributes) Attributes for a private S3 bucket (see [below for nested schema](#nestedatt--private_s3))
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
-- `shield_location` (Attributes) Location of the origin shield (see [below for nested schema](#nestedatt--shield_location))
-- `shield_providers` (Attributes List) List of service providers to enable origin-shield for (see [below for nested schema](#nestedatt--shield_providers))
 - `timeout_ms` (Number) Origin timeout
 - `verify_tls` (Boolean) Should verify origin TLS certificate
 
@@ -97,31 +82,6 @@ Required:
 
 - `access_key` (String, Sensitive) AWS access-key ID
 - `secret_key` (String, Sensitive) AWS access-key secret
-
-
-
-<a id="nestedatt--shield_location"></a>
-### Nested Schema for `shield_location`
-
-Required:
-
-- `country` (String) The country code in which the origin shield is located
-
-Optional:
-
-- `subdivision` (String) The subdivision code in which the origin shield is located. It is required when the country is US in order to specify US state
-
-
-<a id="nestedatt--shield_providers"></a>
-### Nested Schema for `shield_providers`
-
-Required:
-
-- `service_provider` (String) Service provider Id
-
-Read-Only:
-
-- `provider_location` (String) Specific origin-shield location of the provider
 
 ## Import
 
