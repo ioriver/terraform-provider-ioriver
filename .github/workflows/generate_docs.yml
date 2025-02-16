@@ -1,10 +1,12 @@
 name: generate_docs
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
-  workflow_dispatch:
+    paths:
+      - 'docs/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +29,7 @@ jobs:
 
       - name: Setup Go
         if: success()
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: true
