@@ -275,20 +275,20 @@ func (r *TrafficPolicyResource) ImportState(ctx context.Context, req resource.Im
 
 // ------- Implement base Resource API ---------
 
-func (TrafficPolicyResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (TrafficPolicyResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateTrafficPolicy(newObj.(ioriver.TrafficPolicy))
 }
 
-func (TrafficPolicyResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (TrafficPolicyResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(TrafficPolicyResourceId)
 	return client.GetTrafficPolicy(resourceId.serviceId, resourceId.trafficPolicyId)
 }
 
-func (TrafficPolicyResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (TrafficPolicyResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateTrafficPolicy(obj.(ioriver.TrafficPolicy))
 }
 
-func (TrafficPolicyResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (TrafficPolicyResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(TrafficPolicyResourceId)
 	return client.DeleteTrafficPolicy(resourceId.serviceId, resourceId.trafficPolicyId)
 }

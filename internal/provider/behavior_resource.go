@@ -679,20 +679,20 @@ func (r *BehaviorResource) ImportState(ctx context.Context, req resource.ImportS
 
 // ------- Implement base Resource API ---------
 
-func (BehaviorResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (BehaviorResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateBehavior(newObj.(ioriver.Behavior))
 }
 
-func (BehaviorResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (BehaviorResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(BehaviorResourceId)
 	return client.GetBehavior(resourceId.serviceId, resourceId.behaviorId)
 }
 
-func (BehaviorResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (BehaviorResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateBehavior(obj.(ioriver.Behavior))
 }
 
-func (BehaviorResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (BehaviorResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(BehaviorResourceId)
 	return client.DeleteBehavior(resourceId.serviceId, resourceId.behaviorId)
 }

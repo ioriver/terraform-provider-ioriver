@@ -147,20 +147,20 @@ func (r *HealthMonitorResource) ImportState(ctx context.Context, req resource.Im
 
 // ------- Implement base Resource API ---------
 
-func (HealthMonitorResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (HealthMonitorResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateHealthMonitor(newObj.(ioriver.HealthMonitor))
 }
 
-func (HealthMonitorResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (HealthMonitorResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(HealthMonitorResourceId)
 	return client.GetHealthMonitor(resourceId.serviceId, resourceId.healthMonitorId)
 }
 
-func (HealthMonitorResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (HealthMonitorResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateHealthMonitor(obj.(ioriver.HealthMonitor))
 }
 
-func (HealthMonitorResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (HealthMonitorResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(HealthMonitorResourceId)
 	return client.DeleteHealthMonitor(resourceId.serviceId, resourceId.healthMonitorId)
 }

@@ -259,20 +259,20 @@ func (r *OriginResource) ImportState(ctx context.Context, req resource.ImportSta
 
 // ------- Implement base Resource API ---------
 
-func (OriginResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (OriginResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateOrigin(newObj.(ioriver.Origin))
 }
 
-func (OriginResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (OriginResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(OriginResourceId)
 	return client.GetOrigin(resourceId.serviceId, resourceId.originId)
 }
 
-func (OriginResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (OriginResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateOrigin(obj.(ioriver.Origin))
 }
 
-func (OriginResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (OriginResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(OriginResourceId)
 	return client.DeleteOrigin(resourceId.serviceId, resourceId.originId)
 }

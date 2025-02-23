@@ -165,20 +165,20 @@ func (r *DomainResource) ImportState(ctx context.Context, req resource.ImportSta
 
 // ------- Implement base Resource API ---------
 
-func (DomainResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (DomainResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateDomain(newObj.(ioriver.Domain))
 }
 
-func (DomainResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (DomainResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(DomainResourceId)
 	return client.GetDomain(resourceId.serviceId, resourceId.domainId)
 }
 
-func (DomainResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (DomainResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateDomain(obj.(ioriver.Domain))
 }
 
-func (DomainResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (DomainResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(DomainResourceId)
 	return client.DeleteDomain(resourceId.serviceId, resourceId.domainId)
 }

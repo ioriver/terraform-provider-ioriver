@@ -17,10 +17,10 @@ import (
 var mutex sync.Mutex
 
 type Resource interface {
-	create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error)
-	read(client *ioriver.IORiverClient, id interface{}) (interface{}, error)
-	update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error)
-	delete(client *ioriver.IORiverClient, id interface{}) error
+	create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error)
+	read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error)
+	update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error)
+	delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error
 
 	getId(data interface{}) interface{}
 	resourceToObj(ctx context.Context, data interface{}) (interface{}, error)
@@ -44,9 +44,9 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 
 	var operation func() (interface{}, error)
 	if !doUpdate {
-		operation = func() (interface{}, error) { return r.create(client, newObj) }
+		operation = func() (interface{}, error) { return r.create(ctx, client, newObj) }
 	} else {
-		operation = func() (interface{}, error) { return r.update(client, newObj) }
+		operation = func() (interface{}, error) { return r.update(ctx, client, newObj) }
 	}
 	obj, err := performOperation(func() (interface{}, error) { return operation() })
 
@@ -69,7 +69,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 		return nil
 	}
 
-	obj, err := r.read(client, r.getId(data))
+	obj, err := r.read(ctx, client, r.getId(data))
 
 	tflog.Debug(ctx, fmt.Sprintf("Object: %#v", obj))
 
@@ -106,7 +106,7 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 	}
 	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object: %#v", obj))
 
-	updateOp := func() (interface{}, error) { return r.update(client, obj) }
+	updateOp := func() (interface{}, error) { return r.update(ctx, client, obj) }
 	updatedObj, err := performOperation(func() (interface{}, error) { return updateOp() })
 
 	if err != nil {
@@ -132,7 +132,7 @@ func resourceDelete(client *ioriver.IORiverClient, ctx context.Context, req reso
 	tflog.Info(ctx, fmt.Sprintf("Deleting IORiver object: id %d", id))
 
 	// perform the delete operation
-	deleteOp := func() (interface{}, error) { return nil, r.delete(client, id) }
+	deleteOp := func() (interface{}, error) { return nil, r.delete(ctx, client, id) }
 	_, err := performOperation(func() (interface{}, error) { return deleteOp() })
 
 	if err != nil {

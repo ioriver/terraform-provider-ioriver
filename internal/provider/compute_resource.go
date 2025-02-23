@@ -168,20 +168,20 @@ func (r *ComputeResource) ImportState(ctx context.Context, req resource.ImportSt
 
 // ------- Implement base Resource API ---------
 
-func (ComputeResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (ComputeResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateCompute(newObj.(ioriver.Compute))
 }
 
-func (ComputeResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (ComputeResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(ComputeResourceId)
 	return client.GetCompute(resourceId.serviceId, resourceId.computeId)
 }
 
-func (ComputeResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (ComputeResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateCompute(obj.(ioriver.Compute))
 }
 
-func (ComputeResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (ComputeResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(ComputeResourceId)
 	return client.DeleteCompute(resourceId.serviceId, resourceId.computeId)
 }
