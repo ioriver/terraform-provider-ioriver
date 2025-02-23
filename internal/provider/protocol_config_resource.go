@@ -154,20 +154,20 @@ func (r *ProtocolConfigResource) ImportState(ctx context.Context, req resource.I
 
 // ------- Implement base Resource API ---------
 
-func (ProtocolConfigResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (ProtocolConfigResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateProtocolConfig(newObj.(ioriver.ProtocolConfig))
 }
 
-func (ProtocolConfigResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (ProtocolConfigResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(ProtocolConfigResourceId)
 	return client.GetProtocolConfig(resourceId.serviceId, resourceId.protocolConfigId)
 }
 
-func (ProtocolConfigResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (ProtocolConfigResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateProtocolConfig(obj.(ioriver.ProtocolConfig))
 }
 
-func (ProtocolConfigResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (ProtocolConfigResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(ProtocolConfigResourceId)
 	return client.DeleteProtocolConfig(resourceId.serviceId, resourceId.protocolConfigId)
 }

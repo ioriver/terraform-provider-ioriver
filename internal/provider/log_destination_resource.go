@@ -289,20 +289,20 @@ func (r *LogDestinationResource) ImportState(ctx context.Context, req resource.I
 
 // ------- Implement base Resource API ---------
 
-func (LogDestinationResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (LogDestinationResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateLogDestination(newObj.(ioriver.LogDestination))
 }
 
-func (LogDestinationResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (LogDestinationResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(LogDestinationResourceId)
 	return client.GetLogDestination(resourceId.serviceId, resourceId.logDestinationId)
 }
 
-func (LogDestinationResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (LogDestinationResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateLogDestination(obj.(ioriver.LogDestination))
 }
 
-func (LogDestinationResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (LogDestinationResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(LogDestinationResourceId)
 	return client.DeleteLogDestination(resourceId.serviceId, resourceId.logDestinationId)
 }

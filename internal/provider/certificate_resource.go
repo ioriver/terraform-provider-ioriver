@@ -250,19 +250,19 @@ func (r *CertificateResource) ImportState(ctx context.Context, req resource.Impo
 
 // ------- Implement base Resource API ---------
 
-func (CertificateResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (CertificateResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateCertificate(newObj.(ioriver.Certificate))
 }
 
-func (CertificateResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (CertificateResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	return client.GetCertificate(id.(CertificateResourceId))
 }
 
-func (CertificateResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (CertificateResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateCertificate(obj.(ioriver.Certificate))
 }
 
-func (CertificateResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (CertificateResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	return client.DeleteCertificate(id.(CertificateResourceId))
 }
 

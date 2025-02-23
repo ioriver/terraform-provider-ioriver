@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -10,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -207,20 +210,47 @@ func (r *ServiceProviderResource) ImportState(ctx context.Context, req resource.
 
 // ------- Implement base Resource API ---------
 
-func (ServiceProviderResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateServiceProvider(newObj.(ioriver.ServiceProvider))
+func (ServiceProviderResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+	newSp, error := client.CreateServiceProvider(newObj.(ioriver.ServiceProvider))
+	if error != nil {
+		return newSp, error
+	}
+
+	// Wait for the service provider to become active
+	// If we don't wait and will try to create a traffic policy, it will fail on validation
+	// This operation is performed under the global lock, so it blocks other resources creation.
+	timeout := 60 * time.Minute
+	interval := 10 * time.Second
+	deadline := time.Now().Add(timeout)
+
+	for {
+		newSp, error = client.GetServiceProvider(newSp.Service, newSp.Id)
+		if error == nil {
+			tflog.Info(ctx, fmt.Sprintf("Current Serivce-Provider status: %s", newSp.Status))
+			if newSp.Status == "Active" {
+				break
+			}
+		}
+
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(interval)
+	}
+
+	return newSp, error
 }
 
-func (ServiceProviderResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (ServiceProviderResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(ServiceProviderResourceId)
 	return client.GetServiceProvider(resourceId.serviceId, resourceId.serviceProviderId)
 }
 
-func (ServiceProviderResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (ServiceProviderResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateServiceProvider(obj.(ioriver.ServiceProvider))
 }
 
-func (ServiceProviderResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (ServiceProviderResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(ServiceProviderResourceId)
 	return client.DeleteServiceProvider(resourceId.serviceId, resourceId.serviceProviderId, "disconnect")
 }

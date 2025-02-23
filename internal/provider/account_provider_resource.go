@@ -233,19 +233,19 @@ func (r *AccountProviderResource) ImportState(ctx context.Context, req resource.
 
 // ------- Implement base Resource API ---------
 
-func (AccountProviderResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (AccountProviderResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateAccountProvider(newObj.(ioriver.AccountProvider))
 }
 
-func (AccountProviderResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (AccountProviderResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	return client.GetAccountProvider(id.(AccountProviderResourceId))
 }
 
-func (AccountProviderResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (AccountProviderResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateAccountProvider(obj.(ioriver.AccountProvider))
 }
 
-func (AccountProviderResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (AccountProviderResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	return client.DeleteAccountProvider(id.(AccountProviderResourceId))
 }
 

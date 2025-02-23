@@ -213,20 +213,20 @@ func (r *OriginShieldResource) ImportState(ctx context.Context, req resource.Imp
 
 // ------- Implement base Resource API ---------
 
-func (OriginShieldResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (OriginShieldResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("unexpected create of origin shield object")
 }
 
-func (OriginShieldResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (OriginShieldResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(OriginShieldResourceId)
 	return client.GetOrigin(resourceId.serviceId, resourceId.originId)
 }
 
-func (OriginShieldResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (OriginShieldResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateOrigin(obj.(ioriver.Origin))
 }
 
-func (OriginShieldResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (OriginShieldResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	return fmt.Errorf("unexpected delete of origin shield object")
 }
 

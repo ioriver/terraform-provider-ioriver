@@ -147,19 +147,19 @@ func (r *ServiceResource) ImportState(ctx context.Context, req resource.ImportSt
 
 // ------- Implement base Resource API ---------
 
-func (ServiceResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (ServiceResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreateService(newObj.(ioriver.Service))
 }
 
-func (ServiceResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (ServiceResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	return client.GetService(id.(ServiceResourceId))
 }
 
-func (ServiceResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (ServiceResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdateService(obj.(ioriver.Service))
 }
 
-func (ServiceResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (ServiceResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	return client.DeleteService(id.(ServiceResourceId))
 }
 

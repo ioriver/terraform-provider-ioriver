@@ -147,20 +147,20 @@ func (r *PerformanceMonitorResource) ImportState(ctx context.Context, req resour
 
 // ------- Implement base Resource API ---------
 
-func (PerformanceMonitorResource) create(client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
+func (PerformanceMonitorResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
 	return client.CreatePerformanceMonitor(newObj.(ioriver.PerformanceMonitor))
 }
 
-func (PerformanceMonitorResource) read(client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
+func (PerformanceMonitorResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
 	resourceId := id.(PerformanceMonitorResourceId)
 	return client.GetPerformanceMonitor(resourceId.serviceId, resourceId.performanceMonitorId)
 }
 
-func (PerformanceMonitorResource) update(client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+func (PerformanceMonitorResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
 	return client.UpdatePerformanceMonitor(obj.(ioriver.PerformanceMonitor))
 }
 
-func (PerformanceMonitorResource) delete(client *ioriver.IORiverClient, id interface{}) error {
+func (PerformanceMonitorResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
 	resourceId := id.(PerformanceMonitorResourceId)
 	return client.DeletePerformanceMonitor(resourceId.serviceId, resourceId.performanceMonitorId)
 }
