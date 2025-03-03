@@ -336,7 +336,7 @@ func (LogDestinationResource) resourceToObj(ctx context.Context, data interface{
 				d.AwsS3.Credentials.AccessKey.SecretKey.ValueString())
 		}
 		if d.AwsS3.Credentials.AssumeRole != nil {
-			credentials = fmt.Sprintf("{\"assume_role_arn\":\"%s\",\"external_id\":\"%s\"}",
+			credentials = fmt.Sprintf("{\"role_arn\":\"%s\",\"external_id\":\"%s\"}",
 				d.AwsS3.Credentials.AssumeRole.RoleArn.ValueString(),
 				d.AwsS3.Credentials.AssumeRole.ExternalId.ValueString())
 		}
