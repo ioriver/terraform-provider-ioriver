@@ -16,7 +16,11 @@ Domain resource
 resource "ioriver_domain" "example_domain" {
   service = ioriver_service.service.id
   domain  = "domain.example.com"
-  origin  = ioriver_origin.example_origin.id
+  mappings = [
+    {
+      target_id = ioriver_origin.origin.id
+    }
+  ]
 }
 ```
 
@@ -26,17 +30,28 @@ resource "ioriver_domain" "example_domain" {
 ### Required
 
 - `domain` (String) Domain name
+- `mappings` (Attributes List) A list of mappings between path pattern and target (origin/load-balancer) (see [below for nested schema](#nestedatt--mappings))
 - `service` (String) The id of the service this domain belongs to
 
 ### Optional
 
-- `load_balancer` (String) Load balancer id to forward traffic to
-- `origin` (String) Origin id to forward traffic to
-- `path_pattern` (String) Path pattern within the domain to be mapped with the Domain
+- `aliases` (List of String) A list of domain aliases
 
 ### Read-Only
 
 - `id` (String) Domain identifier
+
+<a id="nestedatt--mappings"></a>
+### Nested Schema for `mappings`
+
+Required:
+
+- `target_id` (String) Id of the target (Id of origin/load-balancer)
+
+Optional:
+
+- `path_pattern` (String) Path pattern within the domain to be mapped with the Domain
+- `target_type` (String) Type of the taget: origin or load-balancer
 
 ## Import
 
