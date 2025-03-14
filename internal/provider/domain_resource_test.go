@@ -7,8 +7,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"golang.org/x/exp/slices"
 	ioriver "github.com/ioriver/ioriver-go"
+	"golang.org/x/exp/slices"
 )
 
 var domainResourceType string = "ioriver_domain"
@@ -125,7 +125,11 @@ func testAccCheckDomainConfig(rndName string, serviceId string, domain string, o
 	resource "ioriver_domain" "%s" {
 		service        = "%s"
 		domain         = "%s"
-		origin         = "%s"
+		mappings       = [
+		  {
+			  target_id    = "%s"
+      }
+		]
 	}`, rndName, serviceId, domain, origin)
 }
 
@@ -135,9 +139,15 @@ func testAccCheckDomainConfigUpdate(rndName string, serviceId string, domain str
 		service        = "%s"
 		host           = "example.com"
 	}
+
 	resource "ioriver_domain" "%s" {
 		service        = "%s"
 		domain         = "%s"
-		origin         = ioriver_origin.domain_update_origin.id
+		mappings       = [
+		  {
+		    path_pattern = "/api/*"
+			  target_id    = ioriver_origin.domain_update_origin.id
+      }
+		]
 	}`, serviceId, rndName, serviceId, domain)
 }
