@@ -101,6 +101,7 @@ func (p *IORiverProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewPerformanceMonitorResource,
 		NewProtocolConfigResource,
 		NewLogDestinationResource,
+		NewUrlSigningKeyResource,
 	}
 }
 
