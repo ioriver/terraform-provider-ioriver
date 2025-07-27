@@ -57,6 +57,8 @@ Optional:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Domain can be imported by specifying service-id,domain-id
 terraform import ioriver_domain.example "32489068-0ad6-4823-8c5d-9f4e4c458f93,813d91ff-c2f1-489e-999b-af7f35d73d03"

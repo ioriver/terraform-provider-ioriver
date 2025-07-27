@@ -251,7 +251,12 @@ func (r *CertificateResource) ImportState(ctx context.Context, req resource.Impo
 // ------- Implement base Resource API ---------
 
 func (CertificateResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateCertificate(newObj.(ioriver.Certificate))
+	obj, err := client.CreateCertificate(newObj.(ioriver.Certificate))
+	if err == nil {
+		// certificates challenges are updated after async task completes, so we need to retrieve the object again in order to get the challenges.
+		obj, err = client.GetCertificate(obj.Id)
+	}
+	return obj, err
 }
 
 func (CertificateResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {

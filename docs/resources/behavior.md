@@ -196,7 +196,7 @@ Required:
 - `type` (String) Type of the set: include, exclude, all or none
 
 <a id="nestedatt--actions--cache_key--query_strings--list"></a>
-### Nested Schema for `actions.cache_key.query_strings.type`
+### Nested Schema for `actions.cache_key.query_strings.list`
 
 Required:
 
@@ -308,6 +308,8 @@ Required:
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Behavior can be imported by specifying service-id,behavior-id
