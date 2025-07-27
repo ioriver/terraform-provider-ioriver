@@ -27,6 +27,10 @@ resource "ioriver_account_provider" "fastly" {
 
 - `credentials` (Attributes) Account-Provider credentials (see [below for nested schema](#nestedatt--credentials))
 
+### Optional
+
+- `display_name` (String) Account-Provider display name
+
 ### Read-Only
 
 - `id` (String) Account-Provider identifier
@@ -36,10 +40,24 @@ resource "ioriver_account_provider" "fastly" {
 
 Optional:
 
+- `akamai` (Attributes) Akamai API credentials (see [below for nested schema](#nestedatt--credentials--akamai))
 - `cloudflare` (String, Sensitive) Cloudflare API access token
 - `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
 - `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
 - `fastly` (String, Sensitive) Fastly API access token
+- `gcp_cloud_cdn` (String, Sensitive) GCP project ID
+- `gcp_media_cdn` (String, Sensitive) GCP project ID
+
+<a id="nestedatt--credentials--akamai"></a>
+### Nested Schema for `credentials.akamai`
+
+Required:
+
+- `access_token` (String, Sensitive) Akamai API access token
+- `base_url` (String, Sensitive) Akamai API base URL
+- `client_secret` (String, Sensitive) Akamai API client secret
+- `client_token` (String, Sensitive) Akamai API client token
+
 
 <a id="nestedatt--credentials--cloudfront"></a>
 ### Nested Schema for `credentials.cloudfront`
@@ -80,6 +98,8 @@ Required:
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Account provider can be imported by specifying the account-provider-id

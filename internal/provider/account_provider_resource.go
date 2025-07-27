@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -35,16 +36,27 @@ type EdgioCredsModel struct {
 	OrganizationId types.String `tfsdk:"organization_id"`
 }
 
+type AkamaiCredsModel struct {
+	ClientToken  types.String `tfsdk:"client_token"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	AccessToken  types.String `tfsdk:"access_token"`
+	BaseUrl      types.String `tfsdk:"base_url"`
+}
+
 type CredentialsModel struct {
-	Fastly     types.String     `tfsdk:"fastly"`
-	Cloudflare types.String     `tfsdk:"cloudflare"`
-	Cloudfront *AwsCredsModel   `tfsdk:"cloudfront"`
-	Edgio      *EdgioCredsModel `tfsdk:"edgio"`
+	Fastly      types.String      `tfsdk:"fastly"`
+	Cloudflare  types.String      `tfsdk:"cloudflare"`
+	GCPCloudCDN types.String      `tfsdk:"gcp_cloud_cdn"`
+	GCPMediaCDN types.String      `tfsdk:"gcp_media_cdn"`
+	Cloudfront  *AwsCredsModel    `tfsdk:"cloudfront"`
+	Edgio       *EdgioCredsModel  `tfsdk:"edgio"`
+	Akamai      *AkamaiCredsModel `tfsdk:"akamai"`
 }
 
 type AccountProviderResourceModel struct {
 	Id          types.String      `tfsdk:"id"`
 	Credentials *CredentialsModel `tfsdk:"credentials"`
+	DisplayName types.String      `tfsdk:"display_name"`
 }
 
 func (r *AccountProviderResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -76,11 +88,24 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 								path.MatchRelative().AtParent().AtName("cloudflare"),
 								path.MatchRelative().AtParent().AtName("cloudfront"),
 								path.MatchRelative().AtParent().AtName("edgio"),
+								path.MatchRelative().AtParent().AtName("akamai"),
+								path.MatchRelative().AtParent().AtName("gcp_cloud_cdn"),
+								path.MatchRelative().AtParent().AtName("gcp_media_cdn"),
 							}...),
 						},
 					},
 					"cloudflare": schema.StringAttribute{
 						MarkdownDescription: "Cloudflare API access token",
+						Optional:            true,
+						Sensitive:           true,
+					},
+					"gcp_cloud_cdn": schema.StringAttribute{
+						MarkdownDescription: "GCP project ID",
+						Optional:            true,
+						Sensitive:           true,
+					},
+					"gcp_media_cdn": schema.StringAttribute{
+						MarkdownDescription: "GCP project ID",
 						Optional:            true,
 						Sensitive:           true,
 					},
@@ -146,7 +171,39 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							},
 						},
 					},
+					"akamai": schema.SingleNestedAttribute{
+						MarkdownDescription: "Akamai API credentials",
+						Optional:            true,
+						Attributes: map[string]schema.Attribute{
+							"client_token": schema.StringAttribute{
+								MarkdownDescription: "Akamai API client token",
+								Required:            true,
+								Sensitive:           true,
+							},
+							"client_secret": schema.StringAttribute{
+								MarkdownDescription: "Akamai API client secret",
+								Required:            true,
+								Sensitive:           true,
+							},
+							"access_token": schema.StringAttribute{
+								MarkdownDescription: "Akamai API access token",
+								Required:            true,
+								Sensitive:           true,
+							},
+							"base_url": schema.StringAttribute{
+								MarkdownDescription: "Akamai API base URL",
+								Required:            true,
+								Sensitive:           true,
+							},
+						},
+					},
 				},
+			},
+			"display_name": schema.StringAttribute{
+				MarkdownDescription: "Account-Provider display name",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
 			},
 		},
 	}
@@ -264,6 +321,7 @@ func (AccountProviderResource) resourceToObj(ctx context.Context, data interface
 		Id:          d.Id.ValueString(),
 		Provider:    convertProviderName(providerName),
 		Credentials: convertedCreds,
+		DisplayName: d.DisplayName.ValueString(),
 	}, nil
 }
 
@@ -272,7 +330,8 @@ func (AccountProviderResource) objToResource(ctx context.Context, obj interface{
 	accountProvider := obj.(*ioriver.AccountProvider)
 
 	return AccountProviderResourceModel{
-		Id: types.StringValue(accountProvider.Id),
+		Id:          types.StringValue(accountProvider.Id),
+		DisplayName: types.StringValue(accountProvider.DisplayName),
 	}, nil
 }
 
@@ -283,6 +342,10 @@ func convertProviderName(name string) int {
 		providerId = ioriver.Fastly
 	case "cloudflare":
 		providerId = ioriver.Cloudflare
+	case "gcp_cloud_cdn":
+		providerId = ioriver.GCPCloudCDN
+	case "gcp_media_cdn":
+		providerId = ioriver.GCPMediaCDN
 	case "cloudfront":
 		providerId = ioriver.Cloudfront
 	case "azure_cdn":
@@ -305,6 +368,12 @@ func convertCredentials(credsMap CredentialsModel) (credentials interface{}, nam
 	} else if !credsMap.Cloudflare.IsNull() {
 		credentials = credsMap.Cloudflare.ValueString()
 		name = "cloudflare"
+	} else if !credsMap.GCPCloudCDN.IsNull() {
+		credentials = credsMap.GCPCloudCDN.ValueString()
+		name = "gcp_cloud_cdn"
+	} else if !credsMap.GCPMediaCDN.IsNull() {
+		credentials = credsMap.GCPMediaCDN.ValueString()
+		name = "gcp_media_cdn"
 	} else if credsMap.Cloudfront != nil {
 		name = "cloudfront"
 		if credsMap.Cloudfront.AccessKey != nil {
@@ -322,6 +391,13 @@ func convertCredentials(credsMap CredentialsModel) (credentials interface{}, nam
 			credsMap.Edgio.CliendId.ValueString(),
 			credsMap.Edgio.ClientSecret.ValueString(),
 			credsMap.Edgio.OrganizationId.ValueString())
+	} else if credsMap.Akamai != nil {
+		name = "akamai"
+		credentials = fmt.Sprintf("{\"client_token\":\"%s\",\"client_secret\":\"%s\",\"access_token\":\"%s\",\"base_url\":\"%s\"}",
+			credsMap.Akamai.ClientToken.ValueString(),
+			credsMap.Akamai.ClientSecret.ValueString(),
+			credsMap.Akamai.AccessToken.ValueString(),
+			credsMap.Akamai.BaseUrl.ValueString())
 	}
 
 	return credentials, name

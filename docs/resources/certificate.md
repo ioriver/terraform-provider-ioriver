@@ -69,6 +69,8 @@ Read-Only:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Certificate can be imported by specifying the certificate-id
 terraform import ioriver_certificate.example "32489068-0ad6-4823-8c5d-9f4e4c458f93"

@@ -41,6 +41,8 @@ resource "ioriver_service" "service" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Service can be imported by specifying the service-id
 terraform import ioriver_service.example "32489068-0ad6-4823-8c5d-9f4e4c458f93"
