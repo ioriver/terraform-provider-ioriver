@@ -57,3 +57,33 @@ release:
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
   # If you want to manually examine the release before its live, uncomment this line:
   # draft: true
+
+# Changelog section: Automatically generates a changelog from Git history.
+changelog:
+  # Whether to skip changelog generation. Set to false to enable.
+  skip: false
+  # Sort order for changelog entries.
+  sort: asc
+  # Filters to include/exclude commit messages based on type.
+  # This is useful for keeping the changelog clean and focused on user-facing changes.
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^build:'
+      - '^ci:'
+      - '^refactor:'
+      - '^style:'
+    # If you use conventional commits, you can include specific types.
+    # include:
+    #   - '^feat:'
+    #   - '^fix:'
+    #   - '^perf:'
+  # The path to the changelog file that will be generated.
+  # This file will be included in the release notes.
+  use: github
+  # The path to a custom template for the changelog.
+  # If not specified, Goreleaser uses a default template.
+  # If you want to customize it, create a file like 'changelog.tmpl' and reference it here.
+  # template: '{{ .ProjectName }} Changelog\n\n{{ .Changelog }}'
