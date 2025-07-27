@@ -60,8 +60,6 @@ release:
 
 # Changelog section: Automatically generates a changelog from Git history.
 changelog:
-  # Whether to skip changelog generation. Set to false to enable.
-  skip: false
   # Sort order for changelog entries.
   sort: asc
   # Filters to include/exclude commit messages based on type.
