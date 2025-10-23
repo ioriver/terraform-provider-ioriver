@@ -91,35 +91,12 @@ jobs:
 
       - name: Versioning
         if: success()
-        id: semrel
         uses: go-semantic-release/action@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          force-bump-patch-version: false
-          allow-initial-development-versions: true
-          changelog-file: CHANGELOG.md
-          changelog-generator-opt: "emojis=true"
-
-      - name: Commit updated CHANGELOG.md
-        # This step only runs if the previous step created a new release
-        if: steps.semrel.outputs.new_release_published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.email "devops@ioriver.io"
-          git config --global user.name "devops"
-          git config --global credential.helper store
-          git config --global credential.helper 'cache --timeout=3600'
-          git add CHANGELOG.md
-          if git diff --staged --quiet; then
-            echo "No changes to commit in CHANGELOG.md."
-            exit 0
-          fi
-          echo "Committing updated CHANGELOG.md..."
-          git commit -m "chore(release): Update CHANGELOG.md for v${{ steps.semrel.outputs.new_release_version }}" -m "[skip ci]"
-
-          # Push the changes back to the main branch
-          echo "Pushing changes..."
-          git push
-          
+          npm install -g go-semantic-release
+          go-semantic-release --provider-opt "slug=ioriver/terraform-provider-ioriver" --allow-initial-development-versions --show-progress
 
       - name: Trigger Master Workflow
         if: success()

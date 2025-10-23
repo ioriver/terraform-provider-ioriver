@@ -92,5 +92,19 @@ func testAccCheckUrlSigningKeyConfig(rndName string, serviceId string, keyName s
 		name           = "%s"
 		public_key     = "abcd"
 		encryption_key = "1234"
-	}`, rndName, serviceId, keyName)
+	}
+
+	resource "ioriver_behavior" "%s" {
+		service      = "%s"
+		name         = "%s"
+		path_pattern = "/protected/*"
+		
+		actions = [
+			{
+				url_signing = true
+			}
+		]
+
+		depends_on = [ioriver_url_signing_key.%s]
+  }`, rndName, serviceId, keyName, rndName, serviceId, rndName, rndName)
 }

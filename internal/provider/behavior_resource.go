@@ -151,6 +151,7 @@ type BehaviorActionResourceModel struct {
 	LargeFilesOptimization    types.Bool                      `tfsdk:"large_files_optimization"`
 	GenerateResponse          *GenerateResponseModel          `tfsdk:"generate_response"`
 	CachedMethods             *[]MethodModel                  `tfsdk:"cached_methods"`
+	UrlSigning                types.Bool                      `tfsdk:"url_signing"`
 }
 
 func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -303,6 +304,7 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("generate_response"),
 									path.MatchRelative().AtParent().AtName("cached_methods"),
 									path.MatchRelative().AtParent().AtName("viewer_protocol"),
+									path.MatchRelative().AtParent().AtName("url_signing"),
 								}...),
 							},
 						},
@@ -573,6 +575,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 								},
 							},
 						},
+						"url_signing": schema.BoolAttribute{
+							MarkdownDescription: "Enable URL signing for secure access to resources",
+							Optional:            true,
+						},						
 					},
 				},
 			},
@@ -983,6 +989,13 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			Enabled: &enabled,
 		}, nil
 	}
+	if !action.UrlSigning.IsNull() {
+		enabled := action.UrlSigning.ValueBool()
+		return &ioriver.BehaviorAction{
+			Type:    ioriver.URL_SIGNING,
+			Enabled: &enabled,
+		}, nil
+	}	
 	if action.GenerateResponse != nil {
 		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
 		if err != nil {
@@ -1208,6 +1221,11 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 			LargeFilesOptimization: types.BoolValue(*behaviorAction.Enabled),
 		}, nil
 	}
+	if behaviorAction.Type == ioriver.URL_SIGNING {
+		return &BehaviorActionResourceModel{
+			UrlSigning: types.BoolValue(*behaviorAction.Enabled),
+		}, nil
+	}	
 	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
 		generateResponse := &GenerateResponseModel{
 			StatusCode:       types.StringValue(statusCodeToString(behaviorAction.StatusCode)),
