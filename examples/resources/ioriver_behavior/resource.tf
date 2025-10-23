@@ -82,5 +82,11 @@ resource "ioriver_behavior" "example_behavior" {
     {
       viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
     },
+    {
+      large_files_optimization = true
+    },
+    {
+      url_signing = true
+    },
   ]
 }

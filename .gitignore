@@ -36,3 +36,4 @@ bin
 start.sh
 /vendor/
 /.idea/
+generate_changelog.sh

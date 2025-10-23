@@ -315,7 +315,7 @@ func testAccCheckBehaviorConfigBasic(rndName string, serviceId string, path_patt
 			},
 			{
 				large_files_optimization = true
-			},
+			}
 		]
 	}`, rndName, serviceId, rndName, path_pattern)
 }
