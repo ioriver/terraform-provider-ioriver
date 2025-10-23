@@ -91,12 +91,14 @@ jobs:
 
       - name: Versioning
         if: success()
+        id: semrel
         uses: go-semantic-release/action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm install -g go-semantic-release
-          go-semantic-release --provider-opt "slug=ioriver/terraform-provider-ioriver" --allow-initial-development-versions --show-progress
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          force-bump-patch-version: false
+          allow-initial-development-versions: true
+          changelog-file: true
+          changelog-generator-opt: "emojis=true"
 
       - name: Trigger Master Workflow
         if: success()
