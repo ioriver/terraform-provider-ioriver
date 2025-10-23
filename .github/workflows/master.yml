@@ -96,27 +96,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm install -g go-semantic-release
-          go-semantic-release --provider-opt "slug=ioriver/terraform-provider-ioriver" --changelog CHANGELOG.md --changelog-generator-opt emojis=true --allow-initial-development-versions --show-progress
-
-      - name: Commit updated CHANGELOG.md
-        # This step only runs if the previous step created a new release
-        run: |
-          git config --global user.email "devops@ioriver.io"
-          git config --global user.name "devops"
-          git config --global credential.helper store
-          git config --global credential.helper 'cache --timeout=3600'
-          git add CHANGELOG.md
-          if git diff --staged --quiet; then
-            echo "No changes to commit in CHANGELOG.md."
-            exit 0
-          fi
-          echo "Committing updated CHANGELOG.md..."
-          git commit -m "chore(release): Update CHANGELOG.md" -m "[skip ci]"
-
-          # Push the changes back to the main branch
-          echo "Pushing changes..."
-          git push
-          
+          go-semantic-release --provider-opt "slug=ioriver/terraform-provider-ioriver" --allow-initial-development-versions --show-progress
 
       - name: Trigger Master Workflow
         if: success()
