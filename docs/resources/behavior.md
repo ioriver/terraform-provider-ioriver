@@ -97,6 +97,12 @@ resource "ioriver_behavior" "example_behavior" {
     {
       viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
     },
+    {
+      large_files_optimization = true
+    },
+    {
+      url_signing = true
+    },
   ]
 }
 ```
@@ -152,6 +158,7 @@ Optional:
 - `status_code_browser_cache` (Attributes) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_browser_cache))
 - `status_code_cache` (Attributes) Define edge cache configuration for status code(s) (see [below for nested schema](#nestedatt--actions--status_code_cache))
 - `stream_logs` (Attributes) Define streaming of unifield logs (see [below for nested schema](#nestedatt--actions--stream_logs))
+- `url_signing` (Boolean) Enable URL signing for secure access to resources
 - `viewer_protocol` (String) Allowed viewer protocol - can be one of the following: HTTPS_ONLY, HTTP_AND_HTTPS, or REDIRECT_HTTP_TO_HTTPS.
 
 <a id="nestedatt--actions--allowed_methods"></a>
