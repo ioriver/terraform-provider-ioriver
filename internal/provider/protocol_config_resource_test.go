@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"golang.org/x/exp/slices"
 	ioriver "github.com/ioriver/ioriver-go"
+	"golang.org/x/exp/slices"
 )
 
 var protocolConfigResourceType string = "ioriver_protocol_config"

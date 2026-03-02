@@ -72,7 +72,7 @@ func (p *IORiverProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	if endpoint == "" {
-		endpoint = "https://manage.ioriver.io/api/v1/"
+		endpoint = "https://manage.ioriver.io/api/"
 	}
 
 	tflog.Info(ctx, fmt.Sprintf("IORiver version: %s", p.version))

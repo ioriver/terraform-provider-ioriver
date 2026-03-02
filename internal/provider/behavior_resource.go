@@ -578,7 +578,7 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 						"url_signing": schema.BoolAttribute{
 							MarkdownDescription: "Enable URL signing for secure access to resources",
 							Optional:            true,
-						},						
+						},
 					},
 				},
 			},
@@ -995,7 +995,7 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			Type:    ioriver.URL_SIGNING,
 			Enabled: &enabled,
 		}, nil
-	}	
+	}
 	if action.GenerateResponse != nil {
 		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
 		if err != nil {
@@ -1225,7 +1225,7 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		return &BehaviorActionResourceModel{
 			UrlSigning: types.BoolValue(*behaviorAction.Enabled),
 		}, nil
-	}	
+	}
 	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
 		generateResponse := &GenerateResponseModel{
 			StatusCode:       types.StringValue(statusCodeToString(behaviorAction.StatusCode)),

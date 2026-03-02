@@ -13,10 +13,20 @@ Service Provider resource
 ## Example Usage
 
 ```terraform
+// example 1 - Fastly provider
 resource "ioriver_service_provider" "fastly" {
   service          = ioriver_service.service.id
   account_provider = ioriver_account_provider.fastly.id
   service_domain   = ioriver_domain.domain.id
+}
+
+
+// example 2 - Akamai provider with custom data
+resource "ioriver_service_provider" "akamai" {
+  service              = ioriver_service.service.id
+  account_provider     = ioriver_account_provider.akamai.id
+  service_domain       = ioriver_domain.domain.id
+  provider_custom_data = "{\"group\":\"grp_1234\",\"cp_code\":\"cpc_5678\",\"contract_id\":\"ctr_W-ABCD123\"}"
 }
 ```
 
@@ -26,23 +36,24 @@ resource "ioriver_service_provider" "fastly" {
 ### Required
 
 - `service` (String) The id of the service this service provider belongs to
-- `service_domain` (String) Before creating a service provider, the service must have at least one domain
+- `service_domain` (String) Before creating a service provider, the service must have at least one domain configured. This field is used to specify the domain of the service that this service provider will be associated with. This is a write-only field required during creation of the service provider
 
 ### Optional
 
 - `account_provider` (String) The account provider to be assigned to this service
-- `cname` (String) CName for the ServiceProvider
-- `display_name` (String) Display name for the ServiceProvider
-- `is_unmanaged` (Boolean) Is this an unmanaged ServiceProvider
+- `cname` (String) CName of the ServiceProvider
+- `display_name` (String) Display name of the ServiceProvider
+- `is_unmanaged` (Boolean) Is this an unmanaged ServiceProvider, which means that the provider is not managed by IO River and will not be configured automatically. This is a write-only field required during creation of the service provider
+- `provider_custom_data` (String) ServiceProvider custom data in JSON format. This is a write-only field used to pass provider-specific information during creation or update of the service provider
 
 ### Read-Only
 
 - `id` (String) ServiceProvider identifier
-- `is_failed` (Boolean) Is ServiceProvider in a failed state
-- `name` (String) Name of the provider
+- `is_failed` (Boolean) An indicator of whether the ServiceProvider is in a failed state
+- `name` (String) Name of the provider, e.g. Fastly, Cloudflare, etc.
 - `restored` (Boolean) Is ServiceProvider restored
-- `status` (String) ServiceProvider status
-- `status_details` (String) ServiceProvider detailed status
+- `status` (String) ServiceProvider status, e.g., Active, Deploying, etc.
+- `status_details` (String) ServiceProvider detailed status, providing additional information about the current status of the ServiceProvider
 
 ## Import
 
