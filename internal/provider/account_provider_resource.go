@@ -393,7 +393,7 @@ func convertCredentials(credsMap CredentialsModel) (credentials interface{}, nam
 			credsMap.Edgio.OrganizationId.ValueString())
 	} else if credsMap.Akamai != nil {
 		name = "akamai"
-		credentials = fmt.Sprintf("{\"client_token\":\"%s\",\"client_secret\":\"%s\",\"access_token\":\"%s\",\"base_url\":\"%s\"}",
+		credentials = fmt.Sprintf("{\"clientToken\":\"%s\",\"clientSecret\":\"%s\",\"accessToken\":\"%s\",\"baseURL\":\"%s\"}",
 			credsMap.Akamai.ClientToken.ValueString(),
 			credsMap.Akamai.ClientSecret.ValueString(),
 			credsMap.Akamai.AccessToken.ValueString(),

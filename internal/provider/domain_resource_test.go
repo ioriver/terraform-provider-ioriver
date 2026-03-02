@@ -145,7 +145,7 @@ func testAccCheckDomainConfigUpdate(rndName string, serviceId string, domain str
 		domain         = "%s"
 		mappings       = [
 		  {
-		    path_pattern = "/api/*"
+		    path_pattern = "/*"
 			  target_id    = ioriver_origin.domain_update_origin.id
       }
 		]
