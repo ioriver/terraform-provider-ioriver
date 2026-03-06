@@ -130,6 +130,7 @@ resource "ioriver_behavior" "example_behavior" {
 
 Optional:
 
+- `allow_access_only_from_ip` (Attributes Set) Allow access only from specified IP addresses (see [below for nested schema](#nestedatt--actions--allow_access_only_from_ip))
 - `allowed_methods` (Attributes Set) Set of allowed HTTP methods (see [below for nested schema](#nestedatt--actions--allowed_methods))
 - `auto_minify` (String) Use the provided auto-minify configuration
 - `browser_cache_ttl` (Number) Set the value of the browser cache TTL (Cache-Control)
@@ -160,6 +161,14 @@ Optional:
 - `stream_logs` (Attributes) Define streaming of unifield logs (see [below for nested schema](#nestedatt--actions--stream_logs))
 - `url_signing` (Boolean) Enable URL signing for secure access to resources
 - `viewer_protocol` (String) Allowed viewer protocol - can be one of the following: HTTPS_ONLY, HTTP_AND_HTTPS, or REDIRECT_HTTP_TO_HTTPS.
+
+<a id="nestedatt--actions--allow_access_only_from_ip"></a>
+### Nested Schema for `actions.allow_access_only_from_ip`
+
+Required:
+
+- `ip` (String) IP address or CIDR block to allow
+
 
 <a id="nestedatt--actions--allowed_methods"></a>
 ### Nested Schema for `actions.allowed_methods`

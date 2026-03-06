@@ -402,7 +402,14 @@ func testAccCheckBehaviorConfigDefault(rndName string, serviceId string, ttl int
 			},
 			{
 				viewer_protocol = "REDIRECT_HTTP_TO_HTTPS"
-			},		
+			},
+			{
+				allow_access_only_from_ip = [
+					{ip = "192.168.1.0/24"},
+					{ip = "192.168.1.1"},
+					{ip = "192.168.1.2"},
+				]
+			}
 		]
 	}`, rndName, serviceId, ttl)
 }

@@ -70,6 +70,10 @@ type GenerateResponseModel struct {
 	ResponsePagePath types.String `tfsdk:"response_page_path"`
 }
 
+type IPModel struct {
+	IP types.String `tfsdk:"ip"`
+}
+
 type BehaviorResourceModel struct {
 	Id          types.String                  `tfsdk:"id"`
 	Service     types.String                  `tfsdk:"service"`
@@ -152,6 +156,7 @@ type BehaviorActionResourceModel struct {
 	GenerateResponse          *GenerateResponseModel          `tfsdk:"generate_response"`
 	CachedMethods             *[]MethodModel                  `tfsdk:"cached_methods"`
 	UrlSigning                types.Bool                      `tfsdk:"url_signing"`
+	AllowAccessOnlyFromIP     *[]IPModel                      `tfsdk:"allow_access_only_from_ip"`
 }
 
 func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -305,6 +310,7 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("cached_methods"),
 									path.MatchRelative().AtParent().AtName("viewer_protocol"),
 									path.MatchRelative().AtParent().AtName("url_signing"),
+									path.MatchRelative().AtParent().AtName("allow_access_only_from_ip"),
 								}...),
 							},
 						},
@@ -578,6 +584,18 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 						"url_signing": schema.BoolAttribute{
 							MarkdownDescription: "Enable URL signing for secure access to resources",
 							Optional:            true,
+						},
+						"allow_access_only_from_ip": schema.SetNestedAttribute{
+							MarkdownDescription: "Allow access only from specified IP addresses",
+							Optional:            true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"ip": schema.StringAttribute{
+										MarkdownDescription: "IP address or CIDR block to allow",
+										Required:            true,
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1017,6 +1035,18 @@ func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.Behavio
 			CachedMethods: strings.Join(methods, ","),
 		}, nil
 	}
+	if action.AllowAccessOnlyFromIP != nil {
+		var ipList []string
+		for _, ipModel := range *action.AllowAccessOnlyFromIP {
+			ipList = append(ipList, ipModel.IP.ValueString())
+		}
+		return &ioriver.BehaviorAction{
+			Type: ioriver.ALLOW_ACCESS_ONLY_FROM_IP,
+			AllowAccessOnlyFromIP: &ioriver.AllowAccessOnlyFromIPModel{
+				IPList: ipList,
+			},
+		}, nil
+	}
 
 	return nil, fmt.Errorf("unsupported action type")
 }
@@ -1243,6 +1273,15 @@ func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActi
 		}
 		return &BehaviorActionResourceModel{
 			CachedMethods: &modelMethods,
+		}, nil
+	}
+	if behaviorAction.Type == ioriver.ALLOW_ACCESS_ONLY_FROM_IP {
+		modelIPs := []IPModel{}
+		for _, ip := range behaviorAction.AllowAccessOnlyFromIP.IPList {
+			modelIPs = append(modelIPs, IPModel{IP: types.StringValue(ip)})
+		}
+		return &BehaviorActionResourceModel{
+			AllowAccessOnlyFromIP: &modelIPs,
 		}, nil
 	}
 
