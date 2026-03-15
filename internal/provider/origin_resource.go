@@ -46,17 +46,18 @@ type PrivateS3BucketModel struct {
 }
 
 type OriginResourceModel struct {
-	Id        types.String          `tfsdk:"id"`
-	Service   types.String          `tfsdk:"service"`
-	Host      types.String          `tfsdk:"host"`
-	Protocol  types.String          `tfsdk:"protocol"`
-	HttpsPort types.Int64           `tfsdk:"https_port"`
-	HttpPort  types.Int64           `tfsdk:"http_port"`
-	Path      types.String          `tfsdk:"path"`
-	IsS3      types.Bool            `tfsdk:"is_s3"`
-	PrivateS3 *PrivateS3BucketModel `tfsdk:"private_s3"`
-	TimeoutMs types.Int64           `tfsdk:"timeout_ms"`
-	VerifyTLS types.Bool            `tfsdk:"verify_tls"`
+	Id          types.String          `tfsdk:"id"`
+	Service     types.String          `tfsdk:"service"`
+	Host        types.String          `tfsdk:"host"`
+	Protocol    types.String          `tfsdk:"protocol"`
+	HttpsPort   types.Int64           `tfsdk:"https_port"`
+	HttpPort    types.Int64           `tfsdk:"http_port"`
+	Path        types.String          `tfsdk:"path"`
+	IsS3        types.Bool            `tfsdk:"is_s3"`
+	PrivateS3   *PrivateS3BucketModel `tfsdk:"private_s3"`
+	TimeoutMs   types.Int64           `tfsdk:"timeout_ms"`
+	VerifyTLS   types.Bool            `tfsdk:"verify_tls"`
+	SNIHostname types.String          `tfsdk:"sni_hostname"`
 }
 
 func (r *OriginResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -167,6 +168,11 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
+			},
+			"sni_hostname": schema.StringAttribute{
+				MarkdownDescription: "SNI hostname for the origin",
+				Optional:            true,
+				Computed:            true,
 			},
 		},
 	}
@@ -318,6 +324,7 @@ func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (inte
 		S3AwsSecret:  s3AwsSecret,
 		TimeoutMs:    int(d.TimeoutMs.ValueInt64()),
 		VerifyTLS:    d.VerifyTLS.ValueBool(),
+		SNIHostname:  d.SNIHostname.ValueString(),
 	}, nil
 }
 
@@ -338,17 +345,18 @@ func (OriginResource) objToResource(ctx context.Context, obj interface{}) (inter
 	}
 
 	return OriginResourceModel{
-		Id:        types.StringValue(origin.Id),
-		Service:   types.StringValue(origin.Service),
-		Host:      types.StringValue(origin.Host),
-		Protocol:  types.StringValue(origin.Protocol),
-		HttpsPort: types.Int64Value((int64(origin.HttpsPort))),
-		HttpPort:  types.Int64Value((int64(origin.HttpPort))),
-		Path:      types.StringValue(origin.Path),
-		IsS3:      types.BoolValue(origin.IsS3),
-		PrivateS3: privateS3,
-		TimeoutMs: types.Int64Value((int64(origin.TimeoutMs))),
-		VerifyTLS: types.BoolValue(origin.VerifyTLS),
+		Id:          types.StringValue(origin.Id),
+		Service:     types.StringValue(origin.Service),
+		Host:        types.StringValue(origin.Host),
+		Protocol:    types.StringValue(origin.Protocol),
+		HttpsPort:   types.Int64Value((int64(origin.HttpsPort))),
+		HttpPort:    types.Int64Value((int64(origin.HttpPort))),
+		Path:        types.StringValue(origin.Path),
+		IsS3:        types.BoolValue(origin.IsS3),
+		PrivateS3:   privateS3,
+		TimeoutMs:   types.Int64Value((int64(origin.TimeoutMs))),
+		VerifyTLS:   types.BoolValue(origin.VerifyTLS),
+		SNIHostname: types.StringValue(origin.SNIHostname),
 	}, nil
 }
 

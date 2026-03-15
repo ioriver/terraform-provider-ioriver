@@ -59,6 +59,7 @@ resource "ioriver_origin" "example_origin_private_s3" {
 - `path` (String) Prefix path to be added to the origin request
 - `private_s3` (Attributes) Attributes for a private S3 bucket (see [below for nested schema](#nestedatt--private_s3))
 - `protocol` (String) Origin protocol scheme (HTTP/HTTPS)
+- `sni_hostname` (String) SNI hostname for the origin
 - `timeout_ms` (Number) Origin timeout
 - `verify_tls` (Boolean) Should verify origin TLS certificate
 

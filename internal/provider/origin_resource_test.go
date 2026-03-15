@@ -96,6 +96,8 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 	rndName := generateRandomResourceName()
 	originHost := rndName + ".example.com"
 	updatedOriginHost := "updated-" + originHost
+	sniHostname := "sni-" + originHost
+	updatedSniHostname := "sni-" + updatedOriginHost
 	resourceName := originResourceType + "." + rndName
 
 	resource.Test(t, resource.TestCase{
@@ -106,16 +108,19 @@ func TestAccIORiverOrigin_Update(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, domainId, originHost, fastlyToken),
+				Config: testAccCheckOriginConfigWithSNI(rndName, serviceId, domainId, originHost, sniHostname, fastlyToken),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "host", originHost),
+					resource.TestCheckResourceAttr(resourceName, "sni_hostname", sniHostname),
 				),
 			},
 			{
-				Config: testAccCheckOriginConfig(rndName, serviceId, domainId, updatedOriginHost, fastlyToken),
+				Config: testAccCheckOriginConfigWithSNI(rndName, serviceId, domainId, updatedOriginHost, updatedSniHostname, fastlyToken),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.Origin](resourceName, &origin, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "host", updatedOriginHost),
+					resource.TestCheckResourceAttr(resourceName, "sni_hostname", updatedSniHostname),
 				),
 			},
 		},
@@ -195,4 +200,27 @@ func testAccCheckPrivateS3OriginConfig(rndName string, serviceId string, host st
 			}
 		}
 	}`, rndName, serviceId, host, rndName)
+}
+
+func testAccCheckOriginConfigWithSNI(rndName string, serviceId string, domainId string, host string, sniHostname string, fastlyToken string) string {
+	return fmt.Sprintf(`
+	resource "ioriver_account_provider" "tf_test_account_provider" {
+		credentials = {
+		  fastly = "%s"
+		}
+	}
+
+	resource "ioriver_service_provider" "tf_test_service_provider" {
+		service          = "%s"
+		account_provider = ioriver_account_provider.tf_test_account_provider.id
+		service_domain   = "%s"
+	}
+	
+	resource "ioriver_origin" "%s" {
+		service        = "%s"
+		host           = "%s"
+		protocol       = "HTTPS"
+		sni_hostname   = "%s"
+		timeout_ms     = 5000
+	}`, fastlyToken, serviceId, domainId, rndName, serviceId, host, sniHostname)
 }
