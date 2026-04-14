@@ -20,6 +20,7 @@ func init() {
 		F: func(r string) error {
 			return testSweepResources[ioriver.AccountProvider](r, testedObj, []string{})
 		},
+		Dependencies: []string{"ioriver_service", "ioriver_service_provider"},
 	})
 }
 

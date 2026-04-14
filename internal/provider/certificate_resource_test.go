@@ -22,6 +22,7 @@ func init() {
 		F: func(r string) error {
 			return testSweepResources[ioriver.Certificate](r, testedObj, []string{excludeId})
 		},
+		Dependencies: []string{"ioriver_service"},
 	})
 }
 
