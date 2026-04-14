@@ -133,7 +133,7 @@ func (r *TrafficPolicyResource) Schema(ctx context.Context, req resource.SchemaR
 							MarkdownDescription: "Service provider weight",
 							Optional:            true,
 							Validators: []validator.Int64{
-								int64validator.AtLeast(1),
+								int64validator.AtLeast(0),
 								int64validator.AtMost(100),
 							},
 						},

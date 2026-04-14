@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -108,10 +107,6 @@ func (r *ServiceProviderResource) Schema(ctx context.Context, req resource.Schem
 				MarkdownDescription: "ServiceProvider custom data in JSON format. This is a write-only field used to pass provider-specific information during creation or update of the service provider",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""), // has default since this is a write-only field
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"is_failed": schema.BoolAttribute{
 				MarkdownDescription: "An indicator of whether the ServiceProvider is in a failed state",
@@ -156,11 +151,10 @@ func (r *ServiceProviderResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// is_unamanged, service_domain, provider_custom_data are write-only fields which we need to preserve from original request
+	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
 	newSp.ServiceDomain = data.ServiceDomain
-	newSp.ProviderCustomData = data.ProviderCustomData
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -176,11 +170,10 @@ func (r *ServiceProviderResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// is_unamanged, service_domain, provider_custom_data are write-only fields which we need to preserve from original request
+	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
 	newSp.ServiceDomain = data.ServiceDomain
-	newSp.ProviderCustomData = data.ProviderCustomData
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -197,11 +190,10 @@ func (r *ServiceProviderResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// is_unamanged, service_domain, provider_custom_data are write-only fields which we need to preserve from original request
+	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
 	newSp.ServiceDomain = data.ServiceDomain
-	newSp.ProviderCustomData = data.ProviderCustomData
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }

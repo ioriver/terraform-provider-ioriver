@@ -323,7 +323,7 @@ func (LogDestinationResource) resourceToObj(ctx context.Context, data interface{
 	s3Domain := ""
 	s3Path := ""
 	s3Region := ""
-	var credentials interface{}
+	var credentials string
 
 	if d.AwsS3 != nil {
 		destinationType = ioriver.AWS_S3
@@ -331,7 +331,7 @@ func (LogDestinationResource) resourceToObj(ctx context.Context, data interface{
 		s3Path = d.AwsS3.Path.ValueString()
 		s3Region = d.AwsS3.Region.ValueString()
 		if d.AwsS3.Credentials.AccessKey != nil {
-			credentials = fmt.Sprintf("{\"accessKey\":\"%s\",\"accessSecret\":\"%s\"}",
+			credentials = fmt.Sprintf("{\"access_key\":\"%s\",\"secret_key\":\"%s\"}",
 				d.AwsS3.Credentials.AccessKey.AccessKey.ValueString(),
 				d.AwsS3.Credentials.AccessKey.SecretKey.ValueString())
 		}
@@ -346,7 +346,7 @@ func (LogDestinationResource) resourceToObj(ctx context.Context, data interface{
 		s3Path = d.CompatibleS3.Path.ValueString()
 		s3Domain = d.CompatibleS3.Domain.ValueString()
 		s3Region = d.CompatibleS3.Region.ValueString()
-		credentials = fmt.Sprintf("{\"accessKey\":\"%s\",\"accessSecret\":\"%s\"}",
+		credentials = fmt.Sprintf("{\"access_key\":\"%s\",\"secret_key\":\"%s\"}",
 			d.CompatibleS3.Credentials.AccessKey.ValueString(),
 			d.CompatibleS3.Credentials.SecretKey.ValueString())
 	} else {
