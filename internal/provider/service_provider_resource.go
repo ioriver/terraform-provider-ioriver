@@ -104,7 +104,7 @@ func (r *ServiceProviderResource) Schema(ctx context.Context, req resource.Schem
 				Computed:            true,
 			},
 			"provider_custom_data": schema.StringAttribute{
-				MarkdownDescription: "ServiceProvider custom data in JSON format. This is a write-only field used to pass provider-specific information during creation or update of the service provider",
+				MarkdownDescription: "ServiceProvider custom data in JSON format. It is used to pass provider-specific information during creation or update of the service provider",
 				Optional:            true,
 				Computed:            true,
 			},
