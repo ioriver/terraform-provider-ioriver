@@ -27,7 +27,7 @@ jobs:
 
       - name: Setup Go
         if: success()
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.22.3'
           cache: true
