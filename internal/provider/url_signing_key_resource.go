@@ -2,9 +2,7 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -21,14 +19,7 @@ func NewUrlSigningKeyResource() resource.Resource {
 	return &UrlSigningKeyResource{}
 }
 
-type UrlSigningKeyResourceId struct {
-	urlSigningKeyId string
-	serviceId       string
-}
-
-type UrlSigningKeyResource struct {
-	client *ioriver.IORiverClient
-}
+type UrlSigningKeyResource struct{}
 
 type UrlSigningKeyResourceModel struct {
 	Id            types.String `tfsdk:"id"`
@@ -87,146 +78,75 @@ func (r *UrlSigningKeyResource) Schema(ctx context.Context, req resource.SchemaR
 
 // Configure resource and retrieve API client
 func (r *UrlSigningKeyResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: resource is deprecated, no client needed
 }
 
 // Create UrlSigningKey resource
 func (r *UrlSigningKeyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data UrlSigningKeyResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
-	if newData == nil {
-		return
-	}
-
-	// This resource has a couple of write-only fields which we need to preserve from original request
-	newKey := newData.(UrlSigningKeyResourceModel)
-	newKey.PublicKey = data.PublicKey
-	newKey.EncryptionKey = data.EncryptionKey
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newKey)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read UrlSigningKey resource
 func (r *UrlSigningKeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data UrlSigningKeyResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// This resource has a couple of write-only fields which we need to preserve from original request
-	newKey := newData.(UrlSigningKeyResourceModel)
-	newKey.PublicKey = data.PublicKey
-	newKey.EncryptionKey = data.EncryptionKey
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newKey)...)
+	// resource is deprecated: remove from state so Terraform stops tracking it
+	resp.State.RemoveResource(ctx)
 }
 
 // Update UrlSigningKey resource
 func (r *UrlSigningKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data UrlSigningKeyResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// This resource has a couple of write-only fields which we need to preserve from original request
-	newKey := newData.(UrlSigningKeyResourceModel)
-	newKey.PublicKey = data.PublicKey
-	newKey.EncryptionKey = data.EncryptionKey
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newKey)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete UrlSigningKey resource
 func (r *UrlSigningKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data UrlSigningKeyResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import UrlSigningKey resource
 func (r *UrlSigningKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // ------- Implement base Resource API ---------
 
 func (UrlSigningKeyResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateUrlSigningKey(newObj.(ioriver.UrlSigningKey))
+	return nil, nil
 }
 
 func (UrlSigningKeyResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(UrlSigningKeyResourceId)
-	return client.GetUrlSigningKey(resourceId.serviceId, resourceId.urlSigningKeyId)
+	return nil, nil
 }
 
 func (UrlSigningKeyResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateUrlSigningKey(obj.(ioriver.UrlSigningKey))
+	return nil, nil
 }
 
 func (UrlSigningKeyResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(UrlSigningKeyResourceId)
-	return client.DeleteUrlSigningKey(resourceId.serviceId, resourceId.urlSigningKeyId)
+	return nil
 }
 
 func (UrlSigningKeyResource) getId(data interface{}) interface{} {
-	d := data.(UrlSigningKeyResourceModel)
-	urlSigningKeyId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return UrlSigningKeyResourceId{urlSigningKeyId, serviceId}
+	return nil
 }
 
 // Convert UrlSigningKey resource to UrlSigningKey API object
 func (UrlSigningKeyResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(UrlSigningKeyResourceModel)
-
-	return ioriver.UrlSigningKey{
-		Id:            d.Id.ValueString(),
-		Service:       d.Service.ValueString(),
-		Name:          d.Name.ValueString(),
-		PublicKey:     d.PublicKey.ValueString(),
-		EncryptionKey: d.PublicKey.ValueString(),
-	}, nil
+	return nil, nil
 }
 
 // Convert UrlSigningKey API object to UrlSigningKey resource
-func (UrlSigningKeyResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	urlSigningKey := obj.(*ioriver.UrlSigningKey)
-
-	providerKeysMap := make(map[string]attr.Value, len(urlSigningKey.ProviderKeys))
-	for k, v := range urlSigningKey.ProviderKeys {
-		providerKeysMap[k] = types.StringValue(v)
-	}
-
-	providerKeys, diag := types.MapValue(types.StringType, providerKeysMap)
-	if diag.HasError() {
-		return nil, fmt.Errorf("error converting provider keys map")
-	}
-
-	return UrlSigningKeyResourceModel{
-		Id:            types.StringValue(urlSigningKey.Id),
-		Service:       types.StringValue(urlSigningKey.Service),
-		Name:          types.StringValue(urlSigningKey.Name),
-		PublicKey:     types.StringValue(""),
-		EncryptionKey: types.StringValue(""),
-		ProviderKeys:  providerKeys,
-	}, nil
+func (UrlSigningKeyResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }

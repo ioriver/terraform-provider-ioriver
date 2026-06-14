@@ -186,7 +186,7 @@ func (PerformanceMonitorResource) resourceToObj(ctx context.Context, data interf
 }
 
 // Convert PerformanceMonitor API object to PerformanceMonitor resource
-func (PerformanceMonitorResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (PerformanceMonitorResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	performanceMonitor := obj.(*ioriver.PerformanceMonitor)
 
 	return PerformanceMonitorResourceModel{

@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -24,14 +23,7 @@ func NewLogDestinationResource() resource.Resource {
 	return &LogDestinationResource{}
 }
 
-type LogDestinationResourceId struct {
-	logDestinationId string
-	serviceId        string
-}
-
-type LogDestinationResource struct {
-	client *ioriver.IORiverClient
-}
+type LogDestinationResource struct{}
 
 type AwsS3LogDestinationModel struct {
 	Name        types.String  `tfsdk:"name"`
@@ -195,206 +187,74 @@ func (r *LogDestinationResource) Schema(ctx context.Context, req resource.Schema
 
 // Configure resource and retrieve API client
 func (r *LogDestinationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: resource is deprecated, no client needed
 }
 
 // Create LogDestination resource
 func (r *LogDestinationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data LogDestinationResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
-	if newData == nil {
-		return
-	}
-
-	// LogDestination credential field is write-only which we need to preserve from original request
-	newLogDestination := newData.(LogDestinationResourceModel)
-	if newLogDestination.AwsS3 != nil && data.AwsS3 != nil {
-		newLogDestination.AwsS3.Credentials = data.AwsS3.Credentials
-	}
-	if newLogDestination.CompatibleS3 != nil && data.CompatibleS3 != nil {
-		newLogDestination.CompatibleS3.Credentials = data.CompatibleS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read LogDestination resource
 func (r *LogDestinationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data LogDestinationResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// LogDestination credential field is write-only which we need to preserve from original request
-	newLogDestination := newData.(LogDestinationResourceModel)
-	if newLogDestination.AwsS3 != nil && data.AwsS3 != nil {
-		newLogDestination.AwsS3.Credentials = data.AwsS3.Credentials
-	}
-	if newLogDestination.CompatibleS3 != nil && data.CompatibleS3 != nil {
-		newLogDestination.CompatibleS3.Credentials = data.CompatibleS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.State.RemoveResource(ctx)
 }
 
 // Update LogDestination resource
 func (r *LogDestinationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data LogDestinationResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// LogDestination credential field is write-only which we need to preserve from original request
-	newLogDestination := newData.(LogDestinationResourceModel)
-	if newLogDestination.AwsS3 != nil && data.AwsS3 != nil {
-		newLogDestination.AwsS3.Credentials = data.AwsS3.Credentials
-	}
-	if newLogDestination.CompatibleS3 != nil && data.CompatibleS3 != nil {
-		newLogDestination.CompatibleS3.Credentials = data.CompatibleS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete LogDestination resource
 func (r *LogDestinationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data LogDestinationResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import LogDestination resource
 func (r *LogDestinationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // ------- Implement base Resource API ---------
 
 func (LogDestinationResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateLogDestination(newObj.(ioriver.LogDestination))
+	return nil, nil
 }
 
 func (LogDestinationResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(LogDestinationResourceId)
-	return client.GetLogDestination(resourceId.serviceId, resourceId.logDestinationId)
+	return nil, nil
 }
 
 func (LogDestinationResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateLogDestination(obj.(ioriver.LogDestination))
+	return nil, nil
 }
 
 func (LogDestinationResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(LogDestinationResourceId)
-	return client.DeleteLogDestination(resourceId.serviceId, resourceId.logDestinationId)
+	return nil
 }
 
 func (LogDestinationResource) getId(data interface{}) interface{} {
-	d := data.(LogDestinationResourceModel)
-	logDestinationId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return LogDestinationResourceId{logDestinationId, serviceId}
+	return nil
 }
 
 // Convert LogDestination resource to LogDestination API object
 func (LogDestinationResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(LogDestinationResourceModel)
-
-	var destinationType ioriver.DestinationType
-	s3BucketName := ""
-	s3Domain := ""
-	s3Path := ""
-	s3Region := ""
-	var credentials string
-
-	if d.AwsS3 != nil {
-		destinationType = ioriver.AWS_S3
-		s3BucketName = d.AwsS3.Name.ValueString()
-		s3Path = d.AwsS3.Path.ValueString()
-		s3Region = d.AwsS3.Region.ValueString()
-		if d.AwsS3.Credentials.AccessKey != nil {
-			credentials = fmt.Sprintf("{\"access_key\":\"%s\",\"secret_key\":\"%s\"}",
-				d.AwsS3.Credentials.AccessKey.AccessKey.ValueString(),
-				d.AwsS3.Credentials.AccessKey.SecretKey.ValueString())
-		}
-		if d.AwsS3.Credentials.AssumeRole != nil {
-			credentials = fmt.Sprintf("{\"role_arn\":\"%s\",\"external_id\":\"%s\"}",
-				d.AwsS3.Credentials.AssumeRole.RoleArn.ValueString(),
-				d.AwsS3.Credentials.AssumeRole.ExternalId.ValueString())
-		}
-	} else if d.CompatibleS3 != nil {
-		destinationType = "S3_COMPATIBLE"
-		s3BucketName = d.CompatibleS3.Name.ValueString()
-		s3Path = d.CompatibleS3.Path.ValueString()
-		s3Domain = d.CompatibleS3.Domain.ValueString()
-		s3Region = d.CompatibleS3.Region.ValueString()
-		credentials = fmt.Sprintf("{\"access_key\":\"%s\",\"secret_key\":\"%s\"}",
-			d.CompatibleS3.Credentials.AccessKey.ValueString(),
-			d.CompatibleS3.Credentials.SecretKey.ValueString())
-	} else {
-		return nil, fmt.Errorf("unsupported destination type")
-	}
-
-	return ioriver.LogDestination{
-		Id:          d.Id.ValueString(),
-		Service:     d.Service.ValueString(),
-		Name:        d.Name.ValueString(),
-		Type:        destinationType,
-		Credentials: credentials,
-		S3Bucket:    s3BucketName,
-		S3Domain:    s3Domain,
-		S3Path:      s3Path,
-		S3Region:    s3Region,
-	}, nil
+	return nil, nil
 }
 
 // Convert LogDestination API object to LogDestination resource
-func (LogDestinationResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	logDestination := obj.(*ioriver.LogDestination)
-
-	var awsS3 *AwsS3LogDestinationModel
-	var compatibleS3 *CompatibleS3LogDestinationModel
-
-	if logDestination.Type == ioriver.AWS_S3 {
-		awsS3 = &AwsS3LogDestinationModel{
-			Name:   types.StringValue(logDestination.S3Bucket),
-			Path:   types.StringValue(logDestination.S3Path),
-			Region: types.StringValue(logDestination.S3Region),
-		}
-	} else if logDestination.Type == ioriver.S3_COMPATIBLE {
-		compatibleS3 = &CompatibleS3LogDestinationModel{
-			Name:   types.StringValue(logDestination.S3Bucket),
-			Path:   types.StringValue(logDestination.S3Path),
-			Domain: types.StringValue(logDestination.S3Domain),
-			Region: types.StringValue(logDestination.S3Region),
-		}
-	} else {
-		return nil, fmt.Errorf("unsupported destination type %s", logDestination.Type)
-	}
-
-	return LogDestinationResourceModel{
-		Id:           types.StringValue(logDestination.Id),
-		Service:      types.StringValue(logDestination.Service),
-		Name:         types.StringValue(logDestination.Name),
-		AwsS3:        awsS3,
-		CompatibleS3: compatibleS3,
-	}, nil
+func (LogDestinationResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }

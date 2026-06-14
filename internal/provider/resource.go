@@ -24,7 +24,7 @@ type Resource interface {
 
 	getId(data interface{}) interface{}
 	resourceToObj(ctx context.Context, data interface{}) (interface{}, error)
-	objToResource(ctx context.Context, obj interface{}) (interface{}, error)
+	objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error)
 }
 
 func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req resource.CreateRequest,
@@ -55,7 +55,7 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 		return nil
 	}
 
-	resourceModel, err := r.objToResource(ctx, obj)
+	resourceModel, err := r.objToResource(ctx, obj, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating resource", "Failed to convert IORiver object to resource: "+err.Error())
 	}
@@ -84,7 +84,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 		return nil
 	}
 
-	resourceModel, err := r.objToResource(ctx, obj)
+	resourceModel, err := r.objToResource(ctx, obj, data)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Failed to convert IORiver object to resource, object: %#v", obj))
 	}
@@ -114,7 +114,7 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 		return nil
 	}
 
-	resourceModel, err := r.objToResource(ctx, updatedObj)
+	resourceModel, err := r.objToResource(ctx, updatedObj, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating resource", "Failed to convert IORiver object to resource: "+err.Error())
 	}

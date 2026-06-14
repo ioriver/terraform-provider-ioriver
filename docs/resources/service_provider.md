@@ -17,7 +17,6 @@ Service Provider resource
 resource "ioriver_service_provider" "fastly" {
   service          = ioriver_service.service.id
   account_provider = ioriver_account_provider.fastly.id
-  service_domain   = ioriver_domain.domain.id
 }
 
 
@@ -25,7 +24,6 @@ resource "ioriver_service_provider" "fastly" {
 resource "ioriver_service_provider" "akamai" {
   service              = ioriver_service.service.id
   account_provider     = ioriver_account_provider.akamai.id
-  service_domain       = ioriver_domain.domain.id
   provider_custom_data = "{\"group\":\"grp_1234\",\"cp_code\":\"cpc_5678\",\"contract_id\":\"ctr_W-ABCD123\"}"
 }
 ```
@@ -36,7 +34,6 @@ resource "ioriver_service_provider" "akamai" {
 ### Required
 
 - `service` (String) The id of the service this service provider belongs to
-- `service_domain` (String) Before creating a service provider, the service must have at least one domain configured. This field is used to specify the domain of the service that this service provider will be associated with. This is a write-only field required during creation of the service provider
 
 ### Optional
 

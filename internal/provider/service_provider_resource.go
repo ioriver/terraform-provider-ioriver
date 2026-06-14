@@ -37,7 +37,6 @@ type ServiceProviderResourceModel struct {
 	Id                 types.String `tfsdk:"id"`
 	Service            types.String `tfsdk:"service"`
 	AccountProvider    types.String `tfsdk:"account_provider"`
-	ServiceDomain      types.String `tfsdk:"service_domain"`
 	IsUnmanaged        types.Bool   `tfsdk:"is_unmanaged"`
 	CName              types.String `tfsdk:"cname"`
 	DisplayName        types.String `tfsdk:"display_name"`
@@ -80,10 +79,6 @@ func (r *ServiceProviderResource) Schema(ctx context.Context, req resource.Schem
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"service_domain": schema.StringAttribute{
-				MarkdownDescription: "Before creating a service provider, the service must have at least one domain configured. This field is used to specify the domain of the service that this service provider will be associated with. This is a write-only field required during creation of the service provider",
-				Required:            true,
-			},
 			"is_unmanaged": schema.BoolAttribute{
 				MarkdownDescription: "Is this an unmanaged ServiceProvider, which means that the provider is not managed by IO River and will not be configured automatically. This is a write-only field required during creation of the service provider",
 				Optional:            true,
@@ -104,7 +99,7 @@ func (r *ServiceProviderResource) Schema(ctx context.Context, req resource.Schem
 				Computed:            true,
 			},
 			"provider_custom_data": schema.StringAttribute{
-				MarkdownDescription: "ServiceProvider custom data in JSON format. It is used to pass provider-specific information during creation or update of the service provider",
+				MarkdownDescription: "ServiceProvider custom data in JSON format. This is a write-only field used to pass provider-specific information during creation or update of the service provider",
 				Optional:            true,
 				Computed:            true,
 			},
@@ -151,10 +146,9 @@ func (r *ServiceProviderResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
+	// is_unmanaged is a write-only field which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
-	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -170,10 +164,9 @@ func (r *ServiceProviderResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
+	// is_unmanaged is a write-only field which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
-	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -190,10 +183,9 @@ func (r *ServiceProviderResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// is_unamanged, service_domain are write-only fields which we need to preserve from original request
+	// is_unmanaged is a write-only field which we need to preserve from original request
 	newSp := newData.(ServiceProviderResourceModel)
 	newSp.IsUnmanaged = data.IsUnmanaged
-	newSp.ServiceDomain = data.ServiceDomain
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
@@ -289,7 +281,7 @@ func (ServiceProviderResource) resourceToObj(ctx context.Context, data interface
 }
 
 // Convert ServiceProvider API object to ServiceProvider resource
-func (ServiceProviderResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (ServiceProviderResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	serviceProvider := obj.(*ioriver.ServiceProvider)
 
 	return ServiceProviderResourceModel{

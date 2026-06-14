@@ -19,14 +19,7 @@ func NewComputeResource() resource.Resource {
 	return &ComputeResource{}
 }
 
-type ComputeResourceId struct {
-	computeId string
-	serviceId string
-}
-
-type ComputeResource struct {
-	client *ioriver.IORiverClient
-}
+type ComputeResource struct{}
 
 type ComputeRouteModel struct {
 	Domain types.String `tfsdk:"domain"`
@@ -101,142 +94,75 @@ func (r *ComputeResource) Schema(ctx context.Context, req resource.SchemaRequest
 
 // Configure resource and retrieve API client
 func (r *ComputeResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: resource is deprecated, no client needed
 }
 
 // Create Compute resource
 func (r *ComputeResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ComputeResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read Compute resource
 func (r *ComputeResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ComputeResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	// resource is deprecated: remove from state so Terraform stops tracking it
+	resp.State.RemoveResource(ctx)
 }
 
 // Update Compute resource
 func (r *ComputeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ComputeResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete Compute resource
 func (r *ComputeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ComputeResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import Compute resource
 func (r *ComputeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // ------- Implement base Resource API ---------
 
 func (ComputeResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateCompute(newObj.(ioriver.Compute))
+	return nil, nil
 }
 
 func (ComputeResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(ComputeResourceId)
-	return client.GetCompute(resourceId.serviceId, resourceId.computeId)
+	return nil, nil
 }
 
 func (ComputeResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateCompute(obj.(ioriver.Compute))
+	return nil, nil
 }
 
 func (ComputeResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(ComputeResourceId)
-	return client.DeleteCompute(resourceId.serviceId, resourceId.computeId)
+	return nil
 }
 
 func (ComputeResource) getId(data interface{}) interface{} {
-	d := data.(ComputeResourceModel)
-	computeId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return ComputeResourceId{computeId, serviceId}
+	return nil
 }
 
 // Convert Compute resource to Compute API object
 func (ComputeResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(ComputeResourceModel)
-
-	// convert routes
-	computeRoutes := []ioriver.ComputeRoute{}
-	for _, route := range d.Routes {
-		computeRoutes = append(computeRoutes,
-			ioriver.ComputeRoute{
-				Domain: route.Domain.ValueString(),
-				Path:   route.Path.ValueString(),
-			})
-	}
-
-	return ioriver.Compute{
-		Id:           d.Id.ValueString(),
-		Service:      d.Service.ValueString(),
-		Name:         d.Name.ValueString(),
-		RequestCode:  d.RequestCode.ValueString(),
-		ResponseCode: d.ResponseCode.ValueString(),
-		Routes:       computeRoutes,
-	}, nil
+	return nil, nil
 }
 
 // Convert Compute API object to Compute resource
-func (ComputeResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	compute := obj.(*ioriver.Compute)
-
-	// convert actions
-	modelRoutes := []ComputeRouteModel{}
-	for _, route := range compute.Routes {
-		modelRoutes = append(modelRoutes,
-			ComputeRouteModel{
-				Domain: types.StringValue(route.Domain),
-				Path:   types.StringValue(route.Path),
-			})
-	}
-
-	return ComputeResourceModel{
-		Id:           types.StringValue(compute.Id),
-		Service:      types.StringValue(compute.Service),
-		Name:         types.StringValue(compute.Name),
-		RequestCode:  types.StringValue(compute.RequestCode),
-		ResponseCode: types.StringValue(compute.ResponseCode),
-		Routes:       modelRoutes,
-	}, nil
+func (ComputeResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }

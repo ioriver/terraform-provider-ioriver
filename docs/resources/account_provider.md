@@ -54,9 +54,9 @@ resource "ioriver_account_provider" "akamai" {
 Optional:
 
 - `akamai` (Attributes) Akamai API credentials (see [below for nested schema](#nestedatt--credentials--akamai))
+- `cdnetworks` (Attributes) CDNetworks API credentials (see [below for nested schema](#nestedatt--credentials--cdnetworks))
 - `cloudflare` (String, Sensitive) Cloudflare API access token
 - `cloudfront` (Attributes) Either AWS role or access-key credentials (see [below for nested schema](#nestedatt--credentials--cloudfront))
-- `edgio` (Attributes) Edgio API credentials (see [below for nested schema](#nestedatt--credentials--edgio))
 - `fastly` (String, Sensitive) Fastly API access token
 - `gcp_cloud_cdn` (String, Sensitive) GCP project ID
 - `gcp_media_cdn` (String, Sensitive) GCP project ID
@@ -70,6 +70,16 @@ Required:
 - `base_url` (String, Sensitive) Akamai API base URL
 - `client_secret` (String, Sensitive) Akamai API client secret
 - `client_token` (String, Sensitive) Akamai API client token
+
+
+<a id="nestedatt--credentials--cdnetworks"></a>
+### Nested Schema for `credentials.cdnetworks`
+
+Required:
+
+- `access_key` (String, Sensitive) CDNetworks access key
+- `contract_id` (String, Sensitive) CDNetworks contract ID
+- `secret_key` (String, Sensitive) CDNetworks secret key
 
 
 <a id="nestedatt--credentials--cloudfront"></a>
@@ -96,17 +106,6 @@ Required:
 
 - `external_id` (String) AWS role external ID
 - `role_arn` (String) AWS role ARN
-
-
-
-<a id="nestedatt--credentials--edgio"></a>
-### Nested Schema for `credentials.edgio`
-
-Required:
-
-- `client_id` (String, Sensitive) Edgio API client ID
-- `client_secret` (String, Sensitive) Edgio API client secret
-- `organization_id` (String, Sensitive) Edgio organization ID
 
 ## Import
 

@@ -2,9 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -18,7 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
@@ -31,13 +27,9 @@ func NewBehaviorResource() resource.Resource {
 }
 
 type BehaviorResourceId struct {
-	behaviorId string
-	serviceId  string
 }
 
-type BehaviorResource struct {
-	client *ioriver.IORiverClient
-}
+type BehaviorResource struct{}
 
 type HeaderNameValueModel struct {
 	HeaderName  types.String `tfsdk:"header_name"`
@@ -112,6 +104,8 @@ type CacheKeyModel struct {
 	Headers      []HeaderModel     `tfsdk:"headers"`
 	Cookies      []CookieModel     `tfsdk:"cookies"`
 	QueryStrings QueryStringsModel `tfsdk:"query_strings"`
+	Country      types.Bool        `tfsdk:"country"`
+	DeviceType   types.Bool        `tfsdk:"device_type"`
 }
 
 type QueryStringsData struct {
@@ -138,7 +132,6 @@ type BehaviorActionResourceModel struct {
 	OriginCacheControl        types.Bool                      `tfsdk:"origin_cache_control"`
 	BypassCacheOnCookie       types.String                    `tfsdk:"bypass_cache_on_cookie"`
 	CacheKey                  *CacheKeyModel                  `tfsdk:"cache_key"`
-	AutoMinify                types.String                    `tfsdk:"auto_minify"`
 	HostHeader                *HostHeaderModel                `tfsdk:"host_header"`
 	CorsHeader                *HeaderNameValueModel           `tfsdk:"cors_header"`
 	OverrideOrigin            types.String                    `tfsdk:"override_origin"`
@@ -200,7 +193,7 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"actions": schema.SetNestedAttribute{
-				MarkdownDescription: "Set of actions to apply on the path pattern. Each element in the set defines a single action.",
+				MarkdownDescription: "Set of actions to apply for matching requests. Each element in the set defines a single action.",
 				Required:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -252,10 +245,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							},
 						},
 						"cache_behavior": schema.StringAttribute{
-							MarkdownDescription: "Cache behavior type: CACHE or BYPASS",
+							MarkdownDescription: "Whether to bypass cache for this behavior. Valid values: `" + strings.Join(cacheBehaviorValues, "`, `") + "`",
 							Optional:            true,
 							Validators: []validator.String{
-								stringvalidator.OneOf([]string{"CACHE", "BYPASS"}...),
+								stringvalidator.OneOf(cacheBehaviorValues...),
 							},
 						},
 						"browser_cache_ttl": schema.Int64Attribute{
@@ -291,7 +284,6 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									path.MatchRelative().AtParent().AtName("origin_cache_control"),
 									path.MatchRelative().AtParent().AtName("bypass_cache_on_cookie"),
 									path.MatchRelative().AtParent().AtName("cache_key"),
-									path.MatchRelative().AtParent().AtName("auto_minify"),
 									path.MatchRelative().AtParent().AtName("host_header"),
 									path.MatchRelative().AtParent().AtName("cors_header"),
 									path.MatchRelative().AtParent().AtName("override_origin"),
@@ -375,11 +367,15 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 										},
 									},
 								},
+								"country": schema.BoolAttribute{
+									MarkdownDescription: "Include the client country in the cache key",
+									Optional:            true,
+								},
+								"device_type": schema.BoolAttribute{
+									MarkdownDescription: "Include the client device type (mobile/desktop) in the cache key",
+									Optional:            true,
+								},
 							},
-						},
-						"auto_minify": schema.StringAttribute{
-							MarkdownDescription: "Use the provided auto-minify configuration",
-							Optional:            true,
 						},
 						"host_header": schema.SingleNestedAttribute{
 							MarkdownDescription: "Override the Host header sent to the origin with the specified value",
@@ -444,10 +440,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									Required:            true,
 								},
 								"cache_behavior": schema.StringAttribute{
-									MarkdownDescription: "Cache behavior type: CACHE or BYPASS",
+									MarkdownDescription: "Cache behavior for this status code. Valid values: `" + strings.Join(cacheBehaviorValues, "`, `") + "`",
 									Required:            true,
 									Validators: []validator.String{
-										stringvalidator.OneOf([]string{"CACHE", "BYPASS"}...),
+										stringvalidator.OneOf(cacheBehaviorValues...),
 									},
 								},
 								"cache_ttl": schema.Int64Attribute{
@@ -469,10 +465,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 									NestedObject: schema.NestedAttributeObject{
 										Attributes: map[string]schema.Attribute{
 											"method": schema.StringAttribute{
-												MarkdownDescription: "Allowed HTTP Method",
+												MarkdownDescription: "Allowed HTTP Method. Valid values: `" + strings.Join(httpMethodValues, "`, `") + "`",
 												Required:            true,
 												Validators: []validator.String{
-													stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+													stringvalidator.OneOf(httpMethodValues...),
 												},
 											},
 										},
@@ -535,10 +531,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"method": schema.StringAttribute{
-										MarkdownDescription: "Allowed HTTP Method",
+										MarkdownDescription: "Allowed HTTP Method. Valid values: `" + strings.Join(httpMethodValues, "`, `") + "`",
 										Required:            true,
 										Validators: []validator.String{
-											stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+											stringvalidator.OneOf(httpMethodValues...),
 										},
 									},
 								},
@@ -572,10 +568,10 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"method": schema.StringAttribute{
-										MarkdownDescription: "Method to be cached",
+										MarkdownDescription: "Method to be cached. Valid values: `" + strings.Join(httpMethodValues, "`, `") + "`",
 										Required:            true,
 										Validators: []validator.String{
-											stringvalidator.OneOf([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}...),
+											stringvalidator.OneOf(httpMethodValues...),
 										},
 									},
 								},
@@ -606,736 +602,73 @@ func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaReques
 
 // Configure resource and retrieve API client
 func (r *BehaviorResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: ioriver is deprecated, no client needed
 }
 
 // Create Behavior resource
 func (r *BehaviorResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data BehaviorResourceModel
-	var doUpdate = false
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	// in case this is a default behavior, it needs to be udpated instead of created
-	if data.IsDefault.ValueBool() {
-		id, err := r.getDefaultBehaviorId(r.client, data.Service.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Error creating default behavior", "Unexpected error: "+err.Error())
-			return
-		}
-		data.Id = types.StringValue(id)
-		doUpdate = true
-	}
-
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, doUpdate)
-	if newData == nil {
-		tflog.Error(ctx, "Failed to create IORiver object")
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read Behavior resource
 func (r *BehaviorResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data BehaviorResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	// resource is deprecated: remove from state so Terraform stops tracking it
+	resp.State.RemoveResource(ctx)
 }
 
 // Update Behavior resource
 func (r *BehaviorResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data BehaviorResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete Behavior resource
 func (r *BehaviorResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data BehaviorResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// in case this is a default behavior, it needs to be udpated to default instead of deleted
-	if data.IsDefault.ValueBool() {
-
-		// the reset operation must be called under the global mutex
-		resetOp := func() (interface{}, error) {
-			return nil, r.client.ResetDefaultBehavior(data.Service.ValueString())
-		}
-		_, err := performOperation(func() (interface{}, error) { return resetOp() })
-
-		if err != nil {
-			resp.Diagnostics.AddError("Error deleting default behavior", "Unexpected error: "+err.Error())
-		}
-		return
-	}
-
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import Behavior resource
 func (r *BehaviorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
-// ------- Implement base Resource API ---------
+// ------- Implement base Resource API (stubs to satisfy interface) ---------
 
 func (BehaviorResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateBehavior(newObj.(ioriver.Behavior))
+	return nil, nil
 }
 
 func (BehaviorResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(BehaviorResourceId)
-	return client.GetBehavior(resourceId.serviceId, resourceId.behaviorId)
+	return nil, nil
 }
 
 func (BehaviorResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateBehavior(obj.(ioriver.Behavior))
+	return nil, nil
 }
 
 func (BehaviorResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(BehaviorResourceId)
-	return client.DeleteBehavior(resourceId.serviceId, resourceId.behaviorId)
+	return nil
 }
 
 func (BehaviorResource) getId(data interface{}) interface{} {
-	d := data.(BehaviorResourceModel)
-	behaviorId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return BehaviorResourceId{behaviorId, serviceId}
+	return nil
 }
 
-func (BehaviorResource) getDefaultBehaviorId(client *ioriver.IORiverClient, serviceId string) (string, error) {
-	behaviors, err := client.ListBehaviors(serviceId)
-	if err != nil {
-		return "", err
-	}
-
-	for _, behavior := range behaviors {
-		if behavior.IsDefault {
-			return behavior.Id, nil
-		}
-	}
-	return "", fmt.Errorf("unable to find default behavior for service %s", serviceId)
-}
-
-// Convert Behavior resource to Behavior API object
 func (BehaviorResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(BehaviorResourceModel)
-
-	// convert actions
-	behaviorActions := []ioriver.BehaviorAction{}
-	for _, action := range d.Actions {
-		ba, err := modelToBehaviorAction(action)
-		if err != nil {
-			return nil, err
-		}
-		behaviorActions = append(behaviorActions, *ba)
-	}
-
-	return ioriver.Behavior{
-		Id:          d.Id.ValueString(),
-		Service:     d.Service.ValueString(),
-		Name:        d.Name.ValueString(),
-		PathPattern: d.PathPattern.ValueString(),
-		IsDefault:   d.IsDefault.ValueBool(),
-		Actions:     behaviorActions,
-	}, nil
+	return nil, nil
 }
 
-// Convert Behavior API object to Behavior resource
-func (BehaviorResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	behavior := obj.(*ioriver.Behavior)
-
-	// convert actions
-	modelActions := []BehaviorActionResourceModel{}
-	for _, action := range behavior.Actions {
-		modelAction, err := behaviorActionToModel(action)
-		if err != nil {
-			return nil, err
-		}
-		modelActions = append(modelActions, *modelAction)
-	}
-
-	return BehaviorResourceModel{
-		Id:          types.StringValue(behavior.Id),
-		Service:     types.StringValue(behavior.Service),
-		Name:        types.StringValue(behavior.Name),
-		PathPattern: types.StringValue(behavior.PathPattern),
-		IsDefault:   types.BoolValue(behavior.IsDefault),
-		Actions:     modelActions,
-	}, nil
-}
-
-func modelToBehaviorAction(action BehaviorActionResourceModel) (*ioriver.BehaviorAction, error) {
-
-	if action.ResponseHeader != nil {
-		return &ioriver.BehaviorAction{
-			Type:                ioriver.SET_RESPONSE_HEADER,
-			ResponseHeaderName:  action.ResponseHeader.HeaderName.ValueString(),
-			ResponseHeaderValue: action.ResponseHeader.HeaderValue.ValueString(),
-		}, nil
-	}
-	if !action.DeleteResponseHeader.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:               ioriver.DELETE_RESPONSE_HEADER,
-			ResponseHeaderName: action.DeleteResponseHeader.ValueString(),
-		}, nil
-	}
-	if action.RequestHeader != nil {
-		return &ioriver.BehaviorAction{
-			Type:               ioriver.SET_REQUEST_HEADER,
-			RequestHeaderName:  action.RequestHeader.HeaderName.ValueString(),
-			RequestHeaderValue: action.RequestHeader.HeaderValue.ValueString(),
-		}, nil
-	}
-	if !action.DeleteRequestHeader.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:              ioriver.DELETE_REQUEST_HEADER,
-			RequestHeaderName: action.DeleteRequestHeader.ValueString(),
-		}, nil
-	}
-	if !action.CacheTTL.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:   ioriver.CACHE_TTL,
-			MaxTTL: int(action.CacheTTL.ValueInt64()),
-		}, nil
-	}
-	if !action.CacheBehavior.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:               ioriver.CACHE_BEHAVIOR,
-			CacheBehaviorValue: action.CacheBehavior.ValueString(),
-		}, nil
-	}
-	if !action.BrowserCacheTtl.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:   ioriver.BROWSER_CACHE_TTL,
-			MaxTTL: int(action.BrowserCacheTtl.ValueInt64()),
-		}, nil
-	}
-	if !action.ViewerProtocol.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:           ioriver.VIEWER_PROTOCOL,
-			ViewerProtocol: action.ViewerProtocol.ValueString(),
-		}, nil
-	}
-	if !action.Redirect.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:        ioriver.REDIRECT,
-			RedirectURL: action.Redirect.ValueString(),
-		}, nil
-	}
-	if !action.OriginCacheControl.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:                      ioriver.ORIGIN_CACHE_CONTROL,
-			OriginCacheControlEnabled: action.OriginCacheControl.ValueBool(),
-		}, nil
-	}
-	if !action.BypassCacheOnCookie.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:   ioriver.BYPASS_CACHE_ON_COOKIE,
-			Cookie: action.BypassCacheOnCookie.ValueString(),
-		}, nil
-	}
-	if action.CacheKey != nil {
-		headers := []string{}
-		for _, h := range action.CacheKey.Headers {
-			headers = append(headers, h.Header.ValueString())
-		}
-		cookies := []string{}
-		for _, c := range action.CacheKey.Cookies {
-			cookies = append(cookies, c.Cookie.ValueString())
-		}
-		params := []string{}
-		for _, p := range action.CacheKey.QueryStrings.ParamsList {
-			params = append(params, p.Param.ValueString())
-		}
-
-		paramsListType := convertQueryStringListTypeToBehaviorAction(action.CacheKey.QueryStrings.ListType.ValueString())
-		queryStringData := QueryStringsData{ListType: paramsListType, ParamsList: params}
-		cacheKey, err := json.Marshal(CacheKeyData{Headers: headers, Cookies: cookies, QueryStrings: queryStringData})
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize cache key")
-		}
-
-		return &ioriver.BehaviorAction{
-			Type:     ioriver.CACHE_KEY,
-			CacheKey: string(cacheKey),
-		}, nil
-	}
-	if !action.AutoMinify.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:       ioriver.AUTO_MINIFY,
-			AutoMinify: action.AutoMinify.ValueString(),
-		}, nil
-	}
-	if action.HostHeader != nil {
-		var useOriginHost *bool = nil
-		if !action.HostHeader.UseOriginHost.IsNull() {
-			value := action.HostHeader.UseOriginHost.ValueBool()
-			useOriginHost = &value
-		}
-
-		return &ioriver.BehaviorAction{
-			Type:          ioriver.HOST_HEADER_OVERRIDE,
-			HostHeader:    action.HostHeader.HeaderValue.ValueString(),
-			UseOriginHost: useOriginHost,
-		}, nil
-	}
-	if action.CorsHeader != nil {
-		return &ioriver.BehaviorAction{
-			Type:                ioriver.SET_CORS_HEADER,
-			ResponseHeaderName:  action.CorsHeader.HeaderName.ValueString(),
-			ResponseHeaderValue: action.CorsHeader.HeaderValue.ValueString(),
-		}, nil
-	}
-	if !action.OverrideOrigin.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:   ioriver.OVERRIDE_ORIGIN,
-			Origin: action.OverrideOrigin.ValueString(),
-		}, nil
-	}
-	if !action.OriginErrorPassThrough.IsNull() {
-		enabled := action.OriginErrorPassThrough.ValueBool()
-		return &ioriver.BehaviorAction{
-			Type:    ioriver.ORIGIN_ERRORS_PASS_THRU,
-			Enabled: &enabled,
-		}, nil
-	}
-	if !action.ForwardClientHeader.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:             ioriver.FORWARD_CLIENT_HEADER,
-			ClientHeaderName: action.ForwardClientHeader.ValueString(),
-		}, nil
-	}
-	if !action.FollowRedirects.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type: ioriver.FOLLOW_REDIRECTS,
-		}, nil
-	}
-	if action.StatusCodeCache != nil {
-		statusCode, err := statusCodeToInt(action.StatusCodeCache.StatusCode.ValueString())
-		if err != nil {
-			return nil, fmt.Errorf("invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:               ioriver.STATUS_CODE_CACHE,
-			StatusCode:         statusCode,
-			CacheBehaviorValue: action.StatusCodeCache.CacheBehavior.ValueString(),
-			MaxTTL:             int(action.StatusCodeCache.CacheTTL.ValueInt64()),
-		}, nil
-	}
-	if action.GeneratePreflightResponse != nil {
-		var methods []string
-		for _, m := range *action.GeneratePreflightResponse.AllowedMethods {
-			methods = append(methods, m.Method.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:                ioriver.GENERATE_PREFLIGHT_RESPONSE,
-			ResponseHeaderValue: strings.Join(methods, ","),
-			MaxTTL:              int(action.GeneratePreflightResponse.MaxAge.ValueInt64()),
-		}, nil
-	}
-	if action.StatusCodeBrowserCache != nil {
-		statusCode, err := statusCodeToInt(action.StatusCodeBrowserCache.StatusCode.ValueString())
-		if err != nil {
-			return nil, fmt.Errorf("invalid status code %s", action.StatusCodeCache.StatusCode.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:       ioriver.STATUS_CODE_BROWSER_CACHE,
-			StatusCode: statusCode,
-			MaxTTL:     int(action.StatusCodeBrowserCache.BrowserCacheTtl.ValueInt64()),
-		}, nil
-	}
-	if !action.StaleTtl.IsNull() {
-		return &ioriver.BehaviorAction{
-			Type:   ioriver.STALE_TTL,
-			MaxTTL: int(action.StaleTtl.ValueInt64()),
-		}, nil
-	}
-	if action.StreamLogs != nil {
-		return &ioriver.BehaviorAction{
-			Type:                   ioriver.STREAM_LOGS,
-			UnifiedLogDestination:  action.StreamLogs.UnifiedLogDestination.ValueString(),
-			UnifiedLogSamplingRate: int(action.StreamLogs.UnifiedLogSamplingRate.ValueInt64()),
-		}, nil
-	}
-	if action.AllowedMethods != nil {
-		var methods []string
-		for _, m := range *action.AllowedMethods {
-			methods = append(methods, m.Method.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:           ioriver.ALLOWED_METHODS,
-			AllowedMethods: strings.Join(methods, ","),
-		}, nil
-	}
-	if !action.Compression.IsNull() {
-		enabled := action.Compression.ValueBool()
-		return &ioriver.BehaviorAction{
-			Type:    ioriver.COMPRESSION,
-			Enabled: &enabled,
-		}, nil
-	}
-	if !action.LargeFilesOptimization.IsNull() {
-		enabled := action.LargeFilesOptimization.ValueBool()
-		return &ioriver.BehaviorAction{
-			Type:    ioriver.LARGE_FILES_OPTIMIZATION,
-			Enabled: &enabled,
-		}, nil
-	}
-	if !action.UrlSigning.IsNull() {
-		enabled := action.UrlSigning.ValueBool()
-		return &ioriver.BehaviorAction{
-			Type:    ioriver.URL_SIGNING,
-			Enabled: &enabled,
-		}, nil
-	}
-	if action.GenerateResponse != nil {
-		statusCode, err := statusCodeToInt(action.GenerateResponse.StatusCode.ValueString())
-		if err != nil {
-			return nil, fmt.Errorf("invalid status code %s", action.GenerateResponse.StatusCode.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:             ioriver.GENERATE_RESPONSE,
-			StatusCode:       statusCode,
-			ResponsePagePath: action.GenerateResponse.ResponsePagePath.ValueString(),
-		}, nil
-	}
-	if action.CachedMethods != nil {
-		var methods []string
-		for _, m := range *action.CachedMethods {
-			methods = append(methods, m.Method.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type:          ioriver.CACHED_METHODS,
-			CachedMethods: strings.Join(methods, ","),
-		}, nil
-	}
-	if action.AllowAccessOnlyFromIP != nil {
-		var ipList []string
-		for _, ipModel := range *action.AllowAccessOnlyFromIP {
-			ipList = append(ipList, ipModel.IP.ValueString())
-		}
-		return &ioriver.BehaviorAction{
-			Type: ioriver.ALLOW_ACCESS_ONLY_FROM_IP,
-			AllowAccessOnlyFromIP: &ioriver.AllowAccessOnlyFromIPModel{
-				IPList: ipList,
-			},
-		}, nil
-	}
-
-	return nil, fmt.Errorf("unsupported action type")
-}
-
-func behaviorActionToModel(behaviorAction ioriver.BehaviorAction) (*BehaviorActionResourceModel, error) {
-	actionType := types.StringValue(string(behaviorAction.Type))
-
-	if behaviorAction.Type == ioriver.CACHE_TTL {
-		return &BehaviorActionResourceModel{
-			CacheTTL: types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.SET_RESPONSE_HEADER {
-		responseHeader := &HeaderNameValueModel{
-			HeaderName:  types.StringValue(behaviorAction.ResponseHeaderName),
-			HeaderValue: types.StringValue(behaviorAction.ResponseHeaderValue),
-		}
-		return &BehaviorActionResourceModel{
-			ResponseHeader: responseHeader,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.DELETE_RESPONSE_HEADER {
-		return &BehaviorActionResourceModel{
-			DeleteResponseHeader: types.StringValue(behaviorAction.ResponseHeaderName),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.SET_REQUEST_HEADER {
-		requestHeader := &HeaderNameValueModel{
-			HeaderName:  types.StringValue(behaviorAction.RequestHeaderName),
-			HeaderValue: types.StringValue(behaviorAction.RequestHeaderValue),
-		}
-		return &BehaviorActionResourceModel{
-			RequestHeader: requestHeader,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.DELETE_REQUEST_HEADER {
-		return &BehaviorActionResourceModel{
-			DeleteRequestHeader: types.StringValue(behaviorAction.RequestHeaderName),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.CACHE_BEHAVIOR {
-		return &BehaviorActionResourceModel{
-			CacheBehavior: types.StringValue(behaviorAction.CacheBehaviorValue),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.BROWSER_CACHE_TTL {
-		return &BehaviorActionResourceModel{
-			BrowserCacheTtl: types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.VIEWER_PROTOCOL {
-		return &BehaviorActionResourceModel{
-			ViewerProtocol: types.StringValue(behaviorAction.ViewerProtocol),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.REDIRECT {
-		return &BehaviorActionResourceModel{
-			Redirect: types.StringValue(behaviorAction.RedirectURL),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.ORIGIN_CACHE_CONTROL {
-		return &BehaviorActionResourceModel{
-			OriginCacheControl: types.BoolValue(behaviorAction.OriginCacheControlEnabled),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.BYPASS_CACHE_ON_COOKIE {
-		return &BehaviorActionResourceModel{
-			BypassCacheOnCookie: types.StringValue(behaviorAction.Cookie),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.CACHE_KEY {
-		var cacheKeyData CacheKeyData
-		err := json.Unmarshal([]byte(behaviorAction.CacheKey), &cacheKeyData)
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling cache-key JSON: %v", err)
-		}
-
-		modelHeaders := []HeaderModel{}
-		for _, h := range cacheKeyData.Headers {
-			modelHeaders = append(modelHeaders, HeaderModel{Header: types.StringValue(h)})
-		}
-		modelCookies := []CookieModel{}
-		for _, c := range cacheKeyData.Cookies {
-			modelCookies = append(modelCookies, CookieModel{Cookie: types.StringValue(c)})
-		}
-		paramList := []ParamModel{}
-		for _, p := range cacheKeyData.QueryStrings.ParamsList {
-			paramList = append(paramList, ParamModel{Param: types.StringValue(p)})
-		}
-		listType := convertQueryStringListTypeFromBehaviorAction(cacheKeyData.QueryStrings.ListType)
-		modelQueryString := QueryStringsModel{ParamsList: paramList, ListType: types.StringValue(listType)}
-
-		return &BehaviorActionResourceModel{
-			CacheKey: &CacheKeyModel{Headers: modelHeaders, Cookies: modelCookies, QueryStrings: modelQueryString},
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.AUTO_MINIFY {
-		return &BehaviorActionResourceModel{
-			AutoMinify: types.StringValue(behaviorAction.AutoMinify),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.HOST_HEADER_OVERRIDE {
-		hostHeader := &HostHeaderModel{}
-		if behaviorAction.HostHeader != "" {
-			hostHeader.HeaderValue = types.StringValue(behaviorAction.HostHeader)
-		}
-		if behaviorAction.UseOriginHost != nil {
-			hostHeader.UseOriginHost = types.BoolValue(*behaviorAction.UseOriginHost)
-		}
-		return &BehaviorActionResourceModel{
-			HostHeader: hostHeader,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.SET_CORS_HEADER {
-		responseHeader := &HeaderNameValueModel{
-			HeaderName:  types.StringValue(behaviorAction.ResponseHeaderName),
-			HeaderValue: types.StringValue(behaviorAction.ResponseHeaderValue),
-		}
-		return &BehaviorActionResourceModel{
-			CorsHeader: responseHeader,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.ORIGIN_ERRORS_PASS_THRU {
-		return &BehaviorActionResourceModel{
-			OriginErrorPassThrough: types.BoolValue(*behaviorAction.Enabled),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.FORWARD_CLIENT_HEADER {
-		return &BehaviorActionResourceModel{
-			ForwardClientHeader: types.StringValue(behaviorAction.ClientHeaderName),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.FOLLOW_REDIRECTS {
-		return &BehaviorActionResourceModel{
-			FollowRedirects: types.BoolValue(true),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.STATUS_CODE_CACHE {
-		statusCodeCache := &StatusCodeCacheModel{
-			StatusCode:    types.StringValue(statusCodeToString(behaviorAction.StatusCode)),
-			CacheBehavior: types.StringValue(behaviorAction.CacheBehaviorValue),
-			CacheTTL:      types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}
-		return &BehaviorActionResourceModel{
-			StatusCodeCache: statusCodeCache,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.GENERATE_PREFLIGHT_RESPONSE {
-		methods := strings.Split(behaviorAction.ResponseHeaderValue, ",")
-		modelMethods := []MethodModel{}
-		for _, m := range methods {
-			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
-		}
-		genPreflightResp := &GeneratePreflightResponseModel{
-			AllowedMethods: &modelMethods,
-			MaxAge:         types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}
-		return &BehaviorActionResourceModel{
-			GeneratePreflightResponse: genPreflightResp,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.STATUS_CODE_BROWSER_CACHE {
-		statusCodeBrowserCache := &StatusCodeBrowserCacheModel{
-			StatusCode:      types.StringValue(statusCodeToString(behaviorAction.StatusCode)),
-			BrowserCacheTtl: types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}
-		return &BehaviorActionResourceModel{
-			StatusCodeBrowserCache: statusCodeBrowserCache,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.STALE_TTL {
-		return &BehaviorActionResourceModel{
-			StaleTtl: types.Int64Value(int64(behaviorAction.MaxTTL)),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.STREAM_LOGS {
-		streamLogs := &StreamLogsModel{
-			UnifiedLogDestination:  types.StringValue(behaviorAction.UnifiedLogDestination),
-			UnifiedLogSamplingRate: types.Int64Value(int64(behaviorAction.UnifiedLogSamplingRate)),
-		}
-		return &BehaviorActionResourceModel{
-			StreamLogs: streamLogs,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.ALLOWED_METHODS {
-		methods := strings.Split(behaviorAction.AllowedMethods, ",")
-		modelMethods := []MethodModel{}
-		for _, m := range methods {
-			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
-		}
-		return &BehaviorActionResourceModel{
-			AllowedMethods: &modelMethods,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.COMPRESSION {
-		return &BehaviorActionResourceModel{
-			Compression: types.BoolValue(*behaviorAction.Enabled),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.LARGE_FILES_OPTIMIZATION {
-		return &BehaviorActionResourceModel{
-			LargeFilesOptimization: types.BoolValue(*behaviorAction.Enabled),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.URL_SIGNING {
-		return &BehaviorActionResourceModel{
-			UrlSigning: types.BoolValue(*behaviorAction.Enabled),
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.GENERATE_RESPONSE {
-		generateResponse := &GenerateResponseModel{
-			StatusCode:       types.StringValue(statusCodeToString(behaviorAction.StatusCode)),
-			ResponsePagePath: types.StringValue(behaviorAction.ResponsePagePath),
-		}
-		return &BehaviorActionResourceModel{
-			GenerateResponse: generateResponse,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.CACHED_METHODS {
-		methods := strings.Split(behaviorAction.CachedMethods, ",")
-		modelMethods := []MethodModel{}
-		for _, m := range methods {
-			modelMethods = append(modelMethods, MethodModel{Method: types.StringValue(m)})
-		}
-		return &BehaviorActionResourceModel{
-			CachedMethods: &modelMethods,
-		}, nil
-	}
-	if behaviorAction.Type == ioriver.ALLOW_ACCESS_ONLY_FROM_IP {
-		modelIPs := []IPModel{}
-		for _, ip := range behaviorAction.AllowAccessOnlyFromIP.IPList {
-			modelIPs = append(modelIPs, IPModel{IP: types.StringValue(ip)})
-		}
-		return &BehaviorActionResourceModel{
-			AllowAccessOnlyFromIP: &modelIPs,
-		}, nil
-	}
-
-	return nil, fmt.Errorf("unsupported action type %s", actionType)
-}
-
-func statusCodeToInt(statusCode string) (int, error) {
-	switch statusCode {
-	case "1xx":
-		return 1, nil
-	case "2xx":
-		return 2, nil
-	case "3xx":
-		return 3, nil
-	case "4xx":
-		return 4, nil
-	case "5xx":
-		return 5, nil
-	}
-	return strconv.Atoi(statusCode)
-}
-
-func statusCodeToString(statusCode int) string {
-	switch statusCode {
-	case 1:
-		return "1xx"
-	case 2:
-		return "2xx"
-	case 3:
-		return "4xx"
-	case 4:
-		return "4xx"
-	case 5:
-		return "5xx"
-	}
-	return fmt.Sprintf("%d", statusCode)
-}
-
-func convertQueryStringListTypeToBehaviorAction(listType string) string {
-	if listType == "include" {
-		return "whitelist"
-	}
-	if listType == "exclude" {
-		return "blacklist"
-	}
-	return listType
-}
-
-func convertQueryStringListTypeFromBehaviorAction(listType string) string {
-	if listType == "whitelist" {
-		return "include"
-	}
-	if listType == "blacklist" {
-		return "exclude"
-	}
-	return listType
+func (BehaviorResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }
