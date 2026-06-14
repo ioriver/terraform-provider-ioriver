@@ -19,8 +19,14 @@ func generateRandomResourceName() string {
 }
 
 func createTestClient() *ioriver.IORiverClient {
-	var client *ioriver.IORiverClient = ioriver.NewClient(os.Getenv(APITokenEvnVar))
+	var client = ioriver.NewClient(os.Getenv(APITokenEvnVar))
+
 	client.TerraformVersion = "test"
+
+	if endpoint := os.Getenv(APIEndpointEnvVar); endpoint != "" {
+		client.EndpointUrl = endpoint
+	}
+
 	return client
 }
 
@@ -40,6 +46,14 @@ func testAccPreCheck(t *testing.T) {
 	testAccPreEnvVariable(t, "IORIVER_TEST_SERVICE_PROVIDER_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_DEFAULT_BEHAVIOR_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID")
+	testAccPreEnvVariable(t, "IORIVER_TEST_FASTLY_API_TOKEN")
+}
+
+func testAccPreCheckV2(t *testing.T) {
+	testAccPreEnvVariable(t, "IORIVER_API_TOKEN")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN")
+	testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID")
+	testAccPreEnvVariable(t, "IORIVER_TEST_SERVICE_PROVIDER_ID")
 	testAccPreEnvVariable(t, "IORIVER_TEST_FASTLY_API_TOKEN")
 }
 

@@ -307,7 +307,7 @@ func (CertificateResource) resourceToObj(ctx context.Context, data interface{}) 
 }
 
 // Convert Certificate API object to Certificate resource
-func (CertificateResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (CertificateResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	cert := obj.(*ioriver.Certificate)
 
 	// convert providers certificates only for EXTERNAL certificates, otherwise it should be empty.

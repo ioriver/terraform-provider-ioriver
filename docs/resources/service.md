@@ -13,10 +13,45 @@ Service resource
 ## Example Usage
 
 ```terraform
-resource "ioriver_service" "service" {
-  name        = "example-myservice"
-  description = "This is my service"
+# Canonical starting-point example for an IO River service.
+# One HTTPS origin, one domain, 60-minute edge cache, compression enabled.
+
+resource "ioriver_service" "example" {
+  name        = "my-service"
+  description = "My IO River CDN service"
   certificate = ioriver_certificate.cert.id
+
+  config = {
+    origins = [
+      {
+        name = "primary-origin"
+        custom_origin = {
+          host     = "origin.example.com"
+          protocol = "https"
+        }
+      }
+    ]
+
+    domains = [
+      {
+        domain = "www.example.com"
+        mappings = [
+          {
+            target_mapping = "primary-origin"
+          }
+        ]
+      }
+    ]
+
+    behaviors = {
+      default = {
+        actions = {
+          cache_ttl   = 3600 # 60-minute edge cache
+          compression = true
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -25,17 +60,1514 @@ resource "ioriver_service" "service" {
 
 ### Required
 
-- `certificate` (String) Certificate to be used with the service (must match the domain)
+- `certificate` (String) ID of the certificate to be used with the service
+- `config` (Attributes) Service configuration (see [below for nested schema](#nestedatt--config))
 - `name` (String) Service name
 
 ### Optional
 
-- `description` (String) Description of the service
+- `description` (String) Service description
 
 ### Read-Only
 
 - `cname` (String) CNAME for the IO River service
 - `id` (String) Service identifier
+
+<a id="nestedatt--config"></a>
+### Nested Schema for `config`
+
+Optional:
+
+- `behaviors` (Attributes) Behavior configuration — contains the default behavior and the list of specific (custom) behaviors (see [below for nested schema](#nestedatt--config--behaviors))
+- `compute` (Attributes) Compute configuration (see [below for nested schema](#nestedatt--config--compute))
+- `domains` (Attributes List) Domain configuration (see [below for nested schema](#nestedatt--config--domains))
+- `log_destinations` (Attributes List) Log destination configuration (see [below for nested schema](#nestedatt--config--log_destinations))
+- `origin_sets` (Attributes List) Origin set configuration (see [below for nested schema](#nestedatt--config--origin_sets))
+- `origins` (Attributes List) Origin configuration (see [below for nested schema](#nestedatt--config--origins))
+- `protocol` (Attributes) Protocol configuration (see [below for nested schema](#nestedatt--config--protocol))
+- `security` (Attributes) Security configuration (WAF, custom rules, rate limiting) (see [below for nested schema](#nestedatt--config--security))
+
+Read-Only:
+
+- `creation_name` (String) Name of the service when it was created, const once set by backend
+- `service_uid` (String) Unique identifier for the service
+- `uuid` (String) Unique identifier for the configuration
+
+<a id="nestedatt--config--behaviors"></a>
+### Nested Schema for `config.behaviors`
+
+Optional:
+
+- `custom` (Attributes List) Specific behaviors — evaluated in order, after the default Behavior (see [below for nested schema](#nestedatt--config--behaviors--custom))
+- `default` (Attributes) Default behavior — applies to all requests. 
+  - Optional and computed: omit to let the backend apply platform defaults.
+  - (see [below for nested schema](#nestedatt--config--behaviors--default))
+
+<a id="nestedatt--config--behaviors--custom"></a>
+### Nested Schema for `config.behaviors.custom`
+
+Required:
+
+- `actions` (Attributes) Set of actions to apply for matching requests. Each element in the set defines a single action. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions))
+- `name` (String) Behavior name
+
+Optional:
+
+- `condition` (Attributes) Full match condition (OR-of-ANDs expression).
+  - Mutually exclusive with `path_pattern`. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--condition))
+- `path_pattern` (String) Simple path pattern shorthand (e.g. '/api/*').
+  - Mutually exclusive with `condition`.
+  - Internally expanded to a single `http.request.path` / `match` condition.
+
+<a id="nestedatt--config--behaviors--custom--actions"></a>
+### Nested Schema for `config.behaviors.custom.actions`
+
+Optional:
+
+- `allow_access_only_from_ip` (Attributes Set) Allow access only from specified IP addresses (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--allow_access_only_from_ip))
+- `allowed_methods` (Attributes Set) Set of HTTP methods the CDN will accept (top-level allowed methods action) (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--allowed_methods))
+- `browser_cache_ttl` (Number) Controls how long the browser is allowed to cache the content.
+  - The CDN will add a Cache-Control header to the response sent to end-users with the configured cache TTL.
+  - Set the value of the browser cache TTL in seconds.
+- `cache_behavior` (String) Controls whether content should be cached by the CDN, possible values: `BYPASS`, `CACHE`
+- `cache_key` (Attributes) Custom cache key configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cache_key))
+- `cache_ttl` (Number) Set the value of the edge cache TTL in seconds
+- `cached_methods` (Attributes Set) Controls the list of HTTP methods whose responses the CDN will cache (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cached_methods))
+- `compression` (Boolean) Enable compression of responses.
+- `cors` (Attributes) CORS configuration for the behavior (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors))
+- `deny_access` (Boolean) Controls whether the CDN should deny access to requests that meet the behavior condition.
+  - When enabled, the CDN will return a 403 Forbidden response.
+- `deny_access_by_ip` (Attributes Set) Controls whether the CDN should deny access to a specific set of IP addresses. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--deny_access_by_ip))
+- `deny_access_by_time` (Attributes List) Controls whether the CDN should deny access during a specific time period.
+  - The time period can be either a fixed interval (`date_time_window`) or a recurring one (`time_periodic`). 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--deny_access_by_time))
+- `follow_redirects` (Boolean) This action enables the CDN to follow a redirect response from the origin.
+  - If the origin responds with a redirect, the CDN will follow it and return the response to the end user.
+  - **Limitations**:
+    - The host in the `Location` header must be defined as an origin in the service.
+    - The scheme in the `Location` header must be HTTPS.
+- `generate_preflight_response` (Attributes) Controls how the CDN should respond to a preflight request.
+  - The CDN can respond to a preflight request without forwarding it to the origin.
+  - You can configure the headers to include in the preflight response. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--generate_preflight_response))
+- `generate_response` (Attributes List) Return a custom response page for specific status code(s) (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--generate_response))
+- `host_header` (Attributes) Override the Host header sent to the origin.
+  - Set `header_value` to a specific hostname, or set `use_origin_host = true` to use the origin's own hostname.
+  - The two fields are mutually exclusive. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--host_header))
+- `large_files_optimization` (Boolean) Enable large files optimization.
+- `origin_cache_control` (Boolean) Controls whether the CDN should honor the Cache-Control header sent by the origin.
+  - By default, origin Cache-Control headers are not honored by the CDN.
+- `origin_response_headers` (Attributes Set) Add, modify, or remove headers on the response received from the origin (before caching).
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--origin_response_headers))
+- `redirect` (Attributes) This action enables sending a redirect response with a specified URL. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--redirect))
+- `request_headers` (Attributes Set) Add, modify, or remove headers on the request forwarded to the origin.
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--request_headers))
+- `response_headers` (Attributes Set) Add, modify, or remove headers on the response sent to the client.
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--response_headers))
+- `stale_ttl` (Number) This action sets the time duration the CDN can serve expired content from the cache
+  - If the content is expired and there is a problem fetching it from the origin, the CDN can serve stale content for the specified duration.
+   - Set the cache TTL value in seconds.
+- `status_code_browser_cache` (Attributes List) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--status_code_browser_cache))
+- `status_codes_ttl` (Attributes List) Cache TTL configuration per status code (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--status_codes_ttl))
+- `stream_logs` (Attributes) Stream CDN access logs to a configured logging destination (e.g., an S3 bucket).
+  - All logs are delivered in a unified format, regardless of which CDN provider generated them.
+  - See IO River Documentation for details on how to configure a destination. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--stream_logs))
+- `true_client_ip` (Boolean) Controls whether the CDN should add a `True-Client-IP` header when forwarding the request to the origin.
+  - When enabled, the header will contain the real IP address of the end user.
+- `url_rewrites` (Attributes List) This action enables rewriting the request path.
+  - The destination path can be a static string or can be derived from a regular expression.
+  - This action takes place before the content is retrieved from the cache.
+  - Example: The following removes the static prefix from the request path:     Source `/static/(.*)`, Destination `/$1` 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--url_rewrites))
+- `url_signing` (Boolean) Controls whether the CDN should verify the URL signature before allowing access to the content.
+- `viewer_protocol` (String) Controls how the CDN should respond to HTTP requests.
+  - The CDN can either accept both HTTP and HTTPS, redirect HTTP to HTTPS, or restrict access to HTTPS only.
+  - If HTTPS-only is selected, the CDN will respond with a 403 status code to HTTP requests.
+  - Allowed viewer protocol - can be one of the following: `HTTPS_ONLY`, `HTTP_AND_HTTPS`, `REDIRECT_HTTP_TO_HTTPS`.
+
+<a id="nestedatt--config--behaviors--custom--actions--allow_access_only_from_ip"></a>
+### Nested Schema for `config.behaviors.custom.actions.allow_access_only_from_ip`
+
+Required:
+
+- `ip` (String) IP address or CIDR block to allow
+
+
+<a id="nestedatt--config--behaviors--custom--actions--allowed_methods"></a>
+### Nested Schema for `config.behaviors.custom.actions.allowed_methods`
+
+Optional:
+
+- `method` (String) HTTP method. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cache_key"></a>
+### Nested Schema for `config.behaviors.custom.actions.cache_key`
+
+Optional:
+
+- `cookies` (Attributes Set) Set of cookies to include in the cache key (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cache_key--cookies))
+- `country` (Boolean) Include the client country in the cache key
+- `device_type` (Boolean) Include the client device type (mobile/desktop) in the cache key
+- `headers` (Attributes Set) Set of headers to include in the cache key (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cache_key--headers))
+- `query_strings` (Attributes) Cache key query strings configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cache_key--query_strings))
+
+<a id="nestedatt--config--behaviors--custom--actions--cache_key--cookies"></a>
+### Nested Schema for `config.behaviors.custom.actions.cache_key.cookies`
+
+Required:
+
+- `cookie` (String) Cookie name
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cache_key--headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.cache_key.headers`
+
+Required:
+
+- `header` (String) Header name
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cache_key--query_strings"></a>
+### Nested Schema for `config.behaviors.custom.actions.cache_key.query_strings`
+
+Required:
+
+- `type` (String) Controls which query string params are part of the cache key.
+  - `include` / `exclude`: use the params listed in `params`.
+  - `all`: include every query string param (no `params` allowed).
+  - `none`: ignore all query string params (no `params` allowed).
+
+Optional:
+
+- `params` (Attributes Set) Set of query string params to include or exclude in the cache key.
+  - Required when `type` is `include` or `exclude`.
+  - Must be omitted when `type` is `all` or `none`. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cache_key--query_strings--params))
+
+<a id="nestedatt--config--behaviors--custom--actions--cache_key--query_strings--params"></a>
+### Nested Schema for `config.behaviors.custom.actions.cache_key.query_strings.params`
+
+Required:
+
+- `param` (String) Query param to include/exclude
+
+
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cached_methods"></a>
+### Nested Schema for `config.behaviors.custom.actions.cached_methods`
+
+Optional:
+
+- `method` (String) Method to be cached. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cors"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors`
+
+Optional:
+
+- `allow_credentials` (Boolean) Access-Control-Allow-Credentials value
+- `allow_headers` (Attributes) Access-Control-Allow-Headers configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors--allow_headers))
+- `allow_methods` (Attributes) Access-Control-Allow-Methods configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors--allow_methods))
+- `allow_origin` (Attributes) Access-Control-Allow-Origin configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors--allow_origin))
+- `expose_headers` (Attributes) Access-Control-Expose-Headers configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors--expose_headers))
+- `max_age` (Attributes) Access-Control-Max-Age configuration (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--cors--max_age))
+
+<a id="nestedatt--config--behaviors--custom--actions--cors--allow_headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors.allow_headers`
+
+Required:
+
+- `mode` (String) Header mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the headers value
+- `values` (List of String) List of allowed headers
+  - Required when mode is `specific`, must be empty otherwise.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cors--allow_methods"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors.allow_methods`
+
+Required:
+
+- `mode` (String) Method mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the methods value
+- `values` (List of String) List of allowed methods
+  - Required when mode is `specific`, must be empty otherwise.
+  - Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cors--allow_origin"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors.allow_origin`
+
+Required:
+
+- `mode` (String) Origin mode. Valid values: `all`, `specific`, `from_request`
+
+Optional:
+
+- `origins` (List of String) List of allowed origins
+  - Required when mode is `specific`, must be empty otherwise.
+- `override` (Boolean) Override the origin value
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cors--expose_headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors.expose_headers`
+
+Required:
+
+- `mode` (String) Header mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the expose headers value
+- `values` (List of String) List of exposed headers 
+  - Required when mode is `specific`, must be empty otherwise.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--cors--max_age"></a>
+### Nested Schema for `config.behaviors.custom.actions.cors.max_age`
+
+Optional:
+
+- `override` (Boolean) Override the max_age value
+- `value` (Number) Max-Age value in seconds
+
+
+
+<a id="nestedatt--config--behaviors--custom--actions--deny_access_by_ip"></a>
+### Nested Schema for `config.behaviors.custom.actions.deny_access_by_ip`
+
+Required:
+
+- `ip` (String) IP address or CIDR block to deny
+
+
+<a id="nestedatt--config--behaviors--custom--actions--deny_access_by_time"></a>
+### Nested Schema for `config.behaviors.custom.actions.deny_access_by_time`
+
+Optional:
+
+- `date_time_window` (Attributes) A fixed UTC time interval during which access is denied. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--deny_access_by_time--date_time_window))
+- `time_periodic` (Attributes) A recurring time interval during which access is denied. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--deny_access_by_time--time_periodic))
+
+<a id="nestedatt--config--behaviors--custom--actions--deny_access_by_time--date_time_window"></a>
+### Nested Schema for `config.behaviors.custom.actions.deny_access_by_time.date_time_window`
+
+Required:
+
+- `end_date` (Number) End of the interval as a Unix timestamp (UTC).
+- `start_date` (Number) Start of the interval as a Unix timestamp (UTC).
+
+
+<a id="nestedatt--config--behaviors--custom--actions--deny_access_by_time--time_periodic"></a>
+### Nested Schema for `config.behaviors.custom.actions.deny_access_by_time.time_periodic`
+
+Required:
+
+- `duration` (Number) Duration of the deny access window (numeric value, paired with `duration_units`).
+- `duration_units` (String) Units for `duration`. Valid values: `s` (seconds), `m` (minutes), `h` (hours), `d` (days).
+- `repeat_period` (Number) Interval at which the deny access rule repeats (numeric value, paired with `repeat_period_units`).
+- `repeat_period_units` (String) Units for `repeat_period`. Valid values: `s` (seconds), `m` (minutes), `h` (hours), `d` (days).
+- `start_date` (Number) Start of the first interval as a Unix timestamp (UTC).
+
+
+
+<a id="nestedatt--config--behaviors--custom--actions--generate_preflight_response"></a>
+### Nested Schema for `config.behaviors.custom.actions.generate_preflight_response`
+
+Required:
+
+- `allowed_methods` (Attributes Set) Value for the `Access-Control-Allow-Methods` header.
+  - Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` 
+  - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--generate_preflight_response--allowed_methods))
+- `max_age` (Number) Value for the `Access-Control-Max-Age` header in seconds.
+  - Controls how long the browser may cache the preflight response.
+
+Optional:
+
+- `allowed_headers` (Set of String) Value for the `Access-Control-Allow-Headers` header.
+  - List of request headers the browser is allowed to send in the actual request.
+
+<a id="nestedatt--config--behaviors--custom--actions--generate_preflight_response--allowed_methods"></a>
+### Nested Schema for `config.behaviors.custom.actions.generate_preflight_response.allowed_methods`
+
+Required:
+
+- `method` (String) Allowed HTTP Method. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+
+<a id="nestedatt--config--behaviors--custom--actions--generate_response"></a>
+### Nested Schema for `config.behaviors.custom.actions.generate_response`
+
+Required:
+
+- `response_url` (String) URL of the custom response page
+- `status_code` (String) HTTP status code or range (e.g. `404`, `4xx`, `5xx`)
+
+
+<a id="nestedatt--config--behaviors--custom--actions--host_header"></a>
+### Nested Schema for `config.behaviors.custom.actions.host_header`
+
+Optional:
+
+- `header_value` (String) Value of the host header
+- `use_origin_host` (Boolean) Use the origin domain name as the Host header for the origin. Must be set to `true`.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--origin_response_headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.origin_response_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--redirect"></a>
+### Nested Schema for `config.behaviors.custom.actions.redirect`
+
+Required:
+
+- `destination` (String) Redirect destination URL
+
+Optional:
+
+- `source` (String) Redirect source pattern (optional)
+
+
+<a id="nestedatt--config--behaviors--custom--actions--request_headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.request_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--response_headers"></a>
+### Nested Schema for `config.behaviors.custom.actions.response_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--status_code_browser_cache"></a>
+### Nested Schema for `config.behaviors.custom.actions.status_code_browser_cache`
+
+Required:
+
+- `cache_ttl` (Number) Value of browser cache TTL - in seconds
+- `status_code` (String) Status code to apply the configuratoin for (1xx,2xx,.. can be used for ranges)
+
+
+<a id="nestedatt--config--behaviors--custom--actions--status_codes_ttl"></a>
+### Nested Schema for `config.behaviors.custom.actions.status_codes_ttl`
+
+Required:
+
+- `cache_behavior` (String) Cache behavior for this status code. Valid values: `BYPASS`, `CACHE`
+- `status_code` (String) HTTP status code or range (e.g. `200`, `4xx`, `5xx`)
+
+Optional:
+
+- `cache_ttl` (Number) Cache TTL in seconds
+
+
+<a id="nestedatt--config--behaviors--custom--actions--stream_logs"></a>
+### Nested Schema for `config.behaviors.custom.actions.stream_logs`
+
+Required:
+
+- `log_destination` (String) Name of the log destination to stream logs to.
+  - The destination must be configured in the service's `log_destinations` block.
+- `log_sampling_rate` (Number) Percentage of requests whose logs should be streamed (1–100).
+  - Use `100` to stream all logs, or a lower value to sample.
+
+
+<a id="nestedatt--config--behaviors--custom--actions--url_rewrites"></a>
+### Nested Schema for `config.behaviors.custom.actions.url_rewrites`
+
+Required:
+
+- `destination` (String) The new path, which can be either a static string or a regex.
+- `source` (String) The source request path, which can be either a static string or a regex.
+
+
+
+<a id="nestedatt--config--behaviors--custom--condition"></a>
+### Nested Schema for `config.behaviors.custom.condition`
+
+Required:
+
+- `or` (Attributes List) List of AND groups (OR of ANDs expression) (see [below for nested schema](#nestedatt--config--behaviors--custom--condition--or))
+
+<a id="nestedatt--config--behaviors--custom--condition--or"></a>
+### Nested Schema for `config.behaviors.custom.condition.or`
+
+Required:
+
+- `and` (Attributes List) List of conditions that must ALL match (AND group) (see [below for nested schema](#nestedatt--config--behaviors--custom--condition--or--and))
+
+<a id="nestedatt--config--behaviors--custom--condition--or--and"></a>
+### Nested Schema for `config.behaviors.custom.condition.or.and`
+
+Required:
+
+- `field` (String) Field to match against. Valid values: `http.request.domain`, `http.request.path`, `http.request.method`, `http.request.header`, `http.response.status_code`, `http.response.header`, `client.geo.country`, `client.device.is_mobile`, `http.request.query_param`, `client.ip`
+- `operator` (String) Match operator. Valid values: `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `in`, `not_in`, `match`, `not_match`, `matches_one_of`, `does_not_match_any_of`, `regex`, `not_regex`, `exists`, `does_not_exist`
+
+Optional:
+
+- `field_key` (String) Key within the field (required for header and query_param fields)
+- `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
+- `values` (Set of String) List of values to match against.
+  - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
+  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - For all other operators provide one or more string values. 
+  -  - Mutually exclusive with `value`.
+
+
+
+
+
+<a id="nestedatt--config--behaviors--default"></a>
+### Nested Schema for `config.behaviors.default`
+
+Optional:
+
+- `actions` (Attributes) Set of actions to apply for matching requests. Each element in the set defines a single action. (see [below for nested schema](#nestedatt--config--behaviors--default--actions))
+
+<a id="nestedatt--config--behaviors--default--actions"></a>
+### Nested Schema for `config.behaviors.default.actions`
+
+Optional:
+
+- `allow_access_only_from_ip` (Attributes Set) Allow access only from specified IP addresses (see [below for nested schema](#nestedatt--config--behaviors--default--actions--allow_access_only_from_ip))
+- `allowed_methods` (Attributes Set) Set of allowed HTTP methods (see [below for nested schema](#nestedatt--config--behaviors--default--actions--allowed_methods))
+- `browser_cache_ttl` (Number) Controls how long the browser is allowed to cache the content.
+  - The CDN will add a Cache-Control header to the response sent to end-users with the configured cache TTL.
+  - Set the value of the browser cache TTL in seconds.
+- `cache_behavior` (String) Controls whether content should be cached by the CDN, possible values: `BYPASS`, `CACHE`
+- `cache_key` (Attributes) Custom cache key configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cache_key))
+- `cache_ttl` (Number) Set the value of the edge cache TTL in seconds
+- `cached_methods` (Attributes Set) Controls the list of HTTP methods whose responses the CDN will cache (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cached_methods))
+- `compression` (Boolean) Enable compression of responses.
+- `cors` (Attributes) CORS configuration for the behavior (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors))
+- `deny_access` (Boolean) Controls whether the CDN should deny access to requests that meet the behavior condition.
+  - When enabled, the CDN will return a 403 Forbidden response.
+- `deny_access_by_ip` (Attributes Set) Controls whether the CDN should deny access to a specific set of IP addresses. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--deny_access_by_ip))
+- `deny_access_by_time` (Attributes List) Controls whether the CDN should deny access during a specific time period.
+  - The time period can be either a fixed interval (`date_time_window`) or a recurring one (`time_periodic`). 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--deny_access_by_time))
+- `follow_redirects` (Boolean) This action enables the CDN to follow a redirect response from the origin.
+  - If the origin responds with a redirect, the CDN will follow it and return the response to the end user.
+  - **Limitations**:
+    - The host in the `Location` header must be defined as an origin in the service.
+    - The scheme in the `Location` header must be HTTPS.
+- `generate_preflight_response` (Attributes) Controls how the CDN should respond to a preflight request.
+  - The CDN can respond to a preflight request without forwarding it to the origin.
+  - You can configure the headers to include in the preflight response. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--generate_preflight_response))
+- `generate_response` (Attributes List) Return a custom response page for specific status code(s) (see [below for nested schema](#nestedatt--config--behaviors--default--actions--generate_response))
+- `host_header` (Attributes) Override the Host header sent to the origin.
+  - Set `header_value` to a specific hostname, or set `use_origin_host = true` to use the origin's own hostname.
+  - The two fields are mutually exclusive. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--host_header))
+- `large_files_optimization` (Boolean) Enable large files optimization.
+- `origin_cache_control` (Boolean) Controls whether the CDN should honor the Cache-Control header sent by the origin.
+  - By default, origin Cache-Control headers are not honored by the CDN.
+- `origin_response_headers` (Attributes Set) Add, modify, or remove headers on the response received from the origin (before caching).
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--origin_response_headers))
+- `redirect` (Attributes) This action enables sending a redirect response with a specified URL. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--redirect))
+- `request_headers` (Attributes Set) Add, modify, or remove headers on the request forwarded to the origin.
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--request_headers))
+- `response_headers` (Attributes Set) Add, modify, or remove headers on the response sent to the client.
+  - Set `values` to add/override a header, or set `delete = true` to remove it. 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--response_headers))
+- `stale_ttl` (Number) This action sets the time duration the CDN can serve expired content from the cache
+  - If the content is expired and there is a problem fetching it from the origin, the CDN can serve stale content for the specified duration.
+   - Set the cache TTL value in seconds.
+- `status_code_browser_cache` (Attributes List) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--config--behaviors--default--actions--status_code_browser_cache))
+- `status_codes_ttl` (Attributes List) Cache TTL configuration per status code (see [below for nested schema](#nestedatt--config--behaviors--default--actions--status_codes_ttl))
+- `stream_logs` (Attributes) Stream CDN access logs to a configured logging destination (e.g., an S3 bucket).
+  - All logs are delivered in a unified format, regardless of which CDN provider generated them.
+  - See IO River Documentation for details on how to configure a destination. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--stream_logs))
+- `true_client_ip` (Boolean) Controls whether the CDN should add a `True-Client-IP` header when forwarding the request to the origin.
+  - When enabled, the header will contain the real IP address of the end user.
+- `url_rewrites` (Attributes List) This action enables rewriting the request path.
+  - The destination path can be a static string or can be derived from a regular expression.
+  - This action takes place before the content is retrieved from the cache.
+  - Example: The following removes the static prefix from the request path:     Source `/static/(.*)`, Destination `/$1` 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--url_rewrites))
+- `url_signing` (Boolean) Controls whether the CDN should verify the URL signature before allowing access to the content.
+- `viewer_protocol` (String) Controls how the CDN should respond to HTTP requests.
+  - The CDN can either accept both HTTP and HTTPS, redirect HTTP to HTTPS, or restrict access to HTTPS only.
+  - If HTTPS-only is selected, the CDN will respond with a 403 status code to HTTP requests.
+  - Allowed viewer protocol - can be one of the following: `HTTPS_ONLY`, `HTTP_AND_HTTPS`, `REDIRECT_HTTP_TO_HTTPS`.
+
+<a id="nestedatt--config--behaviors--default--actions--allow_access_only_from_ip"></a>
+### Nested Schema for `config.behaviors.default.actions.allow_access_only_from_ip`
+
+Required:
+
+- `ip` (String) IP address or CIDR block to allow
+
+
+<a id="nestedatt--config--behaviors--default--actions--allowed_methods"></a>
+### Nested Schema for `config.behaviors.default.actions.allowed_methods`
+
+Optional:
+
+- `method` (String) HTTP method. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--default--actions--cache_key"></a>
+### Nested Schema for `config.behaviors.default.actions.cache_key`
+
+Optional:
+
+- `cookies` (Attributes Set) Set of cookies to include in the cache key (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cache_key--cookies))
+- `country` (Boolean) Include the client country in the cache key
+- `device_type` (Boolean) Include the client device type (mobile/desktop) in the cache key
+- `headers` (Attributes Set) Set of headers to include in the cache key (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cache_key--headers))
+- `query_strings` (Attributes) Cache key query strings configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cache_key--query_strings))
+
+<a id="nestedatt--config--behaviors--default--actions--cache_key--cookies"></a>
+### Nested Schema for `config.behaviors.default.actions.cache_key.cookies`
+
+Required:
+
+- `cookie` (String) Cookie name
+
+
+<a id="nestedatt--config--behaviors--default--actions--cache_key--headers"></a>
+### Nested Schema for `config.behaviors.default.actions.cache_key.headers`
+
+Required:
+
+- `header` (String) Header name
+
+
+<a id="nestedatt--config--behaviors--default--actions--cache_key--query_strings"></a>
+### Nested Schema for `config.behaviors.default.actions.cache_key.query_strings`
+
+Required:
+
+- `type` (String) Controls which query string params are part of the cache key.
+  - `include` / `exclude`: use the params listed in `params`.
+  - `all`: include every query string param (no `params` allowed).
+  - `none`: ignore all query string params (no `params` allowed).
+
+Optional:
+
+- `params` (Attributes Set) Set of query string params to include or exclude in the cache key.
+  - Required when `type` is `include` or `exclude`.
+  - Must be omitted when `type` is `all` or `none`. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cache_key--query_strings--params))
+
+<a id="nestedatt--config--behaviors--default--actions--cache_key--query_strings--params"></a>
+### Nested Schema for `config.behaviors.default.actions.cache_key.query_strings.params`
+
+Required:
+
+- `param` (String) Query param to include/exclude
+
+
+
+
+<a id="nestedatt--config--behaviors--default--actions--cached_methods"></a>
+### Nested Schema for `config.behaviors.default.actions.cached_methods`
+
+Optional:
+
+- `method` (String) Method to be cached. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--default--actions--cors"></a>
+### Nested Schema for `config.behaviors.default.actions.cors`
+
+Optional:
+
+- `allow_credentials` (Boolean) Access-Control-Allow-Credentials value
+- `allow_headers` (Attributes) Access-Control-Allow-Headers configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors--allow_headers))
+- `allow_methods` (Attributes) Access-Control-Allow-Methods configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors--allow_methods))
+- `allow_origin` (Attributes) Access-Control-Allow-Origin configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors--allow_origin))
+- `expose_headers` (Attributes) Access-Control-Expose-Headers configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors--expose_headers))
+- `max_age` (Attributes) Access-Control-Max-Age configuration (see [below for nested schema](#nestedatt--config--behaviors--default--actions--cors--max_age))
+
+<a id="nestedatt--config--behaviors--default--actions--cors--allow_headers"></a>
+### Nested Schema for `config.behaviors.default.actions.cors.allow_headers`
+
+Required:
+
+- `mode` (String) Header mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the headers value
+- `values` (List of String) List of allowed headers
+  - Required when mode is `specific`, must be empty otherwise.
+
+
+<a id="nestedatt--config--behaviors--default--actions--cors--allow_methods"></a>
+### Nested Schema for `config.behaviors.default.actions.cors.allow_methods`
+
+Required:
+
+- `mode` (String) Method mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the methods value
+- `values` (List of String) List of allowed methods
+  - Required when mode is `specific`, must be empty otherwise.
+  - Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+<a id="nestedatt--config--behaviors--default--actions--cors--allow_origin"></a>
+### Nested Schema for `config.behaviors.default.actions.cors.allow_origin`
+
+Required:
+
+- `mode` (String) Origin mode. Valid values: `all`, `specific`, `from_request`
+
+Optional:
+
+- `origins` (List of String) List of allowed origins
+  - Required when mode is `specific`, must be empty otherwise.
+- `override` (Boolean) Override the origin value
+
+
+<a id="nestedatt--config--behaviors--default--actions--cors--expose_headers"></a>
+### Nested Schema for `config.behaviors.default.actions.cors.expose_headers`
+
+Required:
+
+- `mode` (String) Header mode. Valid values: `all`, `specific`
+
+Optional:
+
+- `override` (Boolean) Override the expose headers value
+- `values` (List of String) List of exposed headers 
+  - Required when mode is `specific`, must be empty otherwise.
+
+
+<a id="nestedatt--config--behaviors--default--actions--cors--max_age"></a>
+### Nested Schema for `config.behaviors.default.actions.cors.max_age`
+
+Optional:
+
+- `override` (Boolean) Override the max_age value
+- `value` (Number) Max-Age value in seconds
+
+
+
+<a id="nestedatt--config--behaviors--default--actions--deny_access_by_ip"></a>
+### Nested Schema for `config.behaviors.default.actions.deny_access_by_ip`
+
+Required:
+
+- `ip` (String) IP address or CIDR block to deny
+
+
+<a id="nestedatt--config--behaviors--default--actions--deny_access_by_time"></a>
+### Nested Schema for `config.behaviors.default.actions.deny_access_by_time`
+
+Optional:
+
+- `date_time_window` (Attributes) A fixed UTC time interval during which access is denied. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--deny_access_by_time--date_time_window))
+- `time_periodic` (Attributes) A recurring time interval during which access is denied. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--deny_access_by_time--time_periodic))
+
+<a id="nestedatt--config--behaviors--default--actions--deny_access_by_time--date_time_window"></a>
+### Nested Schema for `config.behaviors.default.actions.deny_access_by_time.date_time_window`
+
+Required:
+
+- `end_date` (Number) End of the interval as a Unix timestamp (UTC).
+- `start_date` (Number) Start of the interval as a Unix timestamp (UTC).
+
+
+<a id="nestedatt--config--behaviors--default--actions--deny_access_by_time--time_periodic"></a>
+### Nested Schema for `config.behaviors.default.actions.deny_access_by_time.time_periodic`
+
+Required:
+
+- `duration` (Number) Duration of the deny access window (numeric value, paired with `duration_units`).
+- `duration_units` (String) Units for `duration`. Valid values: `s` (seconds), `m` (minutes), `h` (hours), `d` (days).
+- `repeat_period` (Number) Interval at which the deny access rule repeats (numeric value, paired with `repeat_period_units`).
+- `repeat_period_units` (String) Units for `repeat_period`. Valid values: `s` (seconds), `m` (minutes), `h` (hours), `d` (days).
+- `start_date` (Number) Start of the first interval as a Unix timestamp (UTC).
+
+
+
+<a id="nestedatt--config--behaviors--default--actions--generate_preflight_response"></a>
+### Nested Schema for `config.behaviors.default.actions.generate_preflight_response`
+
+Required:
+
+- `allowed_methods` (Attributes Set) Value for the `Access-Control-Allow-Methods` header.
+  - Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` 
+  - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--generate_preflight_response--allowed_methods))
+- `max_age` (Number) Value for the `Access-Control-Max-Age` header in seconds.
+  - Controls how long the browser may cache the preflight response.
+
+Optional:
+
+- `allowed_headers` (Set of String) Value for the `Access-Control-Allow-Headers` header.
+  - List of request headers the browser is allowed to send in the actual request.
+
+<a id="nestedatt--config--behaviors--default--actions--generate_preflight_response--allowed_methods"></a>
+### Nested Schema for `config.behaviors.default.actions.generate_preflight_response.allowed_methods`
+
+Required:
+
+- `method` (String) Allowed HTTP Method. Valid values: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
+
+
+
+<a id="nestedatt--config--behaviors--default--actions--generate_response"></a>
+### Nested Schema for `config.behaviors.default.actions.generate_response`
+
+Required:
+
+- `response_url` (String) URL of the custom response page
+- `status_code` (String) HTTP status code or range (e.g. `404`, `4xx`, `5xx`)
+
+
+<a id="nestedatt--config--behaviors--default--actions--host_header"></a>
+### Nested Schema for `config.behaviors.default.actions.host_header`
+
+Optional:
+
+- `header_value` (String) Value of the host header
+- `use_origin_host` (Boolean) Use the origin domain name as the Host header for the origin. Must be set to `true`.
+
+
+<a id="nestedatt--config--behaviors--default--actions--origin_response_headers"></a>
+### Nested Schema for `config.behaviors.default.actions.origin_response_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--default--actions--redirect"></a>
+### Nested Schema for `config.behaviors.default.actions.redirect`
+
+Required:
+
+- `destination` (String) Redirect destination URL
+
+Optional:
+
+- `source` (String) Redirect source pattern (optional)
+
+
+<a id="nestedatt--config--behaviors--default--actions--request_headers"></a>
+### Nested Schema for `config.behaviors.default.actions.request_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--default--actions--response_headers"></a>
+### Nested Schema for `config.behaviors.default.actions.response_headers`
+
+Required:
+
+- `action` (String) Header action: `set` replaces the header value, `add` appends it, `delete` removes the header.
+- `name` (String) Header name
+
+Optional:
+
+- `values` (List of String) One or more header values to set.
+  - Not required when `action = "delete"`.
+
+
+<a id="nestedatt--config--behaviors--default--actions--status_code_browser_cache"></a>
+### Nested Schema for `config.behaviors.default.actions.status_code_browser_cache`
+
+Required:
+
+- `cache_ttl` (Number) Value of browser cache TTL - in seconds
+- `status_code` (String) Status code to apply the configuratoin for (1xx,2xx,.. can be used for ranges)
+
+
+<a id="nestedatt--config--behaviors--default--actions--status_codes_ttl"></a>
+### Nested Schema for `config.behaviors.default.actions.status_codes_ttl`
+
+Required:
+
+- `cache_behavior` (String) Cache behavior for this status code. Valid values: `BYPASS`, `CACHE`
+- `status_code` (String) HTTP status code or range (e.g. `200`, `4xx`, `5xx`)
+
+Optional:
+
+- `cache_ttl` (Number) Cache TTL in seconds
+
+
+<a id="nestedatt--config--behaviors--default--actions--stream_logs"></a>
+### Nested Schema for `config.behaviors.default.actions.stream_logs`
+
+Required:
+
+- `log_destination` (String) Name of the log destination to stream logs to.
+  - The destination must be configured in the service's `log_destinations` block.
+- `log_sampling_rate` (Number) Percentage of requests whose logs should be streamed (1–100).
+  - Use `100` to stream all logs, or a lower value to sample.
+
+
+<a id="nestedatt--config--behaviors--default--actions--url_rewrites"></a>
+### Nested Schema for `config.behaviors.default.actions.url_rewrites`
+
+Required:
+
+- `destination` (String) The new path, which can be either a static string or a regex.
+- `source` (String) The source request path, which can be either a static string or a regex.
+
+
+
+
+
+<a id="nestedatt--config--compute"></a>
+### Nested Schema for `config.compute`
+
+Required:
+
+- `name` (String) Compute function name
+- `routes` (Attributes List) List of routes to apply the compute (see [below for nested schema](#nestedatt--config--compute--routes))
+
+Optional:
+
+- `request_code` (String) Compute code for request phase
+- `response_code` (String) Compute code for response phase
+
+<a id="nestedatt--config--compute--routes"></a>
+### Nested Schema for `config.compute.routes`
+
+Required:
+
+- `domain` (String) Route domain name
+- `path` (String) Route path pattern
+
+
+
+<a id="nestedatt--config--domains"></a>
+### Nested Schema for `config.domains`
+
+Required:
+
+- `domain` (String) Domain name
+- `mappings` (Attributes List) A list of mappings between path pattern and target.
+  - Order of paths are performed by ioriver internally. (see [below for nested schema](#nestedatt--config--domains--mappings))
+
+Optional:
+
+- `aliases` (List of String) A list of domain aliases
+
+Read-Only:
+
+- `uuid` (String)
+
+<a id="nestedatt--config--domains--mappings"></a>
+### Nested Schema for `config.domains.mappings`
+
+Required:
+
+- `target_mapping` (String) Id of the origin / origin-set
+
+Optional:
+
+- `path_pattern` (String) Path pattern within the domain
+- `target_type` (String) Type of the target: origin or origin_set
+
+
+
+<a id="nestedatt--config--log_destinations"></a>
+### Nested Schema for `config.log_destinations`
+
+Required:
+
+- `name` (String) Log destination name
+
+Optional:
+
+- `anonymize_ip` (Boolean) Whether to anonymize IP addresses in logs
+- `aws_s3` (Attributes) AWS S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3))
+- `compatible_s3` (Attributes) Compatible S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3))
+- `file_format` (String) Log file format. Possible values: `json-list`, `json-object`, `json-line-delimited`, `csv`
+
+Read-Only:
+
+- `uuid` (String) Origin UUID (managed by system)
+
+<a id="nestedatt--config--log_destinations--aws_s3"></a>
+### Nested Schema for `config.log_destinations.aws_s3`
+
+Required:
+
+- `name` (String) AWS S3 bucket name
+- `region` (String) AWS S3 log destination region
+
+Optional:
+
+- `credentials` (Attributes) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
+- `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
+- `path` (String) AWS S3 log destination path
+
+<a id="nestedatt--config--log_destinations--aws_s3--credentials"></a>
+### Nested Schema for `config.log_destinations.aws_s3.credentials`
+
+Optional:
+
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
+
+<a id="nestedatt--config--log_destinations--aws_s3--credentials--access_key"></a>
+### Nested Schema for `config.log_destinations.aws_s3.credentials.access_key`
+
+Required:
+
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
+
+
+<a id="nestedatt--config--log_destinations--aws_s3--credentials--assume_role"></a>
+### Nested Schema for `config.log_destinations.aws_s3.credentials.assume_role`
+
+Required:
+
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
+
+
+
+
+<a id="nestedatt--config--log_destinations--compatible_s3"></a>
+### Nested Schema for `config.log_destinations.compatible_s3`
+
+Required:
+
+- `domain` (String) Compatible S3 log destination domain
+- `name` (String) Compatible S3 bucket name
+- `region` (String) Compatible S3 log destination region
+
+Optional:
+
+- `credentials` (Attributes) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
+- `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
+- `path` (String) Compatible S3 log destination path
+
+<a id="nestedatt--config--log_destinations--compatible_s3--credentials"></a>
+### Nested Schema for `config.log_destinations.compatible_s3.credentials`
+
+Optional:
+
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
+
+<a id="nestedatt--config--log_destinations--compatible_s3--credentials--access_key"></a>
+### Nested Schema for `config.log_destinations.compatible_s3.credentials.access_key`
+
+Required:
+
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
+
+
+<a id="nestedatt--config--log_destinations--compatible_s3--credentials--assume_role"></a>
+### Nested Schema for `config.log_destinations.compatible_s3.credentials.assume_role`
+
+Required:
+
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
+
+
+
+
+
+<a id="nestedatt--config--origin_sets"></a>
+### Nested Schema for `config.origin_sets`
+
+Required:
+
+- `name` (String) Origin set name (referenced by domain mappings)
+- `origins` (Attributes List) Exactly two origins: index 0 = primary, index 1 = failover (see [below for nested schema](#nestedatt--config--origin_sets--origins))
+
+Optional:
+
+- `failover_response_codes` (List of Number) HTTP response codes from the primary origin that trigger failover to the secondary.
+  - Defaults to [500, 502, 503, 504].
+- `shield` (Attributes) Origin shield shared by all origins in the set.
+  - Collapses requests at a chosen PoP before hitting the origin. (see [below for nested schema](#nestedatt--config--origin_sets--shield))
+
+Read-Only:
+
+- `uuid` (String) Origin set UUID (managed by system)
+
+<a id="nestedatt--config--origin_sets--origins"></a>
+### Nested Schema for `config.origin_sets.origins`
+
+Optional:
+
+- `custom_origin` (Attributes) Custom origin configuration (HTTP/HTTPS server) (see [below for nested schema](#nestedatt--config--origin_sets--origins--custom_origin))
+- `path` (String) Path prefix for origin requests
+- `s3_origin` (Attributes) S3 bucket origin configuration (see [below for nested schema](#nestedatt--config--origin_sets--origins--s3_origin))
+- `sni_hostname` (String) SNI hostname for TLS connection
+- `timeout_ms` (Number) Timeout in milliseconds for origin requests
+- `verify_ssl` (Boolean) Verify SSL certificate when connecting to origin
+
+Read-Only:
+
+- `uuid` (String) Origin UUID (managed by system)
+
+<a id="nestedatt--config--origin_sets--origins--custom_origin"></a>
+### Nested Schema for `config.origin_sets.origins.custom_origin`
+
+Required:
+
+- `host` (String) Origin hostname or IP address
+
+Optional:
+
+- `custom_http_port` (Number) Custom HTTP port (defaults to 80)
+- `custom_https_port` (Number) Custom HTTPS port (defaults to 443)
+- `protocol` (String) Protocol to use when connecting to origin. Valid values: `http`, `https`, `http_and_https`
+
+
+<a id="nestedatt--config--origin_sets--origins--s3_origin"></a>
+### Nested Schema for `config.origin_sets.origins.s3_origin`
+
+Required:
+
+- `host` (String) S3 bucket hostname
+
+Optional:
+
+- `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
+- `is_private` (Boolean) Is this a private S3 bucket
+- `is_static_website` (Boolean) Is this an S3 static website
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_region` (String) AWS region (required if is_private = true)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
+
+
+
+<a id="nestedatt--config--origin_sets--shield"></a>
+### Nested Schema for `config.origin_sets.shield`
+
+Required:
+
+- `location` (Attributes) Geographic location of the origin shield (see [below for nested schema](#nestedatt--config--origin_sets--shield--location))
+- `providers` (Set of String) Set of CDN provider names to enable origin shield for (e.g. ["fastly", "cloudflare"])
+
+<a id="nestedatt--config--origin_sets--shield--location"></a>
+### Nested Schema for `config.origin_sets.shield.location`
+
+Required:
+
+- `country` (String) Country code where the shield is located (e.g. "US")
+
+Optional:
+
+- `subdivision` (String) Subdivision/state code (required when country is "US", e.g. "TX")
+
+
+
+
+<a id="nestedatt--config--origins"></a>
+### Nested Schema for `config.origins`
+
+Required:
+
+- `name` (String) Origin mapping ID (used for referencing in domain mappings)
+
+Optional:
+
+- `custom_origin` (Attributes) Custom origin configuration (HTTP/HTTPS server) (see [below for nested schema](#nestedatt--config--origins--custom_origin))
+- `path` (String) Path prefix for origin requests
+- `s3_origin` (Attributes) S3 bucket origin configuration (see [below for nested schema](#nestedatt--config--origins--s3_origin))
+- `shield` (Attributes) Origin shield configuration.
+  - Collapses requests at a chosen location before hitting the origin (see [below for nested schema](#nestedatt--config--origins--shield))
+- `sni_hostname` (String) SNI hostname for TLS connection
+- `timeout_ms` (Number) Timeout in milliseconds for origin requests
+- `verify_ssl` (Boolean) Verify SSL certificate when connecting to origin
+
+Read-Only:
+
+- `uuid` (String) Origin UUID (managed by system)
+
+<a id="nestedatt--config--origins--custom_origin"></a>
+### Nested Schema for `config.origins.custom_origin`
+
+Required:
+
+- `host` (String) Origin hostname or IP address
+
+Optional:
+
+- `custom_http_port` (Number) Custom HTTP port (defaults to 80)
+- `custom_https_port` (Number) Custom HTTPS port (defaults to 443)
+- `protocol` (String) Protocol to use when connecting to origin. Valid values: `http`, `https`, `http_and_https`
+
+
+<a id="nestedatt--config--origins--s3_origin"></a>
+### Nested Schema for `config.origins.s3_origin`
+
+Required:
+
+- `host` (String) S3 bucket hostname
+
+Optional:
+
+- `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
+- `is_private` (Boolean) Is this a private S3 bucket
+- `is_static_website` (Boolean) Is this an S3 static website
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_region` (String) AWS region (required if is_private = true)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
+
+
+<a id="nestedatt--config--origins--shield"></a>
+### Nested Schema for `config.origins.shield`
+
+Required:
+
+- `location` (Attributes) Geographic location of the origin shield (see [below for nested schema](#nestedatt--config--origins--shield--location))
+- `providers` (Set of String) Set of CDN provider names to enable origin shield for (e.g. ["fastly", "cloudflare"])
+
+<a id="nestedatt--config--origins--shield--location"></a>
+### Nested Schema for `config.origins.shield.location`
+
+Required:
+
+- `country` (String) Country code where the shield is located (e.g. "US")
+
+Optional:
+
+- `subdivision` (String) Subdivision/state code (required when country is "US", e.g. "TX")
+
+
+
+
+<a id="nestedatt--config--protocol"></a>
+### Nested Schema for `config.protocol`
+
+Optional:
+
+- `http2_enabled` (Boolean) Enable HTTP/2
+- `http3_enabled` (Boolean) Enable HTTP/3
+- `ipv6_enabled` (Boolean) Enable IPv6
+
+
+<a id="nestedatt--config--security"></a>
+### Nested Schema for `config.security`
+
+Optional:
+
+- `custom_rules` (Attributes List) Ordered list of custom rules, evaluated **before** the WAF engine.
+  - Rules are evaluated first-to-last.
+  - **Actions:**
+    - `block` (return 403 immediately, do not evaluate further rules or WAF engine),
+    - `log` (allow the request, and add to sampled logs),
+    - `bypass_managed` (allow + skip managed ruleset),
+    - `allow` (skip remaining rules and WAF engine),
+    - `challenge` (automatic Captcha challenge),
+    - `interactive_challenge` (always interactive Captcha challenge),
+    - `ignore` (instruct WAF engine to ignore a specific parameter — requires `ignore_params`).
+  - **Conditions:**
+    - Each rule condition uses an OR-of-ANDs expression: the rule fires when at least one OR group matches, and all AND conditions in that group match. 
+  - (see [below for nested schema](#nestedatt--config--security--custom_rules))
+- `enabled` (Boolean) Enable WAF/security for this service
+- `rate_limit` (Attributes List) Ordered list of rate limiting rules. 
+  - A rule fires when the client IP exceeds `num_of_requests` requests within the `time_window_seconds` sliding window.
+  - The client is then subject to the rule's action for `block_duration_seconds`.
+  - **Actions:**
+    - `block` (drop excess requests),
+    - `log` (observe without blocking),
+    - `challenge` (automatic Captcha challenge),
+    - `interactive_challenge` (always interactive Captcha challenge),
+  - **Conditions:**
+    - Each rule condition uses an OR-of-ANDs expression: the rule fires when at least one OR group matches, and all AND conditions in that group match. 
+  - (see [below for nested schema](#nestedatt--config--security--rate_limit))
+- `waf` (Attributes) WAF configuration (see [below for nested schema](#nestedatt--config--security--waf))
+
+<a id="nestedatt--config--security--custom_rules"></a>
+### Nested Schema for `config.security.custom_rules`
+
+Required:
+
+- `action` (String) Action when rule matches. Valid values: `block`, `log`, `allow`, `bypass_managed`, `ignore`, `challenge`, `interactive_challenge`
+- `condition` (Attributes) Match condition (OR-of-ANDs expression) (see [below for nested schema](#nestedatt--config--security--custom_rules--condition))
+- `name` (String) Rule name (unique within the service)
+
+Optional:
+
+- `enabled` (Boolean) Whether this rule is active
+- `ignore_params` (Attributes) Parameters for the 'ignore' action (required when action = ignore) (see [below for nested schema](#nestedatt--config--security--custom_rules--ignore_params))
+
+<a id="nestedatt--config--security--custom_rules--condition"></a>
+### Nested Schema for `config.security.custom_rules.condition`
+
+Required:
+
+- `or` (Attributes List) OR-of-ANDs match expression.
+  - The rule matches when **at least one** OR group matches.
+  - Each OR group contains one or more `and` conditions that must **all** match simultaneously. 
+  - (see [below for nested schema](#nestedatt--config--security--custom_rules--condition--or))
+
+<a id="nestedatt--config--security--custom_rules--condition--or"></a>
+### Nested Schema for `config.security.custom_rules.condition.or`
+
+Required:
+
+- `and` (Attributes List) List of conditions that must ALL match for this OR group to be satisfied. (see [below for nested schema](#nestedatt--config--security--custom_rules--condition--or--and))
+
+<a id="nestedatt--config--security--custom_rules--condition--or--and"></a>
+### Nested Schema for `config.security.custom_rules.condition.or.and`
+
+Required:
+
+- `field` (String) Request field to evaluate.
+  - Plain fields (no `field_key` needed):
+    - `http.request.method` (HTTP verb)
+    - `http.request.path` (URL path, e.g. `/api/users`)
+    - `http.request.uri_raw` (full raw URI including query string)
+    - `http.request.body` (request body text)
+    - `client.ip.address` (client IPv4/IPv6 — use `ip_match`/`not_ip_match`)
+    - `client.ip.asn` (autonomous system number)
+    - `client.geo.country` (ISO 3166-1 alpha-2 country code)
+    - `bot.advanced.score` (IO River bot score 0-100 — supports `lt`/`le`/`gt`/`ge`)
+    - `client.ja3` (JA3 TLS fingerprint hash)
+    - `client.ja4` (JA4 TLS fingerprint hash)
+  - Collection fields (require `field_key`):
+    - `http.request.header`
+    - `http.request.cookie`
+    - `http.request.query_param`
+    - `http.request.json_param` 
+  -
+- `operator` (String) Match operator to apply.
+  - **String:**
+     - `eq` (exact match),
+    - `ne` (not equal),
+    - `begins_with` / `not_begins_with`,
+    - `ends_with` / `not_ends_with`,
+    - `contains` / `not_contains` (substring),
+    - `contains_word` / `not_contains_word` (word-boundary match),
+    - `regex` / `not_regex` (Python-compatible regular expression).
+  - **List:**
+    - `in` / `not_in` (value is in the supplied list).
+  - **IP/CIDR:**
+    - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
+  - **Existence** (set `value = []`):
+    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
+  - **Numeric** (use with `bot.advanced.score`):
+    - `lt`, `le`, `gt`, `ge`. 
+  -
+
+Optional:
+
+- `field_key` (String) Name of the specific header, cookie, query parameter, or JSON body field to inspect.
+  - **Required** when `field` is one of `http.request.header`, `http.request.cookie`, `http.request.query_param`, or `http.request.json_param`.
+  - For example: `field_key = "User-Agent"` when `field = "http.request.header"`. 
+  -
+- `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
+- `values` (Set of String) List of values to match against.
+  - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
+  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - For all other operators provide one or more string values. 
+  -  - Mutually exclusive with `value`.
+
+
+
+
+<a id="nestedatt--config--security--custom_rules--ignore_params"></a>
+### Nested Schema for `config.security.custom_rules.ignore_params`
+
+Required:
+
+- `ignore_type` (String) Type of ignore. Valid values: `json_body_param`, `indicators`, `query_param`, `header`, `cookie`, `urlencoded_form_field`
+- `value` (String) Value associated with the ignore type
+
+
+
+<a id="nestedatt--config--security--rate_limit"></a>
+### Nested Schema for `config.security.rate_limit`
+
+Required:
+
+- `block_duration_seconds` (Number) Duration in seconds to block the client after rate limit is exceeded
+- `condition` (Attributes) Match condition (OR-of-ANDs expression) (see [below for nested schema](#nestedatt--config--security--rate_limit--condition))
+- `name` (String) Rule name (unique within the service)
+- `num_of_requests` (Number) Number of requests that trigger the rate limit
+- `time_window_seconds` (Number) Time window in seconds for counting requests
+
+Optional:
+
+- `action` (String) Action when rule matches. Valid values: `block`, `log`, `challenge`, `interactive_challenge`
+- `enabled` (Boolean) Whether this rule is active
+
+<a id="nestedatt--config--security--rate_limit--condition"></a>
+### Nested Schema for `config.security.rate_limit.condition`
+
+Required:
+
+- `or` (Attributes List) OR-of-ANDs match expression.
+  - The rule matches when **at least one** OR group matches.
+  - Each OR group contains one or more `and` conditions that must **all** match simultaneously. 
+  - (see [below for nested schema](#nestedatt--config--security--rate_limit--condition--or))
+
+<a id="nestedatt--config--security--rate_limit--condition--or"></a>
+### Nested Schema for `config.security.rate_limit.condition.or`
+
+Required:
+
+- `and` (Attributes List) List of conditions that must ALL match for this OR group to be satisfied. (see [below for nested schema](#nestedatt--config--security--rate_limit--condition--or--and))
+
+<a id="nestedatt--config--security--rate_limit--condition--or--and"></a>
+### Nested Schema for `config.security.rate_limit.condition.or.and`
+
+Required:
+
+- `field` (String) Request field to evaluate.
+  - Plain fields (no `field_key` needed):
+    - `http.request.method` (HTTP verb)
+    - `http.request.path` (URL path, e.g. `/api/users`)
+    - `http.request.uri_raw` (full raw URI including query string)
+    - `http.request.body` (request body text)
+    - `client.ip.address` (client IPv4/IPv6 — use `ip_match`/`not_ip_match`)
+    - `client.ip.asn` (autonomous system number)
+    - `client.geo.country` (ISO 3166-1 alpha-2 country code)
+    - `bot.advanced.score` (IO River bot score 0-100 — supports `lt`/`le`/`gt`/`ge`)
+    - `client.ja3` (JA3 TLS fingerprint hash)
+    - `client.ja4` (JA4 TLS fingerprint hash)
+  - Collection fields (require `field_key`):
+    - `http.request.header`
+    - `http.request.cookie`
+    - `http.request.query_param`
+    - `http.request.json_param` 
+  -
+- `operator` (String) Match operator to apply.
+  - **String:**
+     - `eq` (exact match),
+    - `ne` (not equal),
+    - `begins_with` / `not_begins_with`,
+    - `ends_with` / `not_ends_with`,
+    - `contains` / `not_contains` (substring),
+    - `contains_word` / `not_contains_word` (word-boundary match),
+    - `regex` / `not_regex` (Python-compatible regular expression).
+  - **List:**
+    - `in` / `not_in` (value is in the supplied list).
+  - **IP/CIDR:**
+    - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
+  - **Existence** (set `value = []`):
+    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
+  - **Numeric** (use with `bot.advanced.score`):
+    - `lt`, `le`, `gt`, `ge`. 
+  -
+
+Optional:
+
+- `field_key` (String) Name of the specific header, cookie, query parameter, or JSON body field to inspect.
+  - **Required** when `field` is one of `http.request.header`, `http.request.cookie`, `http.request.query_param`, or `http.request.json_param`.
+  - For example: `field_key = "User-Agent"` when `field = "http.request.header"`. 
+  -
+- `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
+- `values` (Set of String) List of values to match against.
+  - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
+  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - For all other operators provide one or more string values. 
+  -  - Mutually exclusive with `value`.
+
+
+
+
+
+<a id="nestedatt--config--security--waf"></a>
+### Nested Schema for `config.security.waf`
+
+Optional:
+
+- `checkpoint` (Attributes) Checkpoint WAF partial configuration. Some settings (e.g. learning mode results) are managed via the UI; the fields here control the active enforcement configuration. (see [below for nested schema](#nestedatt--config--security--waf--checkpoint))
+- `limit_body_size` (Boolean) Limit the request body size
+
+<a id="nestedatt--config--security--waf--checkpoint"></a>
+### Nested Schema for `config.security.waf.checkpoint`
+
+Optional:
+
+- `ips` (Attributes) Intrusion Prevention System (IPS - rules-based engine) settings (see [below for nested schema](#nestedatt--config--security--waf--checkpoint--ips))
+- `minimal_num_sources` (Number) Minimum number of trusted sources required for learning
+- `trusted_sources` (List of String) List of trusted source IP addresses used for learning mode
+- `web_attacks` (Attributes) Web attacks (ML-based engine) detection settings (see [below for nested schema](#nestedatt--config--security--waf--checkpoint--web_attacks))
+
+<a id="nestedatt--config--security--waf--checkpoint--ips"></a>
+### Nested Schema for `config.security.waf.checkpoint.ips`
+
+Optional:
+
+- `high_confidence_action` (String) Action for high-confidence matches. Valid values: `block`, `log`
+- `low_confidence_action` (String) Action for low-confidence matches. Valid values: `block`, `log`
+- `medium_confidence_action` (String) Action for medium-confidence matches. Valid values: `block`, `log`
+- `mode` (String) IPS mode. Valid values: `prevent`, `disabled`, `learn`
+- `performance_impact` (String) Include rules with performance impact at most: `low`, `medium`, `high`
+- `severity` (String) Include rules with severity at least: `low`, `medium`, `high`, `critical`
+
+
+<a id="nestedatt--config--security--waf--checkpoint--web_attacks"></a>
+### Nested Schema for `config.security.waf.checkpoint.web_attacks`
+
+Optional:
+
+- `confidence_level` (String) Confidence threshold level. Valid values: `medium`, `high`, `critical`
+- `mode` (String) operation mode. Valid values: `prevent`, `disabled`, `learn`
 
 ## Import
 

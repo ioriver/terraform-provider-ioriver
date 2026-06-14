@@ -16,11 +16,21 @@ var certResourceType string = "ioriver_certificate"
 
 func init() {
 	var testedObj TestedCertificate
-	excludeId := os.Getenv("IORIVER_TEST_CERT_ID")
+	excludeIds := []string{}
+	for _, id := range []string{
+		os.Getenv("IORIVER_TEST_CERT_ID"),
+		os.Getenv("IORIVER_TEST_CERT_ID_2"),
+		os.Getenv("IORIVER_TEST_CERT_ID_3"),
+		os.Getenv("IORIVER_TEST_CERT_ID_4"),
+	} {
+		if id != "" {
+			excludeIds = append(excludeIds, id)
+		}
+	}
 	resource.AddTestSweepers(certResourceType, &resource.Sweeper{
 		Name: certResourceType,
 		F: func(r string) error {
-			return testSweepResources[ioriver.Certificate](r, testedObj, []string{excludeId})
+			return testSweepResources[ioriver.Certificate](r, testedObj, excludeIds)
 		},
 		Dependencies: []string{"ioriver_service"},
 	})

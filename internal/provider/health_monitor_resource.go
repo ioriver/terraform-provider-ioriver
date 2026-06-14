@@ -186,7 +186,7 @@ func (HealthMonitorResource) resourceToObj(ctx context.Context, data interface{}
 }
 
 // Convert HealthMonitor API object to HealthMonitor resource
-func (HealthMonitorResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (HealthMonitorResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	healthMonitor := obj.(*ioriver.HealthMonitor)
 
 	return HealthMonitorResourceModel{

@@ -13,51 +13,60 @@ Log Destination resource
 ## Example Usage
 
 ```terraform
-// example 1 - aws s3 bucket log destination with stream_logs behavior with 10% sampling rate
-resource "ioriver_log_destination" "logs_bucket" {
+// example 1 - AWS S3 log destination using IAM assume-role authentication
+resource "ioriver_log_destination" "s3_assume_role" {
   service = ioriver_service.service.id
   name    = "cdn-logs"
+
   aws_s3 = {
     name   = "example-bucket"
     path   = "/logs"
     region = "us-east-1"
+
     credentials = {
       assume_role = {
-        role_arn    = "abc"
-        external_id = "123"
+        role_arn    = "arn:aws:iam::123456789012:role/IORiverLogsRole"
+        external_id = "ioriver-unique-id"
       }
     }
   }
 }
 
-resource "ioriver_behavior" "stream_logs" {
-  service      = "%s"
-  name         = "stream-logs"
-  path_pattern = "/example/*"
+// example 2 - AWS S3 log destination using IAM access key authentication
+resource "ioriver_log_destination" "s3_access_key" {
+  service = ioriver_service.service.id
+  name    = "cdn-logs-key"
 
-  actions = [
-    {
-      stream_logs = {
-        unified_log_destination   = ioriver_log_destination.logs_bucket.id
-        unified_log_sampling_rate = "10"
+  aws_s3 = {
+    name   = "example-bucket"
+    path   = "/logs"
+    region = "us-east-1"
+
+    credentials = {
+      access_key = {
+        access_key = "AKIXXXXXXXXXXXXXXPLE"
+        secret_key = "wJaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXKEY"
       }
     }
-  ]
+  }
 }
 
-
-// example 2 - s3 compatible bucket log destination
-resource "ioriver_log_destination" "logs_bucket" {
+// example 3 - S3-compatible bucket log destination (e.g. Cloudflare R2, MinIO, Wasabi)
+resource "ioriver_log_destination" "compatible_s3" {
   service = ioriver_service.service.id
-  name    = "cdn-logs"
+  name    = "cdn-logs-r2"
+
   compatible_s3 = {
     name   = "example-compatible-bucket"
     path   = "/logs"
-    region = "eu-central-1"
-    domain = "s3.eu-central-1.wasabisys.com"
+    region = "auto"
+    domain = "https://<ACCOUNT_ID>.r2.cloudflarestorage.com"
+
     credentials = {
-      access_key = "abc"
-      secret_key = "123"
+      access_key = {
+        access_key = "r2-access-key-id"
+        secret_key = "r2-secret-access-key"
+      }
     }
   }
 }

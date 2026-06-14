@@ -53,7 +53,6 @@ func TestAccIORiverTrafficPolicy_Basic(t *testing.T) {
 	var testedObj TestedTrafficPolicy
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
-	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	serviceProviderId := os.Getenv("IORIVER_TEST_SERVICE_PROVIDER_ID")
 	rndName := generateRandomResourceName()
@@ -68,7 +67,7 @@ func TestAccIORiverTrafficPolicy_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, domainId, fastlyToken, serviceProviderId, country),
+				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, fastlyToken, serviceProviderId, country),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.TrafficPolicy](resourceName, &policy, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "service", serviceId),
@@ -93,7 +92,6 @@ func TestAccIORiverTrafficPolicy_Update(t *testing.T) {
 	var testedObj TestedTrafficPolicy
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
-	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	serviceProviderId := os.Getenv("IORIVER_TEST_SERVICE_PROVIDER_ID")
 	rndName := generateRandomResourceName()
@@ -108,13 +106,13 @@ func TestAccIORiverTrafficPolicy_Update(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, domainId, fastlyToken, serviceProviderId, "IL"),
+				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, fastlyToken, serviceProviderId, "IL"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.TrafficPolicy](resourceName, &policy, testedObj),
 				),
 			},
 			{
-				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, domainId, fastlyToken, serviceProviderId, updatedCountry),
+				Config: testAccCheckTrafficPolicyConfig(rndName, serviceId, fastlyToken, serviceProviderId, updatedCountry),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.TrafficPolicy](resourceName, &policy, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "geos.0.country", updatedCountry),
@@ -129,7 +127,6 @@ func TestAccIORiverTrafficPolicyDynamic_Basic(t *testing.T) {
 	var testedObj TestedTrafficPolicy
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
-	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	serviceProviderId := os.Getenv("IORIVER_TEST_SERVICE_PROVIDER_ID")
 	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
@@ -146,7 +143,7 @@ func TestAccIORiverTrafficPolicyDynamic_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckTrafficPolicyConfigDynamic(rndName, serviceId, domainId, fastlyToken, serviceProviderId, continent, monitorUrl),
+				Config: testAccCheckTrafficPolicyConfigDynamic(rndName, serviceId, fastlyToken, serviceProviderId, continent, monitorUrl),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.TrafficPolicy](resourceName, &policy, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "service", serviceId),
@@ -171,7 +168,6 @@ func TestAccIORiverTrafficPolicyCostBased_Basic(t *testing.T) {
 	var testedObj TestedTrafficPolicy
 
 	serviceId := os.Getenv("IORIVER_TEST_SERVICE_ID")
-	domainId := os.Getenv("IORIVER_TEST_DOMAIN_ID")
 	fastlyToken := os.Getenv("IORIVER_TEST_FASTLY_API_TOKEN")
 	serviceProviderId := os.Getenv("IORIVER_TEST_SERVICE_PROVIDER_ID")
 	testDomain := os.Getenv("IORIVER_TEST_DOMAIN")
@@ -188,7 +184,7 @@ func TestAccIORiverTrafficPolicyCostBased_Basic(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckTrafficPolicyConfigCostBased(rndName, serviceId, domainId, fastlyToken, serviceProviderId, continent, monitorUrl),
+				Config: testAccCheckTrafficPolicyConfigCostBased(rndName, serviceId, fastlyToken, serviceProviderId, continent, monitorUrl),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.TrafficPolicy](resourceName, &policy, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "service", serviceId),
@@ -208,7 +204,7 @@ func TestAccIORiverTrafficPolicyCostBased_Basic(t *testing.T) {
 	})
 }
 
-func testAccCheckTrafficPolicyConfig(rndName string, serviceId string, domainId string, accountProviderToken string, serviceProviderId string, country string) string {
+func testAccCheckTrafficPolicyConfig(rndName string, serviceId string, accountProviderToken string, serviceProviderId string, country string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "traffic_policy_account_provider" {
 		credentials = {
@@ -219,7 +215,6 @@ func testAccCheckTrafficPolicyConfig(rndName string, serviceId string, domainId 
 	resource "ioriver_service_provider" "traffic_policy_service_provider" {
 		service          = "%s"
 		account_provider = ioriver_account_provider.traffic_policy_account_provider.id
-		service_domain   = "%s"
 	}
 
 	resource "ioriver_traffic_policy" "%s" {
@@ -244,10 +239,10 @@ func testAccCheckTrafficPolicyConfig(rndName string, serviceId string, domainId 
 
 		health_monitors = []
 		performance_monitors = []
-	}`, accountProviderToken, serviceId, domainId, rndName, serviceId, country)
+	}`, accountProviderToken, serviceId, rndName, serviceId, country)
 }
 
-func testAccCheckTrafficPolicyConfigDynamic(rndName string, serviceId string, domainId string, accountProviderToken string, serviceProviderId string, continent string, monitorUrl string) string {
+func testAccCheckTrafficPolicyConfigDynamic(rndName string, serviceId string, accountProviderToken string, serviceProviderId string, continent string, monitorUrl string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "traffic_policy_account_provider" {
 		credentials = {
@@ -258,7 +253,6 @@ func testAccCheckTrafficPolicyConfigDynamic(rndName string, serviceId string, do
 	resource "ioriver_service_provider" "traffic_policy_service_provider" {
 		service          = "%s"
 		account_provider = ioriver_account_provider.traffic_policy_account_provider.id
-		service_domain   = "%s"
 	}
 
 	resource "ioriver_performance_monitor" "perf_mon" {
@@ -292,10 +286,10 @@ func testAccCheckTrafficPolicyConfigDynamic(rndName string, serviceId string, do
 		    performance_monitor = ioriver_performance_monitor.perf_mon.id
       }
 		]
-	}`, accountProviderToken, serviceId, domainId, serviceId, monitorUrl, rndName, serviceId, serviceProviderId, continent)
+	}`, accountProviderToken, serviceId, serviceId, monitorUrl, rndName, serviceId, serviceProviderId, continent)
 }
 
-func testAccCheckTrafficPolicyConfigCostBased(rndName string, serviceId string, domainId string, accountProviderToken string, serviceProviderId string, continent string, monitorUrl string) string {
+func testAccCheckTrafficPolicyConfigCostBased(rndName string, serviceId string, accountProviderToken string, serviceProviderId string, continent string, monitorUrl string) string {
 	return fmt.Sprintf(`
 	resource "ioriver_account_provider" "traffic_policy_account_provider" {
 		credentials = {
@@ -306,7 +300,6 @@ func testAccCheckTrafficPolicyConfigCostBased(rndName string, serviceId string, 
 	resource "ioriver_service_provider" "traffic_policy_service_provider" {
 		service          = "%s"
 		account_provider = ioriver_account_provider.traffic_policy_account_provider.id
-		service_domain   = "%s"
 	}
 
 	resource "ioriver_performance_monitor" "perf_mon" {
@@ -345,5 +338,5 @@ func testAccCheckTrafficPolicyConfigCostBased(rndName string, serviceId string, 
 		    performance_monitor = ioriver_performance_monitor.perf_mon.id
       }
 		]
-	}`, accountProviderToken, serviceId, domainId, serviceId, monitorUrl, rndName, serviceId, serviceProviderId, continent)
+	}`, accountProviderToken, serviceId, serviceId, monitorUrl, rndName, serviceId, serviceProviderId, continent)
 }

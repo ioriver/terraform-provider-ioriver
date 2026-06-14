@@ -403,7 +403,7 @@ func (TrafficPolicyResource) resourceToObj(ctx context.Context, data interface{}
 }
 
 // Convert TrafficPolicy API object to TrafficPolicy resource
-func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	trafficPolicy := obj.(*ioriver.TrafficPolicy)
 
 	// convert providers
@@ -454,13 +454,14 @@ func (TrafficPolicyResource) objToResource(ctx context.Context, obj interface{})
 	}
 
 	var trafficPolicyType string
-	if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_STATIC {
+	switch trafficPolicy.Type {
+	case ioriver.TRAFFIC_POLICY_STATIC:
 		trafficPolicyType = "Static"
-	} else if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_DYNAMIC {
+	case ioriver.TRAFFIC_POLICY_DYNAMIC:
 		trafficPolicyType = "Dynamic"
-	} else if trafficPolicy.Type == ioriver.TRAFFIC_POLICY_COST_BASED {
+	case ioriver.TRAFFIC_POLICY_COST_BASED:
 		trafficPolicyType = "Cost"
-	} else {
+	default:
 		return nil, fmt.Errorf("unsupported traffic policy type %s", trafficPolicy.Type)
 	}
 

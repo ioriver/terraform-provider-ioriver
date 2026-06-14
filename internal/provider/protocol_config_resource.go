@@ -19,14 +19,7 @@ func NewProtocolConfigResource() resource.Resource {
 	return &ProtocolConfigResource{}
 }
 
-type ProtocolConfigResourceId struct {
-	protocolConfigId string
-	serviceId        string
-}
-
-type ProtocolConfigResource struct {
-	client *ioriver.IORiverClient
-}
+type ProtocolConfigResource struct{}
 
 type ProtocolConfigShieldLocationModel struct {
 	Country     types.String `tfsdk:"country"`
@@ -87,120 +80,75 @@ func (r *ProtocolConfigResource) Schema(ctx context.Context, req resource.Schema
 
 // Configure resource and retrieve API client
 func (r *ProtocolConfigResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: resource is deprecated, no client needed
 }
 
 // Create ProtocolConfig resource
 func (r *ProtocolConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ProtocolConfigResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read ProtocolConfig resource
 func (r *ProtocolConfigResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ProtocolConfigResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	// resource is deprecated: remove from state so Terraform stops tracking it
+	resp.State.RemoveResource(ctx)
 }
 
 // Update ProtocolConfig resource
 func (r *ProtocolConfigResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ProtocolConfigResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete ProtocolConfig resource
 func (r *ProtocolConfigResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ProtocolConfigResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import ProtocolConfig resource
 func (r *ProtocolConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // ------- Implement base Resource API ---------
 
 func (ProtocolConfigResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateProtocolConfig(newObj.(ioriver.ProtocolConfig))
+	return nil, nil
 }
 
 func (ProtocolConfigResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(ProtocolConfigResourceId)
-	return client.GetProtocolConfig(resourceId.serviceId, resourceId.protocolConfigId)
+	return nil, nil
 }
 
 func (ProtocolConfigResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateProtocolConfig(obj.(ioriver.ProtocolConfig))
+	return nil, nil
 }
 
 func (ProtocolConfigResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(ProtocolConfigResourceId)
-	return client.DeleteProtocolConfig(resourceId.serviceId, resourceId.protocolConfigId)
+	return nil
 }
 
 func (ProtocolConfigResource) getId(data interface{}) interface{} {
-	d := data.(ProtocolConfigResourceModel)
-	protocolConfigId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return ProtocolConfigResourceId{protocolConfigId, serviceId}
+	return nil
 }
 
 // Convert ProtocolConfig resource to ProtocolConfig API object
 func (ProtocolConfigResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(ProtocolConfigResourceModel)
-
-	return ioriver.ProtocolConfig{
-		Id:           d.Id.ValueString(),
-		Service:      d.Service.ValueString(),
-		Http2Enabled: d.Http2Enabled.ValueBool(),
-		Http3Enabled: d.Http3Enabled.ValueBool(),
-		Ipv6Enabled:  d.Ipv6Enabled.ValueBool(),
-	}, nil
+	return nil, nil
 }
 
 // Convert ProtocolConfig API object to ProtocolConfig resource
-func (ProtocolConfigResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	protocolConfig := obj.(*ioriver.ProtocolConfig)
-
-	return ProtocolConfigResourceModel{
-		Id:           types.StringValue(protocolConfig.Id),
-		Service:      types.StringValue(protocolConfig.Service),
-		Http2Enabled: types.BoolValue(protocolConfig.Http2Enabled),
-		Http3Enabled: types.BoolValue(protocolConfig.Http3Enabled),
-		Ipv6Enabled:  types.BoolValue(protocolConfig.Ipv6Enabled),
-	}, nil
+func (ProtocolConfigResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }

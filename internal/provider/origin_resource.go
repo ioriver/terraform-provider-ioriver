@@ -25,14 +25,7 @@ func NewOriginResource() resource.Resource {
 	return &OriginResource{}
 }
 
-type OriginResourceId struct {
-	originId  string
-	serviceId string
-}
-
-type OriginResource struct {
-	client *ioriver.IORiverClient
-}
+type OriginResource struct{}
 
 type PrivateS3BucketCredentialsModel struct {
 	AccessKey types.String `tfsdk:"access_key"`
@@ -180,184 +173,77 @@ func (r *OriginResource) Schema(ctx context.Context, req resource.SchemaRequest,
 
 // Configure resource and retrieve API client
 func (r *OriginResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := ConfigureBase(ctx, req, resp)
-	if client == nil {
-		return
-	}
-	r.client = client
+	// no-op: resource is deprecated, no client needed
 }
 
 // Create Origin resource
 func (r *OriginResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data OriginResourceModel
-
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-	newData := resourceCreate(r.client, ctx, req, resp, r, data, false)
-	if newData == nil {
-		return
-	}
-
-	// Origin private bucket credential field is write-only which we need to preserve from original request
-	newOrigin := newData.(OriginResourceModel)
-	if newOrigin.PrivateS3 != nil {
-		newOrigin.PrivateS3.Credentials = data.PrivateS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Read Origin resource
 func (r *OriginResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data OriginResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
-	newData := resourceRead(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// Origin private bucket credential field is write-only which we need to preserve from original request
-	newOrigin := newData.(OriginResourceModel)
-	if newOrigin.PrivateS3 != nil && data.PrivateS3 != nil {
-		newOrigin.PrivateS3.Credentials = data.PrivateS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	// resource is deprecated: remove from state so Terraform stops tracking it
+	resp.State.RemoveResource(ctx)
 }
 
 // Update Origin resource
 func (r *OriginResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data OriginResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	newData := resourceUpdate(r.client, ctx, req, resp, r, data)
-	if newData == nil {
-		return
-	}
-
-	// Origin private bucket credential field is write-only which we need to preserve from original request
-	newOrigin := newData.(OriginResourceModel)
-	if newOrigin.PrivateS3 != nil {
-		newOrigin.PrivateS3.Credentials = data.PrivateS3.Credentials
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // Delete Origin resource
 func (r *OriginResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data OriginResourceModel
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resourceDelete(r.client, ctx, req, resp, r, data)
+	// no-op: resource is deprecated, Terraform will remove it from state automatically
 }
 
 // Import Origin resource
 func (r *OriginResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	serviceResourceImport(ctx, req, resp)
+	resp.Diagnostics.AddError(
+		"ioriver resource is deprecated",
+		"Please remove this resource from your configuration.\n"+
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
+	)
 }
 
 // ------- Implement base Resource API ---------
 
 func (OriginResource) create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error) {
-	return client.CreateOrigin(newObj.(ioriver.Origin))
+	return nil, nil
 }
 
 func (OriginResource) read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error) {
-	resourceId := id.(OriginResourceId)
-	return client.GetOrigin(resourceId.serviceId, resourceId.originId)
+	return nil, nil
 }
 
 func (OriginResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return client.UpdateOrigin(obj.(ioriver.Origin))
+	return nil, nil
 }
 
 func (OriginResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
-	resourceId := id.(OriginResourceId)
-	return client.DeleteOrigin(resourceId.serviceId, resourceId.originId)
+	return nil
 }
 
 func (OriginResource) getId(data interface{}) interface{} {
-	d := data.(OriginResourceModel)
-	originId := d.Id.ValueString()
-	serviceId := d.Service.ValueString()
-	return OriginResourceId{originId, serviceId}
+	return nil
 }
 
 // Convert Origin resource to Origin API object
 func (OriginResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
-	d := data.(OriginResourceModel)
-
-	// convert private-s3
-	isPrivateS3 := false
-	s3BucketName := ""
-	s3BucketRegion := ""
-	s3AwsKey := ""
-	s3AwsSecret := ""
-	if d.PrivateS3 != nil {
-		isPrivateS3 = true
-		s3BucketName = d.PrivateS3.BucketName.ValueString()
-		s3BucketRegion = d.PrivateS3.BucketRegion.ValueString()
-		s3AwsKey = d.PrivateS3.Credentials.AccessKey.ValueString()
-		s3AwsSecret = d.PrivateS3.Credentials.SecretKey.ValueString()
-	}
-
-	return ioriver.Origin{
-		Id:           d.Id.ValueString(),
-		Service:      d.Service.ValueString(),
-		Host:         d.Host.ValueString(),
-		Protocol:     d.Protocol.ValueString(),
-		HttpsPort:    int(d.HttpsPort.ValueInt64()),
-		HttpPort:     int(d.HttpPort.ValueInt64()),
-		Path:         d.Path.ValueString(),
-		IsS3:         d.IsS3.ValueBool(),
-		IsPrivateS3:  isPrivateS3,
-		S3BucketName: s3BucketName,
-		S3AwsRegion:  s3BucketRegion,
-		S3AwsKey:     s3AwsKey,
-		S3AwsSecret:  s3AwsSecret,
-		TimeoutMs:    int(d.TimeoutMs.ValueInt64()),
-		VerifyTLS:    d.VerifyTLS.ValueBool(),
-		SNIHostname:  d.SNIHostname.ValueString(),
-	}, nil
+	return nil, nil
 }
 
 // Convert Origin API object to Origin resource
-func (OriginResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
-	origin := obj.(*ioriver.Origin)
-
-	var privateS3 *PrivateS3BucketModel
-	if origin.IsPrivateS3 {
-		privateS3 = &PrivateS3BucketModel{
-			BucketName:   types.StringValue(origin.S3BucketName),
-			BucketRegion: types.StringValue(origin.S3AwsRegion),
-			Credentials: PrivateS3BucketCredentialsModel{
-				AccessKey: types.StringValue(origin.S3AwsKey),
-				SecretKey: types.StringValue(origin.S3AwsSecret),
-			},
-		}
-	}
-
-	return OriginResourceModel{
-		Id:          types.StringValue(origin.Id),
-		Service:     types.StringValue(origin.Service),
-		Host:        types.StringValue(origin.Host),
-		Protocol:    types.StringValue(origin.Protocol),
-		HttpsPort:   types.Int64Value((int64(origin.HttpsPort))),
-		HttpPort:    types.Int64Value((int64(origin.HttpPort))),
-		Path:        types.StringValue(origin.Path),
-		IsS3:        types.BoolValue(origin.IsS3),
-		PrivateS3:   privateS3,
-		TimeoutMs:   types.Int64Value((int64(origin.TimeoutMs))),
-		VerifyTLS:   types.BoolValue(origin.VerifyTLS),
-		SNIHostname: types.StringValue(origin.SNIHostname),
-	}, nil
+func (OriginResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
+	return nil, nil
 }
 
 // Validators

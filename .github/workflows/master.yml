@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: 'write'
-  id-token: 'write'
+  contents: "write"
+  id-token: "write"
 
 jobs:
   build:
@@ -29,7 +29,7 @@ jobs:
         if: success()
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.3'
+          go-version: "1.22.3"
           cache: true
 
       - name: Install dependencies
@@ -96,7 +96,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           force-bump-patch-version: false
-          allow-initial-development-versions: true
+          allow-initial-development-versions: false
           changelog-file: true
           changelog-generator-opt: "emojis=true"
 

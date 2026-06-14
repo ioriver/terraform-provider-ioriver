@@ -30,10 +30,10 @@ type AccountProviderResource struct {
 	client *ioriver.IORiverClient
 }
 
-type EdgioCredsModel struct {
-	CliendId       types.String `tfsdk:"client_id"`
-	ClientSecret   types.String `tfsdk:"client_secret"`
-	OrganizationId types.String `tfsdk:"organization_id"`
+type CDNetworksCredsModel struct {
+	AccessKey  types.String `tfsdk:"access_key"`
+	SecretKey  types.String `tfsdk:"secret_key"`
+	ContractId types.String `tfsdk:"contract_id"`
 }
 
 type AkamaiCredsModel struct {
@@ -44,13 +44,13 @@ type AkamaiCredsModel struct {
 }
 
 type CredentialsModel struct {
-	Fastly      types.String      `tfsdk:"fastly"`
-	Cloudflare  types.String      `tfsdk:"cloudflare"`
-	GCPCloudCDN types.String      `tfsdk:"gcp_cloud_cdn"`
-	GCPMediaCDN types.String      `tfsdk:"gcp_media_cdn"`
-	Cloudfront  *AwsCredsModel    `tfsdk:"cloudfront"`
-	Edgio       *EdgioCredsModel  `tfsdk:"edgio"`
-	Akamai      *AkamaiCredsModel `tfsdk:"akamai"`
+	Fastly      types.String          `tfsdk:"fastly"`
+	Cloudflare  types.String          `tfsdk:"cloudflare"`
+	GCPCloudCDN types.String          `tfsdk:"gcp_cloud_cdn"`
+	GCPMediaCDN types.String          `tfsdk:"gcp_media_cdn"`
+	Cloudfront  *AwsCredsModel        `tfsdk:"cloudfront"`
+	CDNetworks  *CDNetworksCredsModel `tfsdk:"cdnetworks"`
+	Akamai      *AkamaiCredsModel     `tfsdk:"akamai"`
 }
 
 type AccountProviderResourceModel struct {
@@ -87,7 +87,7 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRelative().AtParent().AtName("cloudflare"),
 								path.MatchRelative().AtParent().AtName("cloudfront"),
-								path.MatchRelative().AtParent().AtName("edgio"),
+								path.MatchRelative().AtParent().AtName("cdnetworks"),
 								path.MatchRelative().AtParent().AtName("akamai"),
 								path.MatchRelative().AtParent().AtName("gcp_cloud_cdn"),
 								path.MatchRelative().AtParent().AtName("gcp_media_cdn"),
@@ -150,22 +150,22 @@ func (r *AccountProviderResource) Schema(ctx context.Context, req resource.Schem
 							},
 						},
 					},
-					"edgio": schema.SingleNestedAttribute{
-						MarkdownDescription: "Edgio API credentials",
+					"cdnetworks": schema.SingleNestedAttribute{
+						MarkdownDescription: "CDNetworks API credentials",
 						Optional:            true,
 						Attributes: map[string]schema.Attribute{
-							"client_id": schema.StringAttribute{
-								MarkdownDescription: "Edgio API client ID",
+							"access_key": schema.StringAttribute{
+								MarkdownDescription: "CDNetworks access key",
 								Required:            true,
 								Sensitive:           true,
 							},
-							"client_secret": schema.StringAttribute{
-								MarkdownDescription: "Edgio API client secret",
+							"secret_key": schema.StringAttribute{
+								MarkdownDescription: "CDNetworks secret key",
 								Required:            true,
 								Sensitive:           true,
 							},
-							"organization_id": schema.StringAttribute{
-								MarkdownDescription: "Edgio organization ID",
+							"contract_id": schema.StringAttribute{
+								MarkdownDescription: "CDNetworks contract ID",
 								Required:            true,
 								Sensitive:           true,
 							},
@@ -326,7 +326,7 @@ func (AccountProviderResource) resourceToObj(ctx context.Context, data interface
 }
 
 // Convert AccountProvider API object to AccountProvider resource
-func (AccountProviderResource) objToResource(ctx context.Context, obj interface{}) (interface{}, error) {
+func (AccountProviderResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
 	accountProvider := obj.(*ioriver.AccountProvider)
 
 	return AccountProviderResourceModel{
@@ -352,8 +352,8 @@ func convertProviderName(name string) int {
 		providerId = ioriver.AzureCDN
 	case "akamai":
 		providerId = ioriver.Akamai
-	case "edgio":
-		providerId = ioriver.Edgio
+	case "cdnetworks":
+		providerId = ioriver.CDNetworks
 	}
 	return providerId
 }
@@ -385,12 +385,12 @@ func convertCredentials(credsMap CredentialsModel) (credentials interface{}, nam
 				credsMap.Cloudfront.AssumeRole.RoleArn.ValueString(),
 				credsMap.Cloudfront.AssumeRole.ExternalId.ValueString())
 		}
-	} else if credsMap.Edgio != nil {
-		name = "edgio"
-		credentials = fmt.Sprintf("{\"client_id\":\"%s\",\"client_secret\":\"%s\",\"organization_id\":\"%s\"}",
-			credsMap.Edgio.CliendId.ValueString(),
-			credsMap.Edgio.ClientSecret.ValueString(),
-			credsMap.Edgio.OrganizationId.ValueString())
+	} else if credsMap.CDNetworks != nil {
+		name = "cdnetworks"
+		credentials = fmt.Sprintf("{\"access_key\":\"%s\",\"secret_key\":\"%s\",\"contract_id\":\"%s\"}",
+			credsMap.CDNetworks.AccessKey.ValueString(),
+			credsMap.CDNetworks.SecretKey.ValueString(),
+			credsMap.CDNetworks.ContractId.ValueString())
 	} else if credsMap.Akamai != nil {
 		name = "akamai"
 		credentials = fmt.Sprintf("{\"clientToken\":\"%s\",\"clientSecret\":\"%s\",\"accessToken\":\"%s\",\"baseURL\":\"%s\"}",
