@@ -81,6 +81,7 @@ Optional:
 - `behaviors` (Attributes) Behavior configuration — contains the default behavior and the list of specific (custom) behaviors (see [below for nested schema](#nestedatt--config--behaviors))
 - `compute` (Attributes) Compute configuration (see [below for nested schema](#nestedatt--config--compute))
 - `domains` (Attributes List) Domain configuration (see [below for nested schema](#nestedatt--config--domains))
+- `geo_fencing` (Attributes) Geo-fencing configuration — restrict access by viewer country (allow-list or deny-list). Block is fully optional; omit it to apply no restriction. When present, `mode` is required and `countries` defaults to `[]`. (see [below for nested schema](#nestedatt--config--geo_fencing))
 - `log_destinations` (Attributes List) Log destination configuration (see [below for nested schema](#nestedatt--config--log_destinations))
 - `origin_sets` (Attributes List) Origin set configuration (see [below for nested schema](#nestedatt--config--origin_sets))
 - `origins` (Attributes List) Origin configuration (see [below for nested schema](#nestedatt--config--origins))
@@ -1027,6 +1028,15 @@ Optional:
 
 
 
+<a id="nestedatt--config--geo_fencing"></a>
+### Nested Schema for `config.geo_fencing`
+
+Required:
+
+- `countries` (Set of String) Set of ISO 3166-1 alpha-2 country codes (e.g. `["US", "DE"]`). Must contain at least one country
+- `mode` (String) Mode — `allow` (allow-list `countries`) or `deny` (deny-list `countries`).
+
+
 <a id="nestedatt--config--log_destinations"></a>
 ### Nested Schema for `config.log_destinations`
 
@@ -1055,7 +1065,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
+- `credentials` (Attributes) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) AWS S3 log destination path
 
@@ -1064,16 +1074,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.aws_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--assume_role"></a>
@@ -1081,8 +1091,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1098,7 +1108,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
+- `credentials` (Attributes) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) Compatible S3 log destination path
 
@@ -1107,16 +1117,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.compatible_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--assume_role"></a>
@@ -1124,8 +1134,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1192,9 +1202,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
@@ -1269,9 +1279,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
