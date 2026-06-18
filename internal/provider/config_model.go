@@ -20,6 +20,7 @@ type ServiceConfigModel struct {
 	Name            types.String           `tfsdk:"creation_name" json:"name"`
 	ServiceUid      types.String           `tfsdk:"service_uid" json:"service_uid"`
 	Protocol        *ProtocolConfigModel   `tfsdk:"protocol" json:"protocol,omitempty"`
+	GeoFencing      *GeoFencingModel       `tfsdk:"geo_fencing" json:"geo_fencing,omitempty"`
 	Domains         *[]DomainModel         `tfsdk:"domains" json:"domains,omitempty"`
 	Origins         types.List             `tfsdk:"origins"`
 	OriginSets      []OriginSetModel       `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
@@ -35,6 +36,7 @@ func ConfigAttrTypes() map[string]attr.Type {
 		"creation_name":    types.StringType,
 		"service_uid":      types.StringType,
 		"protocol":         types.ObjectType{AttrTypes: ProtocolAttrTypes()},
+		"geo_fencing":      types.ObjectType{AttrTypes: GeoFencingAttrTypes()},
 		"domains":          types.ListType{ElemType: types.ObjectType{AttrTypes: DomainAttrTypes()}},
 		"origins":          types.ListType{ElemType: types.ObjectType{AttrTypes: GetOriginAttrTypes()}},
 		"origin_sets":      types.ListType{ElemType: types.ObjectType{AttrTypes: OriginSetAttrTypes()}},
@@ -87,6 +89,13 @@ func ConfigAttributes() map[string]schema.Attribute {
 			Computed:            true,
 			Default:             objectdefault.StaticValue(defaultProtocolValue),
 			Attributes:          ProtocolAttributes(),
+		},
+		"geo_fencing": schema.SingleNestedAttribute{
+			MarkdownDescription: "Geo-fencing configuration — restrict access by viewer country " +
+				"(allow-list or deny-list). Block is fully optional; omit it to apply no restriction. " +
+				"When present, `mode` is required and `countries` defaults to `[]`.",
+			Optional:   true,
+			Attributes: GeoFencingAttributes(),
 		},
 		"domains": schema.ListNestedAttribute{
 			MarkdownDescription: "Domain configuration",
@@ -195,6 +204,15 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 	if protocolMap := c.Protocol.ModelToMap(); c.Protocol != nil && protocolMap != nil {
 		configMap["protocol"] = protocolMap
 		tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Protocol converted: %+v\n", protocolMap))
+	}
+
+	// Convert GeoFencing — fully optional block; omit the key entirely when nil
+	// so the backend's `optional=True` semantics are preserved (no block ≠ empty
+	// block). Wire JSON key remains "geo_restriction" because the backend has not
+	// been renamed (see geo_fencing_model.go header for the asymmetry rationale).
+	if geoMap := c.GeoFencing.ModelToMap(ctx); c.GeoFencing != nil && geoMap != nil {
+		configMap["geo_restriction"] = geoMap
+		tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ GeoFencing converted: %+v\n", geoMap))
 	}
 
 	// Convert Log Destinations - before behaviors (UUID must be known before behavior translation)
@@ -500,7 +518,17 @@ func ServiceConfigMapToModel(
 	}
 	tflog.Debug(ctx, fmt.Sprintf("[MapToModel] ✓ Protocol converted: %+v\n", config.Protocol))
 
-	// TODO: Convert Compute, GeoRestriction similarly
+	// Convert GeoFencing — absent in API response ⇢ keep nil in state (no diff
+	// vs. HCL omitting the block). Only populate when the backend actually sent
+	// a map. Wire JSON key remains "geo_restriction" — see geo_fencing_model.go
+	// header for the TF/wire naming asymmetry.
+	if geoMap, ok := configMap["geo_restriction"].(map[string]interface{}); ok {
+		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] Received geo_restriction map: %+v\n", geoMap))
+		config.GeoFencing = GeoFencingMapToModel(ctx, geoMap)
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[MapToModel] ✓ GeoFencing converted: %+v\n", config.GeoFencing))
+
+	// TODO: Convert Compute similarly
 
 	// Security (WAF).
 	// The backend always returns a waf block (even with empty defaults).

@@ -1699,3 +1699,68 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 		},
 	})
 }
+
+// GeoFencing test — verifies that the optional geo_fencing block behaves
+// correctly across the three lifecycle transitions that exercise the full
+// design:
+//
+//	Step 1: create with mode=deny + 2 countries — populated block round-trips.
+//	Step 2: update mode to "allow" and swap the country set — verifies both
+//	        mode flip and set-membership update paths in one apply.
+//	Step 3: omit the block entirely — the "no default" semantic means the block
+//	        must become null in state (no diff loop), unlike the Protocol block
+//	        which would default-fill.
+func TestAccIORiverService_GeoFencing(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Step 1: create with deny + {RU, CN}
+				Config: testAccCheckServiceConfigWithGeoFencing(rndName, certId, "deny", []string{"RU", "CN"}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.geo_fencing.mode", "deny"),
+					resource.TestCheckResourceAttr(resourceName, "config.geo_fencing.countries.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.geo_fencing.countries.*", "RU"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.geo_fencing.countries.*", "CN"),
+				),
+			},
+			{
+				// Step 2: flip mode to allow + swap to {US, DE, FR}
+				Config: testAccCheckServiceConfigWithGeoFencing(rndName, certId, "allow", []string{"US", "DE", "FR"}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.geo_fencing.mode", "allow"),
+					resource.TestCheckResourceAttr(resourceName, "config.geo_fencing.countries.#", "3"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.geo_fencing.countries.*", "US"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.geo_fencing.countries.*", "DE"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.geo_fencing.countries.*", "FR"),
+				),
+			},
+			{
+				// Step 3: omit the block entirely — no default means it must go null.
+				// Assert BOTH sub-attributes are absent so a regression that leaks an
+				// empty geo_fencing object (e.g. {mode=null, countries=[]}) into
+				// state would still fail this step rather than silently passing on
+				// the `mode` check alone.
+				Config: testAccCheckServiceConfigWithoutGeoFencing(rndName, certId),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckNoResourceAttr(resourceName, "config.geo_fencing.mode"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.geo_fencing.countries.#"),
+				),
+			},
+		},
+	})
+}
