@@ -2,6 +2,7 @@
 #   - Two origins (HTTPS custom + private S3)
 #   - Two CDN domains with path-based routing
 #   - Protocol configuration
+#   - Geo-fencing (country deny-list)
 #   - Explicitly configured default behavior
 #   - Multiple specific behaviors: caching, headers, CORS, redirects, access control
 #   - A log destination with streaming
@@ -27,6 +28,15 @@ resource "ioriver_service" "full_example" {
       http2_enabled = true
       http3_enabled = true
       ipv6_enabled  = true
+    }
+
+    # -------------------------------------------------------------------------
+    # Geo-fencing — deny traffic from a small set of countries.
+    # Omit the whole block to apply no geo policy.
+    # -------------------------------------------------------------------------
+    geo_fencing = {
+      mode      = "deny"
+      countries = ["US", "CA", "GB", "DE", "FR"]
     }
 
     # -------------------------------------------------------------------------
@@ -81,170 +91,170 @@ resource "ioriver_service" "full_example" {
     behaviors = {
       default = {
         actions = {
-          viewer_protocol      = "REDIRECT_HTTP_TO_HTTPS"
-          cache_behavior       = "CACHE"
-          cache_ttl            = 3600
-          browser_cache_ttl    = 300
-          stale_ttl            = 120
-          origin_cache_control = false
-          compression          = true
+        viewer_protocol      = "REDIRECT_HTTP_TO_HTTPS"
+        cache_behavior       = "CACHE"
+        cache_ttl            = 3600
+        browser_cache_ttl    = 300
+        stale_ttl            = 120
+        origin_cache_control = false
+        compression          = true
 
-          cache_key = {
-            headers       = [{ header = "Accept-Encoding" }]
-            cookies       = []
-            query_strings = { type = "all" }
-            country       = false
-            device_type   = false
-          }
+        cache_key = {
+          headers       = [{ header = "Accept-Encoding" }]
+          cookies       = []
+          query_strings = { type = "all" }
+          country       = false
+          device_type   = false
+        }
 
-          status_codes_ttl = [
-            { status_code = "4xx", cache_behavior = "BYPASS", cache_ttl = 0 },
-            { status_code = "5xx", cache_behavior = "BYPASS", cache_ttl = 0 }
-          ]
+        status_codes_ttl = [
+          { status_code = "4xx", cache_behavior = "BYPASS", cache_ttl = 0 },
+          { status_code = "5xx", cache_behavior = "BYPASS", cache_ttl = 0 }
+        ]
 
-          allowed_methods = [
-            { method = "GET" },
-            { method = "HEAD" },
-            { method = "OPTIONS" }
-          ]
+        allowed_methods = [
+          { method = "GET" },
+          { method = "HEAD" },
+          { method = "OPTIONS" }
+        ]
         }
       } # end behaviors.default
 
       custom = [
 
-        # API — bypass cache, allow all methods, inject real IP header
-        {
-          name         = "api-bypass-cache"
-          path_pattern = "/api/*"
-          actions = {
-            cache_behavior = "BYPASS"
-            allowed_methods = [
-              { method = "GET" }, { method = "HEAD" }, { method = "POST" },
-              { method = "PUT" }, { method = "PATCH" }, { method = "DELETE" },
-              { method = "OPTIONS" }
-            ]
-            request_headers = [
-              {
-                name   = "X-Real-IP"
-                values = ["$remote_addr"]
-                action = "set"
-              }
-            ]
-            true_client_ip = true
-          }
-        },
-
-        # Static assets — long TTL, no query strings in cache key
-        {
-          name         = "static-assets"
-          path_pattern = "/static/*"
-          actions = {
-            cache_ttl         = 2592000
-            browser_cache_ttl = 86400
-            compression       = true
-            cache_key = {
-              headers       = [{ header = "Accept-Encoding" }]
-              cookies       = []
-              query_strings = { type = "none" }
-              country       = false
-              device_type   = false
+      # API — bypass cache, allow all methods, inject real IP header
+      {
+        name         = "api-bypass-cache"
+        path_pattern = "/api/*"
+        actions = {
+          cache_behavior = "BYPASS"
+          allowed_methods = [
+            { method = "GET" }, { method = "HEAD" }, { method = "POST" },
+            { method = "PUT" }, { method = "PATCH" }, { method = "DELETE" },
+            { method = "OPTIONS" }
+          ]
+          request_headers = [
+            {
+              name   = "X-Real-IP"
+              values = ["$remote_addr"]
+              action = "set"
             }
-          }
-        },
+          ]
+          true_client_ip = true
+        }
+      },
 
-        # Large downloads — segment files >50 MB in cache
-        {
-          name         = "large-files"
-          path_pattern = "/downloads/*"
-          actions = {
-            cache_ttl                = 604800
-            large_files_optimization = true
-          }
-        },
-
-        # CORS for the public API
-        {
-          name         = "cors-public-api"
-          path_pattern = "/api/public/*"
-          actions = {
-            cors = {
-              allow_origin      = { mode = "all", override = true }
-              allow_headers     = { mode = "all", override = true }
-              allow_methods     = { mode = "all", override = true }
-              allow_credentials = true
-              max_age = {
-                value    = 86400
-                override = true
-              }
-            }
-            generate_preflight_response = {
-              allowed_methods = [
-                { method = "GET" }, { method = "POST" }, { method = "OPTIONS" }
-              ]
-              max_age = 3600
-            }
-          }
-        },
-
-        # Redirect old blog URLs to new article paths
-        {
-          name         = "legacy-blog-redirect"
-          path_pattern = "/blog/*"
-          actions = {
-            redirect = {
-              source      = "/blog/(.*)"
-              destination = "https://www.example.com/articles/$1"
-            }
-          }
-        },
-
-        # Require signed URLs for protected downloads
-        {
-          name         = "signed-downloads"
-          path_pattern = "/protected/*"
-          actions = {
-            url_signing = true
-          }
-        },
-
-        # Block internal endpoints from external clients
-        {
-          name = "block-internal"
-          condition = {
-            or = [
-              {
-                and = [
-                  {
-                    field    = "http.request.path"
-                    operator = "match"
-                    value    = ["/internal/*"]
-                  },
-                  {
-                    field    = "client.ip"
-                    operator = "not_ip_match"
-                    value    = ["10.0.0.0/8", "172.16.0.0/12"]
-                  }
-                ]
-              }
-            ]
-          }
-          actions = { deny_access = true }
-        },
-
-        # Stream API logs to S3
-        {
-          name         = "log-api"
-          path_pattern = "/api/*"
-          actions = {
-            stream_logs = {
-              log_destination   = local.log_dest_name
-              log_sampling_rate = 100
-            }
+      # Static assets — long TTL, no query strings in cache key
+      {
+        name         = "static-assets"
+        path_pattern = "/static/*"
+        actions = {
+          cache_ttl         = 2592000
+          browser_cache_ttl = 86400
+          compression       = true
+          cache_key = {
+            headers       = [{ header = "Accept-Encoding" }]
+            cookies       = []
+            query_strings = { type = "none" }
+            country       = false
+            device_type   = false
           }
         }
+      },
+
+      # Large downloads — segment files >50 MB in cache
+      {
+        name         = "large-files"
+        path_pattern = "/downloads/*"
+        actions = {
+          cache_ttl                = 604800
+          large_files_optimization = true
+        }
+      },
+
+      # CORS for the public API
+      {
+        name         = "cors-public-api"
+        path_pattern = "/api/public/*"
+        actions = {
+          cors = {
+            allow_origin  = { mode = "all", override = true }
+            allow_headers = { mode = "all", override = true }
+            allow_methods = { mode = "all", override = true }
+            allow_credentials = true
+            max_age = {
+              value    = 86400
+              override = true
+            }
+          }
+          generate_preflight_response = {
+            allowed_methods = [
+              { method = "GET" }, { method = "POST" }, { method = "OPTIONS" }
+            ]
+            max_age = 3600
+          }
+        }
+      },
+
+      # Redirect old blog URLs to new article paths
+      {
+        name         = "legacy-blog-redirect"
+        path_pattern = "/blog/*"
+        actions = {
+          redirect = {
+            source      = "/blog/(.*)"
+            destination = "https://www.example.com/articles/$1"
+          }
+        }
+      },
+
+      # Require signed URLs for protected downloads
+      {
+        name         = "signed-downloads"
+        path_pattern = "/protected/*"
+        actions = {
+          url_signing = true
+        }
+      },
+
+      # Block internal endpoints from external clients
+      {
+        name = "block-internal"
+        condition = {
+          or = [
+            {
+              and = [
+                {
+                  field    = "http.request.path"
+                  operator = "match"
+                  value    = ["/internal/*"]
+                },
+                {
+                  field    = "client.ip"
+                  operator = "not_ip_match"
+                  value    = ["10.0.0.0/8", "172.16.0.0/12"]
+                }
+              ]
+            }
+          ]
+        }
+        actions = { deny_access = true }
+      },
+
+      # Stream API logs to S3
+      {
+        name         = "log-api"
+        path_pattern = "/api/*"
+        actions = {
+          stream_logs = {
+            log_destination   = local.log_dest_name
+            log_sampling_rate = 100
+          }
+        }
+      }
 
       ] # end behaviors.custom
-    }   # end behaviors
+    } # end behaviors
 
     # -------------------------------------------------------------------------
     # Log destinations

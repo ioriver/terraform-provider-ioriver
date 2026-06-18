@@ -1,3 +1,9 @@
+## [1.1.0] - 2026-06-18
+
+### Added
+
+- Added support for geo fencing.
+
 ## [1.0.0] - 2026-06-15
 
 ### Breaking Changes
