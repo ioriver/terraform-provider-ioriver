@@ -1,3 +1,14 @@
+## [1.2.0] - 2026-06-24
+
+### Added
+
+- Added support for bot management configuration.
+- Added support for provider specific code behavior action.
+
+### Fixed
+
+- Fixed importing of unmanaged service provider.
+
 ## [1.1.0] - 2026-06-18
 
 ### Added
