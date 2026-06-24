@@ -7,12 +7,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // ---------------------------------------------------------------------------
 // Behavior condition helpers
 // ---------------------------------------------------------------------------
+
+var exampleStringSpecificFastlyCode = `{
+  "type": "SNIPPET",
+  "vcl": " if(client.geo.country_code !~ \"(US|CA)\") { error 403 \"Forbidden\"; } ",
+  "subroutine": "<recv>"
+}`
+var exampleSpecificFastlyCodeMap = map[string]string{
+	"type":       "SNIPPET",
+	"vcl":        ` if(client.geo.country_code !~ "(US|CA)") { error 403 "Forbidden"; } `,
+	"subroutine": "<recv>",
+}
+var exampleSpecificFastlyCode jsontypes.Normalized = jsontypes.NewNormalizedValue(exampleStringSpecificFastlyCode)
 
 func makeBehaviorCondition(field, operator string, values []string, fieldKey string) BehaviorConditionModel {
 	valSet, _ := stringSet(values)
@@ -429,6 +442,89 @@ func TestValidateBehaviorModel_NestedAction_Passes(t *testing.T) {
 	}
 }
 
+// POSITIVE: provider_specific-only action should count as non-empty actions.
+func TestValidateBehaviorModel_ProviderSpecificOnly_Passes(t *testing.T) {
+	b := &BehaviorModel{
+		Name:        strVal("provider-specific-only"),
+		PathPattern: types.StringValue("/ps/*"),
+		Actions: &BehaviorActionV2ResourceModel{
+			ProviderSpecific: []ProviderSpecificModel{
+				{Provider: types.StringValue("fastly"), Code: exampleSpecificFastlyCode},
+			},
+		},
+	}
+
+	err := ValidateBehaviorModel(b, "behaviors[0]")
+	if len(err) != 0 {
+		t.Errorf("expected no errors for provider_specific-only actions, got: %v", err)
+	}
+}
+
+func TestProviderSpecific_WriteTranslation_KnownAndUnknown(t *testing.T) {
+	action := BehaviorActionV2ResourceModel{
+		ProviderSpecific: []ProviderSpecificModel{
+			{Provider: types.StringValue("fastly"), Code: exampleSpecificFastlyCode},
+			{Provider: types.StringValue("my_custom_backend_name"), Code: jsontypes.NewNormalizedValue(`{"custom_field": "value"}`)},
+		},
+	}
+
+	apiAction := ServiceConfigAPIAction{}
+	if err := behaviorActionModelToAPIStruct(action, &apiAction); err != nil {
+		t.Fatalf("behaviorActionModelToAPIStruct error: %v", err)
+	}
+
+	if len(apiAction.ProviderSpecific) != 2 {
+		t.Fatalf("expected 2 provider_specific entries, got %d", len(apiAction.ProviderSpecific))
+	}
+
+	if apiAction.ProviderSpecific[0].Name != "Fastly" {
+		t.Errorf("known provider map mismatch: expected Fastly, got %q", apiAction.ProviderSpecific[0].Name)
+	}
+	if apiAction.ProviderSpecific[1].Name != "my_custom_backend_name" {
+		t.Errorf("unknown provider should pass through unchanged, got %q", apiAction.ProviderSpecific[1].Name)
+	}
+}
+
+func TestProviderSpecific_ReadTranslation_Known(t *testing.T) {
+	apiAction := ServiceConfigAPIAction{
+		ProviderSpecific: []ServiceConfigAPIProviderSpecific{
+			{Name: "Cloudflare", Value: "known"},
+		},
+	}
+
+	model, err := apiActionStructToModel(apiAction)
+	if err != nil {
+		t.Fatalf("apiActionStructToModel error: %v", err)
+	}
+
+	if len(model.ProviderSpecific) != 1 {
+		t.Fatalf("expected 1 provider_specific entry, got %d", len(model.ProviderSpecific))
+	}
+
+	if model.ProviderSpecific[0].Provider.ValueString() != "cloudflare" {
+		t.Errorf("known backend provider map mismatch: expected cloudflare, got %q", model.ProviderSpecific[0].Provider.ValueString())
+	}
+	if model.ProviderSpecific[0].Code.ValueString() != "known" {
+		t.Errorf("provider_specific code mismatch: expected known, got %q", model.ProviderSpecific[0].Code.ValueString())
+	}
+}
+
+func TestProviderSpecific_ReadTranslation_UnknownFails(t *testing.T) {
+	apiAction := ServiceConfigAPIAction{
+		ProviderSpecific: []ServiceConfigAPIProviderSpecific{
+			{Name: "BackendCustomName", Value: "unknown"},
+		},
+	}
+
+	_, err := apiActionStructToModel(apiAction)
+	if err == nil {
+		t.Fatal("expected error for unknown backend provider name, got nil")
+	}
+	if !containsStr(err.Error(), "unknown provider name returned by backend") {
+		t.Fatalf("expected unknown-provider error, got: %v", err)
+	}
+}
+
 // NEGATIVE: empty actions AND missing path/condition — both errors returned.
 func TestValidateBehaviorModel_EmptyActions_AndMissingCondition_BothErrors(t *testing.T) {
 	b := &BehaviorModel{
@@ -627,6 +723,14 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 				},
 			},
 
+			// --- provider-specific ---
+			ProviderSpecific: []ProviderSpecificModel{
+				{
+					Provider: types.StringValue("fastly"),
+					Code:     exampleSpecificFastlyCode,
+				},
+			},
+
 			// Fields intentionally skipped (not supported by new service config API):
 			// BypassCacheOnCookie, OverrideOrigin, OriginErrorPassThrough, ForwardClientHeader.
 		},
@@ -813,6 +917,16 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 	}
 	assertStr(t, "origin_response_headers[0].name", "Set-Cookie", (*a.OriginResponseHeaders)[0].Name)
 	assertStr(t, "origin_response_headers[0].action", "delete", (*a.OriginResponseHeaders)[0].Action)
+
+	// provider_specific
+	if len(a.ProviderSpecific) != 1 {
+		t.Fatalf("provider_specific: expected 1, got %d", len(a.ProviderSpecific))
+	}
+	assertStr(t, "provider_specific[0].provider", "fastly", a.ProviderSpecific[0].Provider)
+	if exampleSpecificFastlyCode.ValueString() != a.ProviderSpecific[0].Code.ValueString() {
+		t.Fatalf("Expected code to be %q, but got %q",
+			exampleSpecificFastlyCode.ValueString(), a.ProviderSpecific[0].Code.ValueString())
+	}
 
 	// --- validate: the model itself must pass validation ---
 	if errs := ValidateBehaviorModel(model, "behaviors[all-actions]"); len(errs) != 0 {
@@ -1465,6 +1579,14 @@ resource "ioriver_service" "%s" {
 								action = "delete"
 							}
 						]
+
+						# --- provider-specific ---
+						provider_specific = [
+							{
+								provider = "fastly"
+								code     = jsonencode(%s)
+							}
+						]
 					}
 				}
 			]
@@ -1472,7 +1594,7 @@ resource "ioriver_service" "%s" {
 	}
 }`
 
-	return fmt.Sprintf(format, resourceName, resourceName, certId, behaviorName)
+	return fmt.Sprintf(format, resourceName, resourceName, certId, behaviorName, exampleSpecificFastlyCode.ValueString())
 }
 
 func testAccDefaultBehaviorLifecycleConfig(variant string, resourceName string, certId string) string {
@@ -1871,10 +1993,18 @@ resource "ioriver_service" "%s" {
 								action = "delete"
 							}
 						]
+
+						# ── provider-specific ───────────────────────────────────
+						provider_specific = [
+							{
+								provider = "fastly"
+								code     = jsonencode(%s)
+							}
+						]
 					}
 				}
 			]
-		}`, behaviorNames[0]) + footer
+		}`, behaviorNames[0], exampleSpecificFastlyCode.ValueString()) + footer
 
 	case 3:
 		// Minimal default + 4 custom behaviors: full at [0], minimal at [1][2][3].

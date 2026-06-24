@@ -90,6 +90,15 @@ resource "ioriver_service" "waf_simple" {
           }
         }
       ]
+
+      # Bot-management keys and score thresholds.
+      # web_key is issued from the IO River dashboard.
+      # Omit this block entirely to accept the backend defaults (empty keys, 0.5 thresholds).
+      bot_management = {
+        challenge_threshold    = 0.5 # issue a challenge when bot score >= this
+        action_token_threshold = 0.5 # require action token when bot score >= this
+        web_key                = null
+      }
     }
   }
 }

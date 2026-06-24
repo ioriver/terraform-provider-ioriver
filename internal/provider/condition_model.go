@@ -63,12 +63,10 @@ func conditionValuesAttr() schema.SetAttribute {
 			"  - For all other operators provide one or more string values. \n  -" +
 			"  - Mutually exclusive with `value`.",
 		Optional:    true,
-		Computed:    true,
 		ElementType: types.StringType,
 		Validators: []validator.Set{
-			setvalidator.ConflictsWith(
-				path.MatchRelative().AtParent().AtName("value"),
-			),
+			setvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("value")),
+			setvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("value")),
 		},
 	}
 }
@@ -82,11 +80,9 @@ func conditionValueAttr() schema.StringAttribute {
 	return schema.StringAttribute{
 		MarkdownDescription: "Single-value shorthand for `values = [\"...\"]`. Mutually exclusive with `values`.",
 		Optional:            true,
-		Computed:            true,
 		Validators: []validator.String{
-			stringvalidator.ConflictsWith(
-				path.MatchRelative().AtParent().AtName("values"),
-			),
+			stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("values")),
+			stringvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("values")),
 		},
 	}
 }
@@ -161,7 +157,7 @@ func ConditionExpressionToMap(ctx context.Context, expr *ConditionExpressionMode
 			// Coalesce: prefer `values` (set form); fall back to `value` (single-string
 			// shorthand) in case the plan modifier hasn't run or both paths are used.
 			var vals []string
-			if !cond.Values.IsNull() && !cond.Values.IsUnknown() {
+			if !cond.Values.IsNull() && !cond.Values.IsUnknown() && len(cond.Values.Elements()) > 0 {
 				_ = cond.Values.ElementsAs(ctx, &vals, false)
 			}
 			if len(vals) == 0 && !cond.Value.IsNull() && !cond.Value.IsUnknown() && cond.Value.ValueString() != "" {
@@ -273,16 +269,19 @@ func ConditionExpressionFromMap(
 			cond := ConditionModel{
 				Field:    types.StringValue(field),
 				Operator: types.StringValue(operator),
-				Values:   types.SetNull(types.StringType),
-				Value:    types.StringNull(),
 				FieldKey: types.StringNull(),
 			}
 
 			if priorUsedValue && len(vals) > 0 {
 				cond.Value = types.StringValue(vals[0])
+				cond.Values = types.SetNull(types.StringType) // Explicitly Null the alternative
 			} else {
+				if vals == nil {
+					vals = []string{}
+				}
 				valSet, _ := types.SetValueFrom(ctx, types.StringType, vals)
 				cond.Values = valSet
+				cond.Value = types.StringNull() // Explicitly Null the alternative
 			}
 
 			if fk, ok := andMap["field_key"].(string); ok && fk != "" {

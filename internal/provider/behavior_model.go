@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -552,6 +553,7 @@ func isBehaviorActionsEmpty(a *BehaviorActionV2ResourceModel) bool {
 		len(a.StatusCodeBrowserCache) > 0 ||
 		a.StreamLogs != nil ||
 		len(a.StatusCodeCustomResponse) > 0 ||
+		len(a.ProviderSpecific) > 0 ||
 		a.AllowedMethods != nil ||
 		a.CachedMethods != nil ||
 		a.AllowAccessOnlyFromIP != nil ||
@@ -712,6 +714,7 @@ type ServiceConfigAPIAction struct {
 	DenyAccessByTime          []ServiceConfigAPITimeConstraint           `json:"deny_access_by_time,omitempty"`
 	UrlRewrites               []ServiceConfigAPIUrlRewrite               `json:"url_rewrites,omitempty"`
 	StatusCodeCustomResponse  []ServiceConfigAPIStatusCodeCustomResponse `json:"status_code_custom_response,omitempty"`
+	ProviderSpecific          []ServiceConfigAPIProviderSpecific         `json:"unmanaged_behavior,omitempty"`
 	// Header modification actions — shape matches the Python backend model:
 	// each entry: { name, values, override, delete }
 	RequestHeaders        []ServiceConfigAPIHeaderAction `json:"request_headers,omitempty"`
@@ -845,6 +848,11 @@ type ServiceConfigAPIIP struct {
 	IP string `json:"ip"`
 }
 
+type ServiceConfigAPIProviderSpecific struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // ========== V2 Model Structs (self-contained, independent of behavior_resource.go) ==========
 
 type HeaderNameValueModelV2 struct {
@@ -964,6 +972,11 @@ type IPModelV2 struct {
 	IP types.String `tfsdk:"ip"`
 }
 
+type ProviderSpecificModel struct {
+	Provider types.String         `tfsdk:"provider"`
+	Code     jsontypes.Normalized `tfsdk:"code"`
+}
+
 // HeaderActionModelV2 matches the Python HttpHeaderAction dict-keyed shape.
 // "name" is the header name (the dict key in Python → list element in JSON).
 // action: "set" (override=true), "add" (override=false), "delete" (delete=true).
@@ -1052,6 +1065,7 @@ type BehaviorActionV2ResourceModel struct {
 	ResponseHeaders           *[]HeaderActionModelV2            `tfsdk:"response_headers"`
 	OriginResponseHeaders     *[]HeaderActionModelV2            `tfsdk:"origin_response_headers"`
 	StatusCodeCache           []StatusCodeCacheModelV2          `tfsdk:"status_codes_ttl"`
+	ProviderSpecific          []ProviderSpecificModel           `tfsdk:"provider_specific"`
 }
 
 func statusCodeToInt(statusCode string) (int, error) {
@@ -1317,6 +1331,10 @@ func BehaviorActionAttrTypes() map[string]attr.Type {
 			"status_code":    types.StringType,
 			"cache_behavior": types.StringType,
 			"cache_ttl":      types.Int64Type,
+		}}},
+		"provider_specific": types.ListType{ElemType: types.ObjectType{AttrTypes: map[string]attr.Type{
+			"provider": types.StringType,
+			"code":     jsontypes.NormalizedType{},
 		}}},
 	}
 }
@@ -1957,6 +1975,27 @@ func BehaviorActionAttributes() map[string]schema.Attribute {
 				},
 			},
 		},
+		"provider_specific": schema.ListNestedAttribute{
+			MarkdownDescription: "Provider-specific configuration for the behavior",
+			Optional:            true,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"provider": schema.StringAttribute{
+						MarkdownDescription: "CDN provider name, must be one of(" + strings.Join(ProviderNames, ", ") + ")",
+						Required:            true,
+						Validators: []validator.String{
+							stringvalidator.OneOf(ProviderNames...),
+						},
+					},
+					"code": schema.StringAttribute{
+						MarkdownDescription: "Provider-specific configuration code, must be a valid JSON,\n" +
+							"For guidance per provider please refer to the documentation - https://www.ioriver.io/docs/Guides/Behaviors/Behavior%20Actions/#provider-specific-code",
+						Required:   true,
+						CustomType: jsontypes.NormalizedType{},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -2384,6 +2423,23 @@ func defaultBehaviorModelFromMap(ctx context.Context, apiMap map[string]interfac
 // This function accumulates ALL fields from the model into the apiAction struct
 func behaviorActionModelToAPIStruct(action BehaviorActionV2ResourceModel, apiAction *ServiceConfigAPIAction) error {
 	// Process ALL fields (no early returns) to accumulate everything into apiAction
+
+	if len(action.ProviderSpecific) > 0 {
+		items := []ServiceConfigAPIProviderSpecific{}
+		for _, item := range action.ProviderSpecific {
+			providerName := item.Provider.ValueString()
+			name, ok := ProviderNamesMapHCLToBackend[providerName]
+			if !ok || name == "" {
+				name = providerName
+			}
+			entry := ServiceConfigAPIProviderSpecific{
+				Name:  name,
+				Value: item.Code.ValueString(),
+			}
+			items = append(items, entry)
+		}
+		apiAction.ProviderSpecific = items
+	}
 
 	// Status Code Cache
 	if len(action.StatusCodeCache) > 0 {
@@ -3257,8 +3313,21 @@ func apiActionStructToModel(apiAction ServiceConfigAPIAction) (*BehaviorActionV2
 		model.StatusCodeCustomResponse = items
 	}
 
-	// Status Codes Cache (from Children) - handled separately by caller
-	// Children are ignored here - they represent nested behaviors for status codes
+	if len(apiAction.ProviderSpecific) > 0 {
+		items := []ProviderSpecificModel{}
+		for _, item := range apiAction.ProviderSpecific {
+			providerName := item.Name
+			name, ok := ProviderNamesMapBackendToHCL[providerName]
+			if !ok {
+				return nil, fmt.Errorf("unknown provider name returned by backend: %q", providerName)
+			}
+			items = append(items, ProviderSpecificModel{
+				Provider: types.StringValue(name),
+				Code:     jsontypes.NewNormalizedValue(item.Value),
+			})
+		}
+		model.ProviderSpecific = items
+	}
 
 	return model, nil
 }

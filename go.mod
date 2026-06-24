@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0 // indirect
 	github.com/hashicorp/terraform-plugin-go v0.28.0
 	github.com/hashicorp/yamux v0.1.1 // indirect
-	github.com/ioriver/ioriver-go v1.1.0
+	github.com/ioriver/ioriver-go v1.1.1
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -31,6 +31,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/terraform-plugin-docs v0.22.0
 	github.com/hashicorp/terraform-plugin-framework v1.15.0
+	github.com/hashicorp/terraform-plugin-framework-jsontypes v0.2.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.13.2

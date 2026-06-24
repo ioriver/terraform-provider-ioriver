@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -435,6 +436,17 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 					}),
 					// generate_preflight_response
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.generate_preflight_response.max_age", "3600"),
+					// provider_specific
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.provider_specific.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.provider_specific.0.provider", "fastly"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"config.behaviors.custom.0.actions.provider_specific.0.code",
+						func() string {
+							b, _ := json.Marshal(exampleSpecificFastlyCodeMap)
+							return string(b)
+						}(),
+					),
 				),
 			},
 		},
@@ -1118,6 +1130,8 @@ func TestAccIORiverService_WafConfig(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.security.waf.checkpoint.ips.high_confidence_action", "block"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.waf.checkpoint.ips.low_confidence_action", "log"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.waf.checkpoint.minimal_num_sources", "3"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.bot_management.challenge_threshold", "0.5"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.bot_management.action_token_threshold", "0.5"),
 				),
 			},
 			{ // Step 1: waf = {} — checkpoint Default fires; payload must be identical → no diff.
@@ -1489,6 +1503,9 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.request_headers.#", "2"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.response_headers.#", "2"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.origin_response_headers.#", "1"),
+					// provider_specific
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.provider_specific.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.provider_specific.0.provider", "fastly"),
 				),
 			},
 			{ // Step 4: default + 4 custom behaviors — TTL isolation: each TTL must stay

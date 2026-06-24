@@ -3,12 +3,12 @@
 page_title: "ioriver_domain Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Domain resource
+  
 ---
 
 # ioriver_domain (Resource)
 
-Domain resource
+
 
 
 
@@ -17,26 +17,26 @@ Domain resource
 
 ### Required
 
-- `domain` (String) Domain name
-- `mappings` (Attributes List) A list of mappings between path pattern and target (origin/load-balancer) (see [below for nested schema](#nestedatt--mappings))
-- `service` (String) The id of the service this domain belongs to
+- `domain` (String)
+- `mappings` (Attributes List) (see [below for nested schema](#nestedatt--mappings))
+- `service` (String)
 
 ### Optional
 
-- `aliases` (List of String) A list of domain aliases
+- `aliases` (List of String)
 
 ### Read-Only
 
-- `id` (String) Domain identifier
+- `id` (String) The ID of this resource.
 
 <a id="nestedatt--mappings"></a>
 ### Nested Schema for `mappings`
 
 Required:
 
-- `target_id` (String) Id of the target (Id of origin/load-balancer)
+- `target_id` (String)
 
 Optional:
 
-- `path_pattern` (String) Path pattern within the domain to be mapped with the Domain
-- `target_type` (String) Type of the taget: origin or load-balancer
+- `path_pattern` (String)
+- `target_type` (String)

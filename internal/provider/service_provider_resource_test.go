@@ -73,11 +73,10 @@ func TestAccIORiverServiceProvider_Basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "ioriver_service_provider." + rndName,
-				ImportStateIdPrefix:     fmt.Sprintf("%s,", serviceId),
-				ImportState:             true,
-				ImportStateVerify:       false,                    // should be disabled since cname field is populated in a delay
-				ImportStateVerifyIgnore: []string{"is_unmanaged"}, // ignore since this field cannot be read
+				ResourceName:        "ioriver_service_provider." + rndName,
+				ImportStateIdPrefix: fmt.Sprintf("%s,", serviceId),
+				ImportState:         true,
+				ImportStateVerify:   false, // should be disabled since cname field is populated in a delay
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ioriver.ServiceProvider](resourceName, &serviceProvider, testedObj),
 				),

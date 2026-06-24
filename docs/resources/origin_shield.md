@@ -3,12 +3,12 @@
 page_title: "ioriver_origin_shield Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  OriginShield resource
+  
 ---
 
 # ioriver_origin_shield (Resource)
 
-OriginShield resource
+
 
 
 

@@ -146,11 +146,7 @@ func (r *ServiceProviderResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// is_unmanaged is a write-only field which we need to preserve from original request
-	newSp := newData.(ServiceProviderResourceModel)
-	newSp.IsUnmanaged = data.IsUnmanaged
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
 // Read ServiceProvider resource
@@ -164,11 +160,7 @@ func (r *ServiceProviderResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// is_unmanaged is a write-only field which we need to preserve from original request
-	newSp := newData.(ServiceProviderResourceModel)
-	newSp.IsUnmanaged = data.IsUnmanaged
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
 // Update ServiceProvider resource
@@ -183,11 +175,8 @@ func (r *ServiceProviderResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// is_unmanaged is a write-only field which we need to preserve from original request
-	newSp := newData.(ServiceProviderResourceModel)
-	newSp.IsUnmanaged = data.IsUnmanaged
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newSp)...)
 }
 
 // Delete ServiceProvider resource
