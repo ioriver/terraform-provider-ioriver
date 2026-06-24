@@ -163,6 +163,7 @@ Optional:
 - `origin_response_headers` (Attributes Set) Add, modify, or remove headers on the response received from the origin (before caching).
   - Set `values` to add/override a header, or set `delete = true` to remove it. 
   - (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--origin_response_headers))
+- `provider_specific` (Attributes List) Provider-specific configuration for the behavior (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--provider_specific))
 - `redirect` (Attributes) This action enables sending a redirect response with a specified URL. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--redirect))
 - `request_headers` (Attributes Set) Add, modify, or remove headers on the request forwarded to the origin.
   - Set `values` to add/override a header, or set `delete = true` to remove it. 
@@ -442,6 +443,16 @@ Optional:
   - Not required when `action = "delete"`.
 
 
+<a id="nestedatt--config--behaviors--custom--actions--provider_specific"></a>
+### Nested Schema for `config.behaviors.custom.actions.provider_specific`
+
+Required:
+
+- `code` (String) Provider-specific configuration code, must be a valid JSON,
+For guidance per provider please refer to the documentation - https://www.ioriver.io/docs/Guides/Behaviors/Behavior%20Actions/#provider-specific-code
+- `provider` (String) CDN provider name, must be one of(fastly, cloudflare, gcp_cloud_cdn, gcp_media_cdn, cloudfront, azure_cdn, akamai, cdnetworks)
+
+
 <a id="nestedatt--config--behaviors--custom--actions--redirect"></a>
 ### Nested Schema for `config.behaviors.custom.actions.redirect`
 
@@ -610,6 +621,7 @@ Optional:
 - `origin_response_headers` (Attributes Set) Add, modify, or remove headers on the response received from the origin (before caching).
   - Set `values` to add/override a header, or set `delete = true` to remove it. 
   - (see [below for nested schema](#nestedatt--config--behaviors--default--actions--origin_response_headers))
+- `provider_specific` (Attributes List) Provider-specific configuration for the behavior (see [below for nested schema](#nestedatt--config--behaviors--default--actions--provider_specific))
 - `redirect` (Attributes) This action enables sending a redirect response with a specified URL. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--redirect))
 - `request_headers` (Attributes Set) Add, modify, or remove headers on the request forwarded to the origin.
   - Set `values` to add/override a header, or set `delete = true` to remove it. 
@@ -889,6 +901,16 @@ Optional:
   - Not required when `action = "delete"`.
 
 
+<a id="nestedatt--config--behaviors--default--actions--provider_specific"></a>
+### Nested Schema for `config.behaviors.default.actions.provider_specific`
+
+Required:
+
+- `code` (String) Provider-specific configuration code, must be a valid JSON,
+For guidance per provider please refer to the documentation - https://www.ioriver.io/docs/Guides/Behaviors/Behavior%20Actions/#provider-specific-code
+- `provider` (String) CDN provider name, must be one of(fastly, cloudflare, gcp_cloud_cdn, gcp_media_cdn, cloudfront, azure_cdn, akamai, cdnetworks)
+
+
 <a id="nestedatt--config--behaviors--default--actions--redirect"></a>
 ### Nested Schema for `config.behaviors.default.actions.redirect`
 
@@ -1065,7 +1087,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
+- `credentials` (Attributes) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) AWS S3 log destination path
 
@@ -1074,16 +1096,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.aws_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--assume_role"></a>
@@ -1091,8 +1113,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1108,7 +1130,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
+- `credentials` (Attributes) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) Compatible S3 log destination path
 
@@ -1117,16 +1139,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.compatible_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--assume_role"></a>
@@ -1134,8 +1156,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1202,9 +1224,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
@@ -1279,9 +1301,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
@@ -1322,6 +1344,10 @@ Optional:
 
 Optional:
 
+- `bot_management` (Attributes) Bot-management keys and challenge thresholds.
+  - `web_key` is issued by IORiver.
+  - Both thresholds are floats in `[0.0, 1.0]` and default to `0.5`.
+  - (see [below for nested schema](#nestedatt--config--security--bot_management))
 - `custom_rules` (Attributes List) Ordered list of custom rules, evaluated **before** the WAF engine.
   - Rules are evaluated first-to-last.
   - **Actions:**
@@ -1348,6 +1374,22 @@ Optional:
     - Each rule condition uses an OR-of-ANDs expression: the rule fires when at least one OR group matches, and all AND conditions in that group match. 
   - (see [below for nested schema](#nestedatt--config--security--rate_limit))
 - `waf` (Attributes) WAF configuration (see [below for nested schema](#nestedatt--config--security--waf))
+
+<a id="nestedatt--config--security--bot_management"></a>
+### Nested Schema for `config.security.bot_management`
+
+Optional:
+
+- `action_token_threshold` (Number) Bot score above which an action token is required. Range `0.0`–1.0`. Default `0.5`.
+- `challenge_threshold` (Number) Bot score above which a challenge is issued. Range `0.0`–1.0`. Default `0.5`.
+
+Read-Only:
+
+- `web_key` (String) reCAPTCHA Site Key. Add this key to your front-end code to enable action-level bot mitigation.
+  - This key is issued by IORiver and is required for bot management to function.
+  - If you do not have a key, contact IORiver support to obtain one.
+  -
+
 
 <a id="nestedatt--config--security--custom_rules"></a>
 ### Nested Schema for `config.security.custom_rules`

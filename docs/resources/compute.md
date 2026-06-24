@@ -3,12 +3,12 @@
 page_title: "ioriver_compute Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Compute resource
+  
 ---
 
 # ioriver_compute (Resource)
 
-Compute resource
+
 
 ## Example Usage
 

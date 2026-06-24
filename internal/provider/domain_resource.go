@@ -54,53 +54,45 @@ func (r *DomainResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *DomainResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Domain resource",
-
+		DeprecationMessage: "ioriver resource is deprecated, Please remove this resource from your configuration.\n" +
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "Domain identifier",
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"service": schema.StringAttribute{
-				MarkdownDescription: "The id of the service this domain belongs to",
-				Required:            true,
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"domain": schema.StringAttribute{
-				MarkdownDescription: "Domain name",
-				Required:            true,
+				Required: true,
 			},
 			"aliases": schema.ListAttribute{
-				MarkdownDescription: "A list of domain aliases",
-				ElementType:         types.StringType,
-				Optional:            true,
-				Computed:            true,
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
 			},
 			"mappings": schema.ListNestedAttribute{
-				MarkdownDescription: "A list of mappings between path pattern and target (origin/load-balancer)",
-				Required:            true,
+				Required: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"path_pattern": schema.StringAttribute{
-							MarkdownDescription: "Path pattern within the domain to be mapped with the Domain",
-							Optional:            true,
-							Computed:            true,
-							Default:             stringdefault.StaticString("/*"),
+							Optional: true,
+							Computed: true,
+							Default:  stringdefault.StaticString("/*"),
 						},
 						"target_id": schema.StringAttribute{
-							MarkdownDescription: "Id of the target (Id of origin/load-balancer)",
-							Required:            true,
+							Required: true,
 						},
 						"target_type": schema.StringAttribute{
-							MarkdownDescription: "Type of the taget: origin or load-balancer",
-							Optional:            true,
-							Computed:            true,
-							Default:             stringdefault.StaticString("origin"),
+							Optional: true,
+							Computed: true,
+							Default:  stringdefault.StaticString("origin"),
 							Validators: []validator.String{
 								stringvalidator.OneOf([]string{"origin", "load-balancer"}...),
 							},
@@ -164,32 +156,27 @@ func (r *DomainResource) UpgradeState(ctx context.Context) map[int64]resource.St
 			PriorSchema: &schema.Schema{
 				Attributes: map[string]schema.Attribute{
 					"id": schema.StringAttribute{
-						Computed:            true,
-						MarkdownDescription: "Domain identifier",
+						Computed: true,
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"service": schema.StringAttribute{
-						MarkdownDescription: "The id of the service this domain belongs to",
-						Required:            true,
+						Required: true,
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.RequiresReplace(),
 						},
 					},
 					"domain": schema.StringAttribute{
-						MarkdownDescription: "Domain name",
-						Required:            true,
+						Required: true,
 					},
 					"path_pattern": schema.StringAttribute{
-						MarkdownDescription: "Path pattern within the domain to be mapped with the Domain",
-						Optional:            true,
-						Computed:            true,
+						Optional: true,
+						Computed: true,
 					},
 					"origin": schema.StringAttribute{
-						MarkdownDescription: "Origin id to forward traffic to",
-						Optional:            true,
-						Computed:            true,
+						Optional: true,
+						Computed: true,
 						Validators: []validator.String{
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRoot("load_balancer"),
@@ -197,9 +184,8 @@ func (r *DomainResource) UpgradeState(ctx context.Context) map[int64]resource.St
 						},
 					},
 					"load_balancer": schema.StringAttribute{
-						MarkdownDescription: "Load balancer id to forward traffic to",
-						Optional:            true,
-						Computed:            true,
+						Optional: true,
+						Computed: true,
 						Validators: []validator.String{
 							stringvalidator.ExactlyOneOf(path.Expressions{
 								path.MatchRoot("origin"),

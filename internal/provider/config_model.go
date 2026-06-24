@@ -309,6 +309,10 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 			if wafApiMap := sec.SecurityModelToMap(ctx); wafApiMap != nil {
 				configMap["waf"] = wafApiMap
 			}
+			// bot_management is a sibling of waf on the wire (matches the Python Config schema).
+			if bmMap := sec.BotManagementToMap(ctx); bmMap != nil {
+				configMap["bot_management"] = bmMap
+			}
 		}
 	}
 
@@ -545,6 +549,10 @@ func ServiceConfigMapToModel(
 			}
 			sec := securityMapToModelWithCtx(ctx, wafRaw, updateTransformCtx, priorSec)
 			if sec != nil {
+				// bot_management is a top-level sibling of waf on the wire.
+				if bmRaw, ok := configMap["bot_management"]; ok && bmRaw != nil {
+					sec.BotManagement = BotManagementMapToModel(ctx, bmRaw)
+				}
 				objVal, diags := types.ObjectValueFrom(ctx, SecurityAttrTypes(), sec)
 				if diags.HasError() {
 					config.Security = types.ObjectNull(SecurityAttrTypes())

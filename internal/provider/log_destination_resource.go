@@ -54,7 +54,8 @@ func (r *LogDestinationResource) Metadata(ctx context.Context, req resource.Meta
 
 func (r *LogDestinationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Log Destination resource",
+		DeprecationMessage: "ioriver resource is deprecated, Please remove this resource from your configuration.\n" +
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

@@ -7,17 +7,20 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -136,16 +139,28 @@ var defaultWafValue = types.ObjectValueMust(
 	},
 )
 
+// defaultBotManagementValue is the zero-value bot_management block — mirrors the
+// Python config_field defaults: web_key="", secret_key="", thresholds=0.5.
+var defaultBotManagementValue = types.ObjectValueMust(
+	BotManagementAttrTypes(),
+	map[string]attr.Value{
+		"web_key":                types.StringUnknown(),
+		"challenge_threshold":    types.Float64Value(0.5),
+		"action_token_threshold": types.Float64Value(0.5),
+	},
+)
+
 // defaultSecurityValue is the top-level security block default — used when the
 // user omits the security block entirely, so defaults propagate without requiring
 // the user to write the block explicitly.
 var defaultSecurityValue = types.ObjectValueMust(
 	SecurityAttrTypes(),
 	map[string]attr.Value{
-		"enabled":      types.BoolValue(defaultSecurityEnabled),
-		"waf":          defaultWafValue,
-		"custom_rules": defaultEmptyCustomList,
-		"rate_limit":   defaultEmptyRateLimitList,
+		"enabled":        types.BoolValue(defaultSecurityEnabled),
+		"waf":            defaultWafValue,
+		"custom_rules":   defaultEmptyCustomList,
+		"rate_limit":     defaultEmptyRateLimitList,
+		"bot_management": defaultBotManagementValue,
 	},
 )
 
@@ -231,12 +246,20 @@ type WafModel struct {
 	Checkpoint    *WafCheckpointModel `tfsdk:"checkpoint"`
 }
 
+// BotManagementModel maps to the Python BotManagement config object.
+type BotManagementModel struct {
+	WebKey               types.String  `tfsdk:"web_key"`
+	ChallengeThreshold   types.Float64 `tfsdk:"challenge_threshold"`
+	ActionTokenThreshold types.Float64 `tfsdk:"action_token_threshold"`
+}
+
 // SecurityModel is the top-level security config block embedded in ServiceConfigModel.
 type SecurityModel struct {
-	Enabled     types.Bool              `tfsdk:"enabled"`
-	Waf         *WafModel               `tfsdk:"waf"`
-	CustomRules []WafCustomRuleModel    `tfsdk:"custom_rules"`
-	RateLimit   []WafRateLimitRuleModel `tfsdk:"rate_limit"`
+	Enabled       types.Bool              `tfsdk:"enabled"`
+	Waf           *WafModel               `tfsdk:"waf"`
+	CustomRules   []WafCustomRuleModel    `tfsdk:"custom_rules"`
+	RateLimit     []WafRateLimitRuleModel `tfsdk:"rate_limit"`
+	BotManagement *BotManagementModel     `tfsdk:"bot_management"`
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,12 +1139,52 @@ func WafAttrTypes() map[string]attr.Type {
 	}
 }
 
+func BotManagementAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"web_key":                types.StringType,
+		"challenge_threshold":    types.Float64Type,
+		"action_token_threshold": types.Float64Type,
+	}
+}
+
 func SecurityAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
-		"enabled":      types.BoolType,
-		"waf":          types.ObjectType{AttrTypes: WafAttrTypes()},
-		"custom_rules": types.ListType{ElemType: types.ObjectType{AttrTypes: WafCustomRuleAttrTypes()}},
-		"rate_limit":   types.ListType{ElemType: types.ObjectType{AttrTypes: WafRateLimitRuleAttrTypes()}},
+		"enabled":        types.BoolType,
+		"waf":            types.ObjectType{AttrTypes: WafAttrTypes()},
+		"custom_rules":   types.ListType{ElemType: types.ObjectType{AttrTypes: WafCustomRuleAttrTypes()}},
+		"rate_limit":     types.ListType{ElemType: types.ObjectType{AttrTypes: WafRateLimitRuleAttrTypes()}},
+		"bot_management": types.ObjectType{AttrTypes: BotManagementAttrTypes()},
+	}
+}
+
+// BotManagementAttributes returns the schema attributes for the bot_management block.
+func BotManagementAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"web_key": schema.StringAttribute{
+			MarkdownDescription: "reCAPTCHA Site Key. Add this key to your front-end code to enable action-level bot mitigation.\n  - This key is issued by IORiver and is required for bot management to function.\n  - If you do not have a key, contact IORiver support to obtain one.\n  -",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		"challenge_threshold": schema.Float64Attribute{
+			MarkdownDescription: "Bot score above which a challenge is issued. Range `0.0`\u20131.0`. Default `0.5`.",
+			Optional:            true,
+			Computed:            true,
+			Default:             float64default.StaticFloat64(0.5),
+			Validators: []validator.Float64{
+				float64validator.Between(0.0, 1.0),
+			},
+		},
+		"action_token_threshold": schema.Float64Attribute{
+			MarkdownDescription: "Bot score above which an action token is required. Range `0.0`\u20131.0`. Default `0.5`.",
+			Optional:            true,
+			Computed:            true,
+			Default:             float64default.StaticFloat64(0.5),
+			Validators: []validator.Float64{
+				float64validator.Between(0.0, 1.0),
+			},
+		},
 	}
 }
 
@@ -1158,6 +1221,15 @@ func SecurityAttributes() map[string]schema.Attribute {
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: rateLimitAttributes(),
 			},
+		},
+		"bot_management": schema.SingleNestedAttribute{
+			MarkdownDescription: "Bot-management keys and challenge thresholds.\n" +
+				"  - `web_key` is issued by IORiver.\n" +
+				"  - Both thresholds are floats in `[0.0, 1.0]` and default to `0.5`.\n  -",
+			Optional:   true,
+			Computed:   true,
+			Default:    objectdefault.StaticValue(defaultBotManagementValue),
+			Attributes: BotManagementAttributes(),
 		},
 		"custom_rules": schema.ListNestedAttribute{
 			MarkdownDescription: "Ordered list of custom rules, evaluated **before** the WAF engine.\n" +
@@ -1355,4 +1427,59 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 		}
 	}
 	return model
+}
+
+// ---------------------------------------------------------------------------
+// BotManagement serialization / deserialization
+// ---------------------------------------------------------------------------
+
+// BotManagementToMap serialises the bot_management block into a wire map.
+// Returns nil when BotManagement is nil so the caller can omit the key entirely.
+// Note: the UUID is never sent — the backend generates / preserves it automatically.
+func (s *SecurityModel) BotManagementToMap(ctx context.Context) map[string]interface{} {
+	if s == nil || s.BotManagement == nil {
+		return nil
+	}
+	bm := s.BotManagement
+	out := map[string]interface{}{}
+	if !bm.WebKey.IsNull() && !bm.WebKey.IsUnknown() {
+		out["web_key"] = bm.WebKey.ValueString()
+	}
+	if !bm.ChallengeThreshold.IsNull() && !bm.ChallengeThreshold.IsUnknown() {
+		out["challenge_threshold"] = bm.ChallengeThreshold.ValueFloat64()
+	}
+	if !bm.ActionTokenThreshold.IsNull() && !bm.ActionTokenThreshold.IsUnknown() {
+		out["action_token_threshold"] = bm.ActionTokenThreshold.ValueFloat64()
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[BotManagementToMap] map: %+v", out))
+	return out
+}
+
+// BotManagementMapToModel deserialises a wire bot_management map into a TF model.
+// Unknown keys (e.g. uuid) are silently dropped — they are server-managed.
+func BotManagementMapToModel(ctx context.Context, raw interface{}) *BotManagementModel {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	bm := &BotManagementModel{
+		WebKey:               types.StringNull(),
+		ChallengeThreshold:   types.Float64Null(),
+		ActionTokenThreshold: types.Float64Null(),
+	}
+	if v, ok := m["web_key"].(string); ok {
+		bm.WebKey = types.StringValue(v)
+	}
+	if v, ok := m["challenge_threshold"]; ok {
+		if fv, ok := toFloat64(v); ok {
+			bm.ChallengeThreshold = types.Float64Value(fv)
+		}
+	}
+	if v, ok := m["action_token_threshold"]; ok {
+		if fv, ok := toFloat64(v); ok {
+			bm.ActionTokenThreshold = types.Float64Value(fv)
+		}
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[BotManagementMapToModel] model: %+v", bm))
+	return bm
 }

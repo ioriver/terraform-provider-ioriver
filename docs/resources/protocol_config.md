@@ -3,12 +3,12 @@
 page_title: "ioriver_protocol_config Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  ProtocolConfig resource
+  
 ---
 
 # ioriver_protocol_config (Resource)
 
-ProtocolConfig resource
+
 
 
 

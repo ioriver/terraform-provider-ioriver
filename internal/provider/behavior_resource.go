@@ -158,8 +158,8 @@ func (r *BehaviorResource) Metadata(ctx context.Context, req resource.MetadataRe
 
 func (r *BehaviorResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Behavior resource that includes a list of actions to apply",
-
+		DeprecationMessage: "ioriver resource is deprecated, Please remove this resource from your configuration.\n" +
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,

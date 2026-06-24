@@ -3,12 +3,12 @@
 page_title: "ioriver_log_destination Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Log Destination resource
+  
 ---
 
 # ioriver_log_destination (Resource)
 
-Log Destination resource
+
 
 ## Example Usage
 

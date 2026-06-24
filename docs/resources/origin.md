@@ -3,12 +3,12 @@
 page_title: "ioriver_origin Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Origin resource
+  
 ---
 
 # ioriver_origin (Resource)
 
-Origin resource
+
 
 
 

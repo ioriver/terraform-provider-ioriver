@@ -41,7 +41,8 @@ func (r *ComputeResource) Metadata(ctx context.Context, req resource.MetadataReq
 
 func (r *ComputeResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Compute resource",
+		DeprecationMessage: "ioriver resource is deprecated, Please remove this resource from your configuration.\n" +
+			"Any existing configuration remains set in ioriver, and can be imported to new resource.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

@@ -30,6 +30,30 @@ type AccountProviderResource struct {
 	client *ioriver.IORiverClient
 }
 
+var ProviderNames = []string{"fastly", "cloudflare", "gcp_cloud_cdn", "gcp_media_cdn", "cloudfront", "azure_cdn", "akamai", "cdnetworks"}
+
+var ProviderNamesMapHCLToBackend = map[string]string{
+	"fastly":        "Fastly",
+	"cloudflare":    "Cloudflare",
+	"gcp_cloud_cdn": "GCPCloudCDN",
+	"gcp_media_cdn": "GCPMediaCDN",
+	"cloudfront":    "Cloudfront",
+	"azure_cdn":     "Azure CDN",
+	"akamai":        "Akamai",
+	"cdnetworks":    "CDNetworks",
+}
+
+var ProviderNamesMapBackendToHCL = map[string]string{
+	"Fastly":      "fastly",
+	"Cloudflare":  "cloudflare",
+	"GCPCloudCDN": "gcp_cloud_cdn",
+	"GCPMediaCDN": "gcp_media_cdn",
+	"Cloudfront":  "cloudfront",
+	"Azure CDN":   "azure_cdn",
+	"Akamai":      "akamai",
+	"CDNetworks":  "cdnetworks",
+}
+
 type CDNetworksCredsModel struct {
 	AccessKey  types.String `tfsdk:"access_key"`
 	SecretKey  types.String `tfsdk:"secret_key"`
