@@ -1087,7 +1087,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
+- `credentials` (Attributes) AWS S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) AWS S3 log destination path
 
@@ -1096,16 +1096,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.aws_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--aws_s3--credentials--assume_role"></a>
@@ -1113,8 +1113,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1130,7 +1130,7 @@ Required:
 
 Optional:
 
-- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
+- `credentials` (Attributes) Compatible S3 log destination credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials))
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `path` (String) Compatible S3 log destination path
 
@@ -1139,16 +1139,16 @@ Optional:
 
 Optional:
 
-- `access_key` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
-- `assume_role` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
+- `access_key` (Attributes) AWS access key credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--access_key))
+- `assume_role` (Attributes) AWS assume role credentials (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3--credentials--assume_role))
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--access_key"></a>
 ### Nested Schema for `config.log_destinations.compatible_s3.credentials.access_key`
 
 Required:
 
-- `access_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key
-- `secret_key` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret key
+- `access_key` (String) AWS access key
+- `secret_key` (String) AWS secret key
 
 
 <a id="nestedatt--config--log_destinations--compatible_s3--credentials--assume_role"></a>
@@ -1156,8 +1156,8 @@ Required:
 
 Required:
 
-- `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
-- `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
+- `external_id` (String) AWS external ID
+- `role_arn` (String) AWS role ARN
 
 
 
@@ -1224,9 +1224,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
@@ -1301,9 +1301,9 @@ Optional:
 - `credentials_version` (Number) Increment this value to trigger a credentials update. Credentials are only sent to the backend when this value changes. After import, set this to any value alongside credentials to push them.
 - `is_private` (Boolean) Is this a private S3 bucket
 - `is_static_website` (Boolean) Is this an S3 static website
-- `s3_aws_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS access key ID (required when is_private = true; write-only, never stored in state)
+- `s3_aws_key` (String, Sensitive) AWS access key ID (required when is_private = true; write-only, never stored in state)
 - `s3_aws_region` (String) AWS region (required if is_private = true)
-- `s3_aws_secret` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS secret access key (required when is_private = true; write-only, never stored in state)
+- `s3_aws_secret` (String, Sensitive) AWS secret access key (required when is_private = true; write-only, never stored in state)
 - `s3_bucket_name` (String) S3 bucket name (required if is_private = true)
 
 
@@ -1436,14 +1436,15 @@ Required:
     - `client.ip.address` (client IPv4/IPv6 — use `ip_match`/`not_ip_match`)
     - `client.ip.asn` (autonomous system number)
     - `client.geo.country` (ISO 3166-1 alpha-2 country code)
-    - `bot.advanced.score` (IO River bot score 0-100 — supports `lt`/`le`/`gt`/`ge`)
+    - `bot_validation.result` (bot validation boolean result — supports `eq`/`ne`)
     - `client.ja3` (JA3 TLS fingerprint hash)
     - `client.ja4` (JA4 TLS fingerprint hash)
   - Collection fields (require `field_key`):
     - `http.request.header`
     - `http.request.cookie`
     - `http.request.query_param`
-    - `http.request.json_param` 
+    - `http.request.json_param`
+    - `action_token.score` (action token score in range 0.0-1.0 — `field_key` selects the token type, supports `lt`/`le`/`gt`/`ge`) 
   -
 - `operator` (String) Match operator to apply.
   - **String:**
@@ -1460,7 +1461,7 @@ Required:
     - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
   - **Existence** (set `value = []`):
     - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
-  - **Numeric** (use with `bot.advanced.score`):
+  - **Numeric** (use with `action_token.score`):
     - `lt`, `le`, `gt`, `ge`. 
   -
 
@@ -1537,14 +1538,15 @@ Required:
     - `client.ip.address` (client IPv4/IPv6 — use `ip_match`/`not_ip_match`)
     - `client.ip.asn` (autonomous system number)
     - `client.geo.country` (ISO 3166-1 alpha-2 country code)
-    - `bot.advanced.score` (IO River bot score 0-100 — supports `lt`/`le`/`gt`/`ge`)
+    - `bot_validation.result` (bot validation boolean result — supports `eq`/`ne`)
     - `client.ja3` (JA3 TLS fingerprint hash)
     - `client.ja4` (JA4 TLS fingerprint hash)
   - Collection fields (require `field_key`):
     - `http.request.header`
     - `http.request.cookie`
     - `http.request.query_param`
-    - `http.request.json_param` 
+    - `http.request.json_param`
+    - `action_token.score` (action token score in range 0.0-1.0 — `field_key` selects the token type, supports `lt`/`le`/`gt`/`ge`) 
   -
 - `operator` (String) Match operator to apply.
   - **String:**
@@ -1561,7 +1563,7 @@ Required:
     - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
   - **Existence** (set `value = []`):
     - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
-  - **Numeric** (use with `bot.advanced.score`):
+  - **Numeric** (use with `action_token.score`):
     - `lt`, `le`, `gt`, `ge`. 
   -
 

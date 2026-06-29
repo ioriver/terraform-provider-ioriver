@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // ---------------------------------------------------------------------------
@@ -66,7 +67,6 @@ func conditionValuesAttr() schema.SetAttribute {
 		ElementType: types.StringType,
 		Validators: []validator.Set{
 			setvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("value")),
-			setvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("value")),
 		},
 	}
 }
@@ -82,7 +82,6 @@ func conditionValueAttr() schema.StringAttribute {
 		Optional:            true,
 		Validators: []validator.String{
 			stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("values")),
-			stringvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("values")),
 		},
 	}
 }
@@ -132,48 +131,6 @@ func conditionListItemToString(item interface{}) string {
 	return fmt.Sprintf("%v", item)
 }
 
-// ConditionExpressionToMap serialises a ConditionExpressionModel → API OR-of-ANDs map.
-//
-// valueSerializer is an optional hook that controls how the `values` set for a
-// single condition is written to the API map.  When nil the default is used:
-// the values are sent as a []string list (correct for all behavior fields and
-// most WAF fields).  Pass a custom func to override per-field serialisation
-// (e.g. WAF's client.ip.address which uses a comma-separated string).
-func ConditionExpressionToMap(ctx context.Context, expr *ConditionExpressionModel, valueSerializer func(field string, vals []string) interface{}) map[string]interface{} {
-	if expr == nil {
-		return nil
-	}
-	if valueSerializer == nil {
-		valueSerializer = func(_ string, vals []string) interface{} { return vals }
-	}
-	orArr := []interface{}{}
-	for _, andGroup := range expr.Or {
-		andArr := []interface{}{}
-		for _, cond := range andGroup.And {
-			condMap := map[string]interface{}{
-				"field":    cond.Field.ValueString(),
-				"operator": cond.Operator.ValueString(),
-			}
-			// Coalesce: prefer `values` (set form); fall back to `value` (single-string
-			// shorthand) in case the plan modifier hasn't run or both paths are used.
-			var vals []string
-			if !cond.Values.IsNull() && !cond.Values.IsUnknown() && len(cond.Values.Elements()) > 0 {
-				_ = cond.Values.ElementsAs(ctx, &vals, false)
-			}
-			if len(vals) == 0 && !cond.Value.IsNull() && !cond.Value.IsUnknown() && cond.Value.ValueString() != "" {
-				vals = []string{cond.Value.ValueString()}
-			}
-			condMap["value"] = valueSerializer(cond.Field.ValueString(), vals)
-			if !cond.FieldKey.IsNull() && !cond.FieldKey.IsUnknown() && cond.FieldKey.ValueString() != "" {
-				condMap["field_key"] = cond.FieldKey.ValueString()
-			}
-			andArr = append(andArr, condMap)
-		}
-		orArr = append(orArr, map[string]interface{}{"and": andArr})
-	}
-	return map[string]interface{}{"or": orArr}
-}
-
 // ---------------------------------------------------------------------------
 // Shared deserialisation helpers
 // ---------------------------------------------------------------------------
@@ -198,16 +155,32 @@ func DefaultValueDeserializer(_ string, rawVal interface{}) []string {
 	return nil
 }
 
-// WafValueDeserializer is the WAF-specific deserializer.
-// client.ip.address is sent as a comma-separated string; everything else is
-// a []interface{} list.
-func WafValueDeserializer(field string, rawVal interface{}) []string {
-	if field == "client.ip.address" {
+// valuesFromRaw decodes the raw API value for a single condition into []string,
+// using the caller's CommaStringField metadata to pick the right shape. This is
+// the inverse of the value-encoding branches in ConditionExpressionToMapByCaller
+// — the caller is the single source of truth for both directions.
+func valuesFromRaw(field, operator string, rawVal interface{}, spec *ConditionSpec) []string {
+	if spec != nil && spec.Operators[operator].CommaString {
 		s, _ := rawVal.(string)
 		if s == "" {
 			return nil
 		}
 		return strings.Split(s, ",")
+	}
+	// kindPassFail: backend stores bool, surface as "passed"/"failed"
+	if spec != nil && spec.Fields[field].Kind == kindPassFail {
+		switch v := rawVal.(type) {
+		case bool:
+			if v {
+				return []string{"passed"}
+			}
+			return []string{"failed"}
+		case string:
+			if v == "true" {
+				return []string{"passed"}
+			}
+			return []string{"failed"}
+		}
 	}
 	return DefaultValueDeserializer(field, rawVal)
 }
@@ -218,20 +191,22 @@ func WafValueDeserializer(field string, rawVal interface{}) []string {
 // (single-string shorthand) or `values` (set form) for each condition.
 // Pass nil when there is no prior (e.g. import) — defaults to `values`.
 //
-// valueDeserializer controls how the raw API value is converted to []string.
-// Pass nil to use DefaultValueDeserializer ([]interface{} list).
-// Pass WafValueDeserializer for WAF (handles client.ip.address comma-string).
+// caller carries the per-flavour metadata (WAF / behavior) — specifically the
+// CommaStringField needed to decode comma-joined wire values back into a slice.
+// Pass nil for plain []interface{} decoding only.
 func ConditionExpressionFromMap(
 	ctx context.Context,
 	raw map[string]interface{},
-	prior *ConditionExpressionModel,
-	valueDeserializer func(field string, rawVal interface{}) []string,
-) *ConditionExpressionModel {
-	if raw == nil {
-		return nil
+	plan *ConditionExpressionModel,
+	spec *ConditionSpec,
+) (*ConditionExpressionModel, error) {
+	tflog.Debug(ctx, fmt.Sprintf("[ConditionExpressionFromMap] Start: map condition: %+v", raw))
+	if plan != nil {
+		tflog.Debug(ctx, fmt.Sprintf("[ConditionExpressionFromMap] Start: plan condition: %+v", *plan))
 	}
-	if valueDeserializer == nil {
-		valueDeserializer = DefaultValueDeserializer
+
+	if raw == nil {
+		return nil, nil
 	}
 
 	orRaw, _ := raw["or"].([]interface{})
@@ -252,18 +227,18 @@ func ConditionExpressionFromMap(
 			}
 			field, _ := andMap["field"].(string)
 			operator, _ := andMap["operator"].(string)
-			vals := valueDeserializer(field, andMap["value"])
+			vals := valuesFromRaw(field, operator, andMap["value"], spec)
 
-			// Use prior state to decide which form to restore.
+			// Use plan state to decide which form to restore.
 			// We must check IsUnknown() too: on first create, Computed fields the
 			// user didn't set are Unknown (not null), which would otherwise trigger
-			// a false positive for priorUsedValue.
-			priorUsedValue := false
-			if prior != nil &&
-				orIdx < len(prior.Or) &&
-				andIdx < len(prior.Or[orIdx].And) {
-				pv := prior.Or[orIdx].And[andIdx].Value
-				priorUsedValue = !pv.IsNull() && !pv.IsUnknown() && pv.ValueString() != ""
+			// a false positive for planUsedValue.
+			planUsedValue := false
+			if plan != nil &&
+				orIdx < len(plan.Or) &&
+				andIdx < len(plan.Or[orIdx].And) {
+				pv := plan.Or[orIdx].And[andIdx].Value
+				planUsedValue = !pv.IsNull() && !pv.IsUnknown() && pv.ValueString() != ""
 			}
 
 			cond := ConditionModel{
@@ -272,7 +247,12 @@ func ConditionExpressionFromMap(
 				FieldKey: types.StringNull(),
 			}
 
-			if priorUsedValue && len(vals) > 0 {
+			tflog.Debug(ctx, fmt.Sprintf("[ConditionExpressionFromMap] 🔍 planUsedValue: %v, vals: %+v\n", planUsedValue, vals))
+
+			if planUsedValue && len(vals) > 0 {
+				if len(vals) > 1 {
+					return nil, fmt.Errorf("single value set in plan but received more than one element: %+v", vals)
+				}
 				cond.Value = types.StringValue(vals[0])
 				cond.Values = types.SetNull(types.StringType) // Explicitly Null the alternative
 			} else {
@@ -291,5 +271,70 @@ func ConditionExpressionFromMap(
 		}
 		expr.Or = append(expr.Or, andGroup)
 	}
-	return expr
+
+	tflog.Debug(ctx, fmt.Sprintf("[ConditionExpressionFromMap] 🔍 Deserialized expression: %+v\n", expr))
+	return expr, nil
+}
+
+func ValidateConditionModel(expr *ConditionExpressionModel, prefix string, spec *ConditionSpec) []string {
+	if expr == nil {
+		return nil
+	}
+	var errs []string
+	for j, andGroup := range expr.Or {
+		for k, cond := range andGroup.And {
+			loc := fmt.Sprintf("%s.condition.or[%d].and[%d]", prefix, j, k)
+			errs = append(errs, ValidateCondition(context.Background(), cond, loc, spec)...)
+		}
+	}
+	return errs
+}
+
+// ---------------------------------------------------------------------------
+// Schema-level validator wrapper around ValidateConditionModel
+//
+// Attached to the `or` ListNestedAttribute on a condition expression schema
+// (see wafConditionExpressionAttributes / behaviorConditionExpressionAttributes).
+// The validator decodes the list of AND-groups, wraps it into a
+// ConditionExpressionModel, and runs ValidateConditionModel with the
+// caller-supplied spec (WAF or behavior).
+// ---------------------------------------------------------------------------
+
+type conditionExpressionValidator struct {
+	spec *ConditionSpec
+}
+
+func (v conditionExpressionValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("condition must satisfy %s field/operator/value rules", v.spec.Name)
+}
+
+func (v conditionExpressionValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v conditionExpressionValidator) ValidateList(ctx context.Context, req validator.ListRequest, resp *validator.ListResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	var or []ConditionAndGroupModel
+	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &or, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	expr := &ConditionExpressionModel{Or: or}
+
+	for _, msg := range ValidateConditionModel(expr, v.spec.Name, v.spec) {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			fmt.Sprintf("Invalid %s condition", v.spec.Name),
+			msg,
+		)
+	}
+}
+
+// ConditionExpressionValidator returns a schema validator.List bound to the
+// supplied ConditionSpec (for example WafConditionSpec or BehaviorConditionSpec).
+func ConditionExpressionValidator(spec *ConditionSpec) validator.List {
+	return conditionExpressionValidator{spec: spec}
 }

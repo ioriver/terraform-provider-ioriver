@@ -1,3 +1,11 @@
+## [1.2.1] - 2026-06-30
+
+### Fixed
+
+- Fixed conditions in behaviors.
+- Fixed conditions in WAF custom rules.
+- Fixed validations for conditions.
+
 ## [1.2.0] - 2026-06-24
 
 ### Added

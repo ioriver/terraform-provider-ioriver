@@ -29,14 +29,14 @@
 # │   client.ip.address        — client IPv4/v6; use CIDR with ip_match        │
 # │   client.ip.asn            — ASN as string, e.g. "64496"                   │
 # │   client.geo.country       — ISO 3166-1 alpha-2 code, e.g. "US"            │
-# │   bot.advanced.score       — bot score as numeric string "0"–"100"         │
-# │                              also accepts "high" / "low"                    │
+# │                                                                             │
 # │                                                                             │
 # │ Collection fields (field_key = "<name>" required):                         │
 # │   http.request.header      — field_key = header name                       │
 # │   http.request.cookie      — field_key = cookie name                       │
 # │   http.request.query_param — field_key = query parameter name              │
 # │   http.request.json_param  — field_key = JSON body key name                │
+# │   action_token.score       — score 0.0–1.0; field_key selects token scope  │
 # └─────────────────────────────────────────────────────────────────────────────┘
 #
 # ┌── OPERATORS ────────────────────────────────────────────────────────────────┐
@@ -71,7 +71,7 @@
 # │   le               less than or equal                                       │
 # │   gt               greater than                                             │
 # │   ge               greater than or equal                                    │
-# │   (only valid for bot.advanced.score)                                       │
+# │   (only valid for action_token.score)                                       │
 # └─────────────────────────────────────────────────────────────────────────────┘
 #
 # ┌── CUSTOM RULE ACTIONS ──────────────────────────────────────────────────────┐
@@ -246,9 +246,10 @@ resource "ioriver_service" "waf_full" {
               {
                 and = [
                   {
-                    field    = "bot.advanced.score"
-                    operator = "ge"
-                    value    = ["70"] # numeric string — score 70 or above
+                    field     = "action_token.score"
+                    field_key = "web"
+                    operator  = "ge"
+                    value     = ["0.7"] # numeric string — score 0.7 or above
                   }
                 ]
               }
@@ -553,13 +554,13 @@ resource "ioriver_service" "waf_full" {
         },
 
         # ── lt / le / gt / ge — numeric comparison ────────────────────────────
-        # value = ["<number>"]  (numeric string) — only valid for bot.advanced.score
+        # value = ["<number>"]  (numeric string 0.0-1.0) — only valid for action_token.score
         {
           name    = "op-lt-bot-score"
           enabled = true
           action  = "allow" # very low score = almost certainly human
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "lt", value = ["10"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "lt", value = ["0.1"] }] }]
           }
         },
         {
@@ -567,7 +568,7 @@ resource "ioriver_service" "waf_full" {
           enabled = true
           action  = "log"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "le", value = ["40"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "le", value = ["0.4"] }] }]
           }
         },
         {
@@ -575,7 +576,7 @@ resource "ioriver_service" "waf_full" {
           enabled = true
           action  = "interactive_challenge"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "gt", value = ["60"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "gt", value = ["0.6"] }] }]
           }
         },
         {
@@ -583,7 +584,7 @@ resource "ioriver_service" "waf_full" {
           enabled = true
           action  = "block"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "ge", value = ["90"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "ge", value = ["0.9"] }] }]
           }
         },
 
@@ -770,11 +771,11 @@ resource "ioriver_service" "waf_full" {
 # PLAIN FIELDS (no field_key)
 #   http.request.method      http.request.path     http.request.uri_raw
 #   http.request.body        client.ip.address     client.ip.asn
-#   client.geo.country       bot.advanced.score
+#   client.geo.country
 #
 # COLLECTION FIELDS (field_key = "<name>" required)
 #   http.request.header      http.request.cookie
-#   http.request.query_param http.request.json_param
+#   http.request.query_param http.request.json_param  action_token.score
 #
 # OPERATORS
 #   String:  eq  ne  begins_with  not_begins_with  ends_with  not_ends_with
@@ -783,7 +784,7 @@ resource "ioriver_service" "waf_full" {
 #   List:    in  not_in
 #   IP/CIDR: ip_match  not_ip_match
 #   Exists:  exists  does_not_exist  (use value = [])
-#   Numeric: lt  le  gt  ge  (for bot.advanced.score)
+#   Numeric: lt  le  gt  ge  (for action_token.score, value 0.0-1.0)
 #
 # CUSTOM RULE ACTIONS
 #   block  log  allow  bypass_managed  challenge  interactive_challenge  ignore
@@ -1033,9 +1034,10 @@ resource "ioriver_service" "waf_full" {
               {
                 and = [
                   {
-                    field    = "bot.advanced.score"
-                    operator = "ge"
-                    value    = ["70"]
+                    field     = "action_token.score"
+                    field_key = "web"
+                    operator  = "ge"
+                    value     = ["0.7"]
                   }
                 ]
               }

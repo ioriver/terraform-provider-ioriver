@@ -29,6 +29,7 @@ require (
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/go-set v0.1.14
 	github.com/hashicorp/terraform-plugin-docs v0.22.0
 	github.com/hashicorp/terraform-plugin-framework v1.15.0
 	github.com/hashicorp/terraform-plugin-framework-jsontypes v0.2.0

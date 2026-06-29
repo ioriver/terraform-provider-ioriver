@@ -25,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // ---------------------------------------------------------------------------
@@ -285,205 +286,6 @@ func queryStringType() validator.String {
 	return queryStringTypeValidator{}
 }
 
-var behaviorConditionFields = []string{
-	"http.request.domain",
-	"http.request.path",
-	"http.request.method",
-	"http.request.header",
-	"http.response.status_code",
-	"http.response.header",
-	"client.geo.country",
-	"client.device.is_mobile",
-	"http.request.query_param",
-	"client.ip",
-}
-
-// Fields that require a field_key in behavior conditions
-var behaviorCollectionFields = map[string]bool{
-	"http.request.header":      true,
-	"http.response.header":     true,
-	"http.request.query_param": true,
-}
-
-var behaviorConditionOperators = []string{
-	"eq", "ne",
-	"lt", "gt", "le", "ge",
-	"in", "not_in",
-	"match", "not_match",
-	"matches_one_of", "does_not_match_any_of",
-	"regex", "not_regex",
-	"exists", "does_not_exist",
-}
-
-// ---------------------------------------------------------------------------
-// Behavior Condition model types
-// ---------------------------------------------------------------------------
-
-// BehaviorConditionModel is an alias for the shared ConditionModel.
-// Behavior-specific field/operator validation is applied in the schema only.
-type BehaviorConditionModel = ConditionModel
-
-// BehaviorConditionAndGroupModel is an alias for the shared ConditionAndGroupModel.
-type BehaviorConditionAndGroupModel = ConditionAndGroupModel
-
-// BehaviorConditionExpressionModel is an alias for the shared ConditionExpressionModel.
-type BehaviorConditionExpressionModel = ConditionExpressionModel
-
-// ---------------------------------------------------------------------------
-// Behavior Condition schema helpers
-// ---------------------------------------------------------------------------
-
-func behaviorConditionAttributes() map[string]schema.Attribute {
-	return map[string]schema.Attribute{
-		"field": schema.StringAttribute{
-			MarkdownDescription: "Field to match against. Valid values: `" + strings.Join(behaviorConditionFields, "`, `") + "`",
-			Required:            true,
-			Validators: []validator.String{
-				stringvalidator.OneOf(behaviorConditionFields...),
-			},
-		},
-		"operator": schema.StringAttribute{
-			MarkdownDescription: "Match operator. Valid values: `" + strings.Join(behaviorConditionOperators, "`, `") + "`",
-			Required:            true,
-			Validators: []validator.String{
-				stringvalidator.OneOf(behaviorConditionOperators...),
-			},
-		},
-		"values": conditionValuesAttr(),
-		"value":  conditionValueAttr(),
-		"field_key": schema.StringAttribute{
-			MarkdownDescription: "Key within the field (required for header and query_param fields)",
-			Optional:            true,
-		},
-	}
-}
-
-func behaviorConditionExpressionAttributes() map[string]schema.Attribute {
-	return map[string]schema.Attribute{
-		"or": schema.ListNestedAttribute{
-			MarkdownDescription: "List of AND groups (OR of ANDs expression)",
-			Required:            true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"and": schema.ListNestedAttribute{
-						MarkdownDescription: "List of conditions that must ALL match (AND group)",
-						Required:            true,
-						NestedObject: schema.NestedAttributeObject{
-							Attributes: behaviorConditionAttributes(),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Behavior Condition serialisation helpers
-// ---------------------------------------------------------------------------
-
-// behaviorConditionExpressionToMap serialises a ConditionExpressionModel → API map.
-// All behavior fields send values as a list — no per-field override needed.
-func behaviorConditionExpressionToMap(ctx context.Context, expr *BehaviorConditionExpressionModel) map[string]interface{} {
-	return ConditionExpressionToMap(ctx, expr, nil)
-}
-
-// behaviorConditionExpressionFromMap deserialises an API condition map → BehaviorConditionExpressionModel.
-// prior, when non-nil, is used to decide whether to populate `value` or `values` per condition.
-// Pass nil when there is no prior (import) — defaults to `values`.
-func behaviorConditionExpressionFromMap(ctx context.Context, raw map[string]interface{}, prior *BehaviorConditionExpressionModel) *BehaviorConditionExpressionModel {
-	return ConditionExpressionFromMap(ctx, raw, prior, nil)
-}
-
-// behaviorPathAllowedChars mirrors the backend's path_pattern_contains_allowed_chars check.
-// Pattern: ^/[A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$
-var behaviorPathAllowedChars = regexp.MustCompile(`^/[A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$`)
-
-// validateBehaviorCondition mirrors Python backend validate_behavior_condition.
-// Only http.request.path is validated; other fields are passed through.
-func validateBehaviorCondition(cond BehaviorConditionModel, loc string) []string {
-	field := cond.Field.ValueString()
-	if field != "http.request.path" {
-		return nil
-	}
-
-	op := cond.Operator.ValueString()
-	var values []string
-	for _, v := range cond.Values.Elements() {
-		if sv, ok := v.(types.String); ok {
-			values = append(values, sv.ValueString())
-		}
-	}
-
-	var errs []string
-	for _, val := range values {
-		// eq / ne / match: must start with "/"
-		if op == "eq" || op == "ne" || op == "match" || op == "not_match" {
-			if !strings.HasPrefix(val, "/") {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q must start with '/'", loc, val))
-				continue
-			}
-		}
-
-		switch op {
-		case "eq", "ne":
-			if len(val) > 255 {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q exceeds 255 chars", loc, val))
-			} else if strings.Contains(val, "*") {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q must not contain '*' for operator %s", loc, val, op))
-			} else if !behaviorPathAllowedChars.MatchString(val) {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q contains invalid characters for operator %s", loc, val, op))
-			}
-		case "match", "not_match":
-			if len(val) > 255 {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q exceeds 255 chars", loc, val))
-			} else if !behaviorPathAllowedChars.MatchString(val) {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q contains invalid characters for operator %s", loc, val, op))
-			}
-		case "regex", "not_regex":
-			if _, err := regexp.Compile(val); err != nil {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q is not a valid regex: %v", loc, val, err))
-			}
-		case "in", "not_in", "matches_one_of", "does_not_match_any_of":
-			if len(val) > 255 {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q exceeds 255 chars", loc, val))
-			} else if !behaviorPathAllowedChars.MatchString(val) {
-				errs = append(errs, fmt.Sprintf("%s: http.request.path value %q contains invalid characters for operator %s", loc, val, op))
-			}
-		}
-	}
-	return errs
-}
-
-// ValidateBehaviorConditionModel validates field_key constraints and path field rules on behavior conditions.
-func ValidateBehaviorConditionModel(expr *BehaviorConditionExpressionModel, prefix string) []string {
-	if expr == nil {
-		return nil
-	}
-	var errs []string
-	for j, andGroup := range expr.Or {
-		for k, cond := range andGroup.And {
-			loc := fmt.Sprintf("%s.condition.or[%d].and[%d]", prefix, j, k)
-			field := cond.Field.ValueString()
-
-			// field_key: required for collection fields, forbidden for plain fields
-			if behaviorCollectionFields[field] {
-				if cond.FieldKey.IsNull() || cond.FieldKey.ValueString() == "" {
-					errs = append(errs, fmt.Sprintf("%s: field '%s' requires field_key to be set", loc, field))
-				}
-			} else {
-				if !cond.FieldKey.IsNull() && cond.FieldKey.ValueString() != "" {
-					errs = append(errs, fmt.Sprintf("%s: field '%s' does not support field_key", loc, field))
-				}
-			}
-
-			// path-specific validation
-			errs = append(errs, validateBehaviorCondition(cond, loc)...)
-		}
-	}
-	return errs
-}
-
 // ValidateBehaviorModel validates that exactly one of path_pattern or condition is set,
 // and that at least one action field is populated.
 func ValidateBehaviorModel(b *BehaviorModel, prefix string) []string {
@@ -502,7 +304,7 @@ func ValidateBehaviorModel(b *BehaviorModel, prefix string) []string {
 		errs = append(errs, fmt.Sprintf("%s: actions must have at least one field set", prefix))
 	}
 	if hasCondition {
-		errs = append(errs, ValidateBehaviorConditionModel(b.Condition, prefix)...)
+		errs = append(errs, ValidateConditionModel(b.Condition, prefix, BehaviorConditionSpec)...)
 	}
 	if b.Actions != nil {
 		errs = append(errs, validateHeaderActions(b.Actions.RequestHeaders, prefix+".actions.request_headers")...)
@@ -604,67 +406,6 @@ func isBehaviorActionsEmpty(a *BehaviorActionV2ResourceModel) bool {
 		return false
 	}
 	return true
-}
-
-// pathPatternToConditionMap converts a simple path pattern string to the API condition map.
-// Note: value must be a plain string (not a list) so the backend's path_pattern validators
-// can use it as a dict key in _validate_behavior_no_partial_intersects.
-func pathPatternToConditionMap(pattern string) map[string]interface{} {
-	return map[string]interface{}{
-		"or": []interface{}{
-			map[string]interface{}{
-				"and": []interface{}{
-					map[string]interface{}{
-						"field":    "http.request.path",
-						"operator": "match",
-						"value":    pattern,
-					},
-				},
-			},
-		},
-	}
-}
-
-// isSimplePathPattern returns (pattern, true) if the condition map represents a single
-// http.request.path / match condition — i.e. the shorthand that path_pattern expands to.
-func isSimplePathPattern(condMap map[string]interface{}) (string, bool) {
-	orRaw, ok := condMap["or"].([]interface{})
-	if !ok || len(orRaw) != 1 {
-		return "", false
-	}
-	orMap, ok := orRaw[0].(map[string]interface{})
-	if !ok {
-		return "", false
-	}
-	andRaw, ok := orMap["and"].([]interface{})
-	if !ok || len(andRaw) != 1 {
-		return "", false
-	}
-	andMap, ok := andRaw[0].(map[string]interface{})
-	if !ok {
-		return "", false
-	}
-	if strOrEmpty(andMap, "field") != "http.request.path" {
-		return "", false
-	}
-	if strOrEmpty(andMap, "operator") != "match" {
-		return "", false
-	}
-	switch v := andMap["value"].(type) {
-	case []interface{}:
-		if len(v) == 1 {
-			if s, ok := v[0].(string); ok {
-				return s, true
-			}
-		}
-	case []string:
-		if len(v) == 1 {
-			return v[0], true
-		}
-	case string:
-		return v, true
-	}
-	return "", false
 }
 
 // Service Config API response structures
@@ -1068,6 +809,8 @@ type BehaviorActionV2ResourceModel struct {
 	ProviderSpecific          []ProviderSpecificModel           `tfsdk:"provider_specific"`
 }
 
+var behaviorPathAllowedChars = regexp.MustCompile(`^/[A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$`)
+
 func statusCodeToInt(statusCode string) (int, error) {
 	switch statusCode {
 	case "1xx":
@@ -1130,6 +873,9 @@ func BehaviorAttributes() map[string]schema.Attribute {
 				"  - Mutually exclusive with `condition`.\n" +
 				"  - Internally expanded to a single `http.request.path` / `match` condition.",
 			Optional: true,
+			Validators: []validator.String{
+				stringvalidator.LengthAtLeast(1),
+			},
 		},
 		"condition": schema.SingleNestedAttribute{
 			MarkdownDescription: "Full match condition (OR-of-ANDs expression).\n" +
@@ -2212,7 +1958,7 @@ func translateStreamLogsToName(action *BehaviorActionV2ResourceModel, uuidToName
 //
 // transformCtx.BehaviorRepresentation (set during write) is used to preserve
 // the user's chosen representation (path_pattern vs condition) on refresh.
-func BehaviorsModelFromMap(ctx context.Context, behaviorsDict map[string]interface{}, transformCtx *ServiceTransformContext) (*BehaviorsModel, error) {
+func BehaviorsModelFromMap(ctx context.Context, behaviorsDict map[string]interface{}, transformCtx *ServiceTransformContext, planConfig *ServiceConfigModel) (*BehaviorsModel, error) {
 	if behaviorsDict == nil {
 		return nil, nil
 	}
@@ -2245,6 +1991,13 @@ func BehaviorsModelFromMap(ctx context.Context, behaviorsDict map[string]interfa
 	// Extract non default behaviors - list of dicts -> []BehaviorModel
 	BehaviorModelList := []BehaviorModel{}
 
+	// Extract planFittingItem all_match behaviors for comparison
+	var planAllMatch *[]BehaviorModel
+	planAllMatch, err := extractCustomBehaviors(ctx, planConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract plan all_match behaviors: %v", err)
+	}
+
 	if allMatchBehaviors, ok := behaviorsDict["all_match"].([]interface{}); ok {
 		for _, behaviorData := range allMatchBehaviors {
 			behaviorMap, ok := behaviorData.(map[string]interface{})
@@ -2265,7 +2018,9 @@ func BehaviorsModelFromMap(ctx context.Context, behaviorsDict map[string]interfa
 				}
 			}
 
-			behavior, err := BehaviorModelfromMap(ctx, name, behaviorMap, preferPathPattern)
+			// TODO - use idx of loop instead of find.
+			planBehavior := findBehaviorByName(ctx, planAllMatch, name)
+			behavior, err := BehaviorModelfromMap(ctx, name, behaviorMap, preferPathPattern, planBehavior)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert behavior %s: %w", name, err)
 			}
@@ -2290,6 +2045,9 @@ func BehaviorsModelFromMap(ctx context.Context, behaviorsDict map[string]interfa
 		}
 	}
 
+	tflog.Debug(ctx, "Converted behaviors from API map", map[string]interface{}{
+		"behaviors": behaviors,
+	})
 	return behaviors, nil
 }
 
@@ -2851,7 +2609,7 @@ func behaviorActionModelToAPIStruct(action BehaviorActionV2ResourceModel, apiAct
 // preferPathPattern controls whether a simple http.request.path/match condition
 // is collapsed back to the path_pattern shorthand. Pass true (the default) to
 // collapse, false to always return a full condition block.
-func BehaviorModelfromMap(ctx context.Context, name string, apiMap map[string]interface{}, preferPathPattern bool) (*BehaviorModel, error) {
+func BehaviorModelfromMap(ctx context.Context, name string, apiMap map[string]interface{}, preferPathPattern bool, planBehavior *BehaviorModel) (*BehaviorModel, error) {
 	// Marshal map to JSON then unmarshal to typed struct
 	jsonBytes, err := json.Marshal(apiMap)
 	if err != nil {
@@ -2879,14 +2637,20 @@ func BehaviorModelfromMap(ctx context.Context, name string, apiMap map[string]in
 	// condition is collapsed back to the path_pattern shorthand (avoids drift).
 	behavior.PathPattern = types.StringNull()
 	if condMap, ok := apiMap["condition"].(map[string]interface{}); ok {
-		if preferPathPattern {
-			if pattern, simple := isSimplePathPattern(condMap); simple {
-				behavior.PathPattern = types.StringValue(pattern)
-			} else {
-				behavior.Condition = behaviorConditionExpressionFromMap(ctx, condMap, nil)
-			}
+		pattern, isSimple := isSimplePathPattern(condMap)
+		if preferPathPattern && isSimple {
+			behavior.PathPattern = types.StringValue(pattern)
 		} else {
-			behavior.Condition = behaviorConditionExpressionFromMap(ctx, condMap, nil)
+			var planCond *BehaviorConditionExpressionModel
+			if planBehavior != nil {
+				planCond = planBehavior.Condition
+			}
+			var err error
+			behavior.Condition, err = behaviorConditionExpressionFromMap(ctx, condMap, planCond)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse condition: %w", err)
+			}
+			tflog.Debug(ctx, fmt.Sprintf(" [BehaviorModelfromMap] 🔍 converted condition: %+v", behavior.Condition))
 		}
 	}
 
@@ -3359,4 +3123,43 @@ func propagateMissingDefaultActions(dest *BehaviorActionV2ResourceModel, src *Be
 	if dest.CacheBehavior.IsNull() {
 		dest.CacheBehavior = src.CacheBehavior
 	}
+}
+
+func extractCustomBehaviors(ctx context.Context, planConfig *ServiceConfigModel) (*[]BehaviorModel, error) {
+	planAllMatch := []BehaviorModel{}
+	if planConfig != nil {
+		var allMatchPlan types.List
+		if !planConfig.Behaviors.IsNull() && !planConfig.Behaviors.IsUnknown() {
+			var b BehaviorsBlockModel
+			diags := planConfig.Behaviors.As(ctx, &b, basetypes.ObjectAsOptions{})
+			if diags.HasError() {
+				return nil, fmt.Errorf("failed to unmarshal plan config behaviors: %v", diags)
+			}
+			allMatchPlan = b.Custom
+		}
+		diags := allMatchPlan.ElementsAs(ctx, &planAllMatch, false)
+		if diags.HasError() {
+			return nil, fmt.Errorf("failed to extract behaviors from plan: %v", diags.Errors()[0])
+		}
+	}
+	return &planAllMatch, nil
+}
+
+func findBehaviorByName(ctx context.Context, behaviors *[]BehaviorModel, name string) *BehaviorModel {
+	if behaviors == nil {
+		tflog.Debug(ctx, "[findBehaviorByName] behaviors is nil")
+		return nil
+	}
+	for _, behavior := range *behaviors {
+		if behavior.Name.IsNull() || behavior.Name.IsUnknown() {
+			tflog.Debug(ctx, "[findBehaviorByName] behavior name is nil or unknown")
+			continue
+		}
+		if name == behavior.Name.ValueString() {
+			tflog.Debug(ctx, "[findBehaviorByName] found behavior: "+name)
+			return &behavior
+		}
+	}
+	tflog.Debug(ctx, "[findBehaviorByName] behavior not found: "+name)
+	return nil
 }
