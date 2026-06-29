@@ -162,7 +162,10 @@ func TestWafRoundTrip(t *testing.T) {
 	}
 
 	secMap := secOriginal.SecurityModelToMap(ctx)
-	recoveredSec := SecurityMapToModel(ctx, secMap)
+	recoveredSec, err := SecurityMapToModel(ctx, secMap)
+	if err != nil {
+		t.Fatalf("SecurityMapToModel returned error: %v", err)
+	}
 	recovered := recoveredSec.Waf
 
 	if recovered == nil {
@@ -186,7 +189,7 @@ func TestWafRoundTrip(t *testing.T) {
 }
 
 func TestValidateWafModel_IgnoreParamsMissing(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("bad-ignore"),
 			Action: strVal("ignore"),
@@ -200,7 +203,7 @@ func TestValidateWafModel_IgnoreParamsMissing(t *testing.T) {
 
 func TestValidateWafModel_FieldKeyMissingForCollectionField(t *testing.T) {
 	valSet, _ := stringSet([]string{"X-Custom"})
-	errs := ValidateCustomRules([]WafCustomRuleModel{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("bad-header"),
 			Action: strVal("block"),
@@ -344,7 +347,10 @@ func TestWafMapToModel_BackendDefaults(t *testing.T) {
 	}
 
 	// enabled lives on SecurityModel; check via SecurityMapToModel
-	secModel := SecurityMapToModel(ctx, apiMap)
+	secModel, err := SecurityMapToModel(ctx, apiMap)
+	if err != nil {
+		t.Fatalf("SecurityMapToModel returned error: %v", err)
+	}
 	if secModel.Enabled.ValueBool() != false {
 		t.Errorf("enabled: expected false, got %v", secModel.Enabled.ValueBool())
 	}
@@ -493,7 +499,10 @@ func TestWafRoundTrip_WithFieldKey(t *testing.T) {
 	}
 
 	apiMap := sec.SecurityModelToMap(ctx)
-	recovered := SecurityMapToModel(ctx, apiMap)
+	recovered, err := SecurityMapToModel(ctx, apiMap)
+	if err != nil {
+		t.Fatalf("SecurityMapToModel returned error: %v", err)
+	}
 
 	if recovered == nil || len(recovered.CustomRules) != 1 {
 		t.Fatal("round-trip lost the custom rule")
@@ -536,7 +545,10 @@ func TestWafRoundTrip_WithIgnoreParams(t *testing.T) {
 	}
 
 	apiMap := sec.SecurityModelToMap(ctx)
-	recovered := SecurityMapToModel(ctx, apiMap)
+	recovered, err := SecurityMapToModel(ctx, apiMap)
+	if err != nil {
+		t.Fatalf("SecurityMapToModel returned error: %v", err)
+	}
 
 	if recovered == nil || len(recovered.CustomRules) != 1 {
 		t.Fatal("round-trip lost the custom rule")
@@ -556,7 +568,7 @@ func TestWafRoundTrip_WithIgnoreParams(t *testing.T) {
 // validate passes for a valid model with no issues.
 func TestValidateWafModel_Clean(t *testing.T) {
 	valSet, _ := stringSet([]string{"/ok"})
-	errs := ValidateCustomRules([]WafCustomRuleModel{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("ok-rule"),
 			Action: strVal("block"),
@@ -577,7 +589,7 @@ func TestValidateWafModel_Clean(t *testing.T) {
 // validate catches field_key missing on query_param and json_param too.
 func TestValidateWafModel_FieldKeyRequired_QueryParam(t *testing.T) {
 	valSet, _ := stringSet([]string{"admin"})
-	errs := ValidateCustomRules([]WafCustomRuleModel{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("bad-query"),
 			Action: strVal("block"),
@@ -598,7 +610,7 @@ func TestValidateWafModel_FieldKeyRequired_QueryParam(t *testing.T) {
 // validate passes when field_key IS set for a collection field.
 func TestValidateWafModel_FieldKeyPresent_OK(t *testing.T) {
 	valSet, _ := stringSet([]string{"admin"})
-	errs := ValidateCustomRules([]WafCustomRuleModel{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("ok-query"),
 			Action: strVal("block"),
@@ -670,7 +682,10 @@ func TestWafRoundTrip_OrderPreserved(t *testing.T) {
 	}
 
 	secMap := sec.SecurityModelToMap(ctx)
-	recoveredSec := SecurityMapToModel(ctx, secMap)
+	recoveredSec, err := SecurityMapToModel(ctx, secMap)
+	if err != nil {
+		t.Fatalf("SecurityMapToModel returned error: %v", err)
+	}
 
 	if recoveredSec == nil {
 		t.Fatal("round-trip returned nil")
@@ -802,7 +817,7 @@ func TestValidateSecurityModel_WafIgnoreParamsMissing(t *testing.T) {
 // ── A. field_key ─────────────────────────────────────────────────────────────
 
 func TestValidateCondition_FieldKeyOnPlainField(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), strVal("oops")),
 	}})
@@ -812,7 +827,7 @@ func TestValidateCondition_FieldKeyOnPlainField(t *testing.T) {
 }
 
 func TestValidateCondition_CollectionFieldMissingFieldKey(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("contains"), mustStringSet([]string{"x"}), nullStr()),
 	}})
@@ -822,7 +837,7 @@ func TestValidateCondition_CollectionFieldMissingFieldKey(t *testing.T) {
 }
 
 func TestValidateCondition_CollectionFieldWithFieldKey_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("contains"), mustStringSet([]string{"x"}), strVal("X-Custom")),
 	}})
@@ -834,7 +849,7 @@ func TestValidateCondition_CollectionFieldWithFieldKey_OK(t *testing.T) {
 // ── B. uri_raw operator restrictions ─────────────────────────────────────────
 
 func TestValidateCondition_URIRaw_IpMatchForbidden(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8"}), nullStr()),
 	}})
@@ -845,7 +860,7 @@ func TestValidateCondition_URIRaw_IpMatchForbidden(t *testing.T) {
 
 func TestValidateCondition_URIRaw_ExistsForbidden(t *testing.T) {
 	emptySet, _ := stringSet([]string{})
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("exists"), emptySet, nullStr()),
 	}})
@@ -855,7 +870,7 @@ func TestValidateCondition_URIRaw_ExistsForbidden(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_LtForbidden(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("lt"), mustStringSet([]string{"50"}), nullStr()),
 	}})
@@ -865,7 +880,7 @@ func TestValidateCondition_URIRaw_LtForbidden(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_EqRequiresFullURL_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("eq"), mustStringSet([]string{"/not-a-url"}), nullStr()),
 	}})
@@ -875,7 +890,7 @@ func TestValidateCondition_URIRaw_EqRequiresFullURL_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_EqWithFullURL_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("eq"), mustStringSet([]string{"https://example.com/path"}), nullStr()),
 	}})
@@ -885,7 +900,7 @@ func TestValidateCondition_URIRaw_EqWithFullURL_OK(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_InRequiresFullURL_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("in"), mustStringSet([]string{"https://example.com", "not-a-url"}), nullStr()),
 	}})
@@ -895,7 +910,7 @@ func TestValidateCondition_URIRaw_InRequiresFullURL_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_BeginsWith_InvalidPrefix_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("begins_with"), mustStringSet([]string{"ftp://bad"}), nullStr()),
 	}})
@@ -905,7 +920,7 @@ func TestValidateCondition_URIRaw_BeginsWith_InvalidPrefix_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_BeginsWith_ValidPrefix_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("begins_with"), mustStringSet([]string{"https://example.com"}), nullStr()),
 	}})
@@ -915,7 +930,7 @@ func TestValidateCondition_URIRaw_BeginsWith_ValidPrefix_OK(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_Regex_InvalidRegex_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("regex"), mustStringSet([]string{"[invalid"}), nullStr()),
 	}})
@@ -925,7 +940,7 @@ func TestValidateCondition_URIRaw_Regex_InvalidRegex_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_Regex_ValidRegex_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("regex"), mustStringSet([]string{"https://example\\.com/.*"}), nullStr()),
 	}})
@@ -936,7 +951,7 @@ func TestValidateCondition_URIRaw_Regex_ValidRegex_OK(t *testing.T) {
 
 // contains on uri_raw is free-form → OK.
 func TestValidateCondition_URIRaw_Contains_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("contains"), mustStringSet([]string{"/api/v"}), nullStr()),
 	}})
@@ -947,7 +962,7 @@ func TestValidateCondition_URIRaw_Contains_OK(t *testing.T) {
 
 // ip_match on http.request.path is NOT forbidden by the backend → OK.
 func TestValidateCondition_IpMatchOnPath_NotForbidden(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8"}), nullStr()),
 	}})
@@ -959,7 +974,7 @@ func TestValidateCondition_IpMatchOnPath_NotForbidden(t *testing.T) {
 // ── C. path operator restrictions ────────────────────────────────────────────
 
 func TestValidateCondition_Path_EqNoSlash_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("eq"), mustStringSet([]string{"no-leading-slash"}), nullStr()),
 	}})
@@ -969,7 +984,7 @@ func TestValidateCondition_Path_EqNoSlash_Error(t *testing.T) {
 }
 
 func TestValidateCondition_Path_EqWithSlash_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("eq"), mustStringSet([]string{"/login"}), nullStr()),
 	}})
@@ -979,7 +994,7 @@ func TestValidateCondition_Path_EqWithSlash_OK(t *testing.T) {
 }
 
 func TestValidateCondition_Path_Regex_InvalidRegex_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("regex"), mustStringSet([]string{"[broken"}), nullStr()),
 	}})
@@ -989,7 +1004,7 @@ func TestValidateCondition_Path_Regex_InvalidRegex_Error(t *testing.T) {
 }
 
 func TestValidateCondition_Path_Regex_ValidRegex_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("regex"), mustStringSet([]string{"/api/v[0-9]+/.*"}), nullStr()),
 	}})
@@ -1001,7 +1016,7 @@ func TestValidateCondition_Path_Regex_ValidRegex_OK(t *testing.T) {
 // ── D. client.ip.address IP/CIDR validation ───────────────────────────────────
 
 func TestValidateCondition_IPAddress_InvalidCIDR_Error(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("client.ip.address"), strVal("ip_match"), mustStringSet([]string{"not-an-ip"}), nullStr()),
 	}})
@@ -1011,7 +1026,7 @@ func TestValidateCondition_IPAddress_InvalidCIDR_Error(t *testing.T) {
 }
 
 func TestValidateCondition_IPAddress_ValidCIDR_OK(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("client.ip.address"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8", "1.2.3.4"}), nullStr()),
 	}})
@@ -1023,7 +1038,7 @@ func TestValidateCondition_IPAddress_ValidCIDR_OK(t *testing.T) {
 // ── E. value-presence rules ───────────────────────────────────────────────────
 
 func TestValidateCondition_ExistsWithNonEmptyValue(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("exists"), mustStringSet([]string{"oops"}), strVal("X-Debug")),
 	}})
@@ -1034,7 +1049,7 @@ func TestValidateCondition_ExistsWithNonEmptyValue(t *testing.T) {
 
 func TestValidateCondition_DoesNotExistEmptyValue_OK(t *testing.T) {
 	emptySet, _ := stringSet([]string{})
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.cookie"), strVal("does_not_exist"), emptySet, strVal("csrf_token")),
 	}})
@@ -1045,7 +1060,7 @@ func TestValidateCondition_DoesNotExistEmptyValue_OK(t *testing.T) {
 
 func TestValidateCondition_ContainsWithEmptyValue(t *testing.T) {
 	emptySet, _ := stringSet([]string{})
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), emptySet, nullStr()),
 	}})
@@ -1057,7 +1072,7 @@ func TestValidateCondition_ContainsWithEmptyValue(t *testing.T) {
 // ── ignore_params ─────────────────────────────────────────────────────────────
 
 func TestValidateCondition_IgnoreParamsOnNonIgnoreAction(t *testing.T) {
-	errs := ValidateCustomRules([]WafCustomRuleModel{{
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition:    cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), nullStr()),
 		IgnoreParams: &WafIgnoreParamsModel{IgnoreType: strVal("json_body_param"), Value: strVal("token")},
@@ -1074,7 +1089,7 @@ func TestValidateCondition_DuplicateCustomRuleNames(t *testing.T) {
 		Name: strVal("dup"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), nullStr()),
 	}
-	errs := ValidateCustomRules([]WafCustomRuleModel{rule, rule})
+	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{rule, rule})
 	if len(errs) == 0 {
 		t.Error("expected error for duplicate custom rule names")
 	}
@@ -1086,7 +1101,7 @@ func TestValidateCondition_DuplicateRateLimitNames(t *testing.T) {
 		NumOfRequests: int64Val(100), TimeWindowSeconds: int64Val(60), BlockDurationSeconds: int64Val(300),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), nullStr()),
 	}
-	errs := ValidateRateLimitRules([]WafRateLimitRuleModel{rule, rule})
+	errs := ValidateRateLimitRules(t.Context(), []WafRateLimitRuleModel{rule, rule})
 	if len(errs) == 0 {
 		t.Error("expected error for duplicate rate_limit rule names")
 	}
@@ -1297,20 +1312,20 @@ resource "ioriver_service" "%s" {
             or = [{ and = [{ field = "client.geo.country", operator = "not_in", values = ["US", "GB", "DE"] }] }]
           }
         },
-        # 12. bot.advanced.score + eq → block
+        # 12. action_token.score + eq → block
         {
           name   = "cond-bot-score-eq"
           action = "block"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "eq", values = ["high"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "eq", values = [0.5] }] }]
           }
         },
-        # 13. bot.advanced.score + gt → challenge  (numeric comparison operators: lt, le, gt, ge)
+        # 13. action_token.score + gt → challenge  (numeric comparison operators: lt, le, gt, ge)
         {
           name   = "cond-bot-score-gt"
           action = "challenge"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "gt", values = ["50"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "gt", values = [0.5] }] }]
           }
         },
         # 14. http.request.path + regex → log  (regex just needs to compile as Python regex)
@@ -1402,28 +1417,28 @@ resource "ioriver_service" "%s" {
             or = [{ and = [{ field = "http.request.cookie", operator = "does_not_exist", values = [], field_key = "csrf" }] }]
           }
         },
-        # 23. bot.advanced.score + lt → block
+        # 23. action_token.score + lt → block
         {
           name   = "cond-bot-lt"
           action = "block"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "lt", values = ["30"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "lt", values = [0.3] }] }]
           }
         },
-        # 24. bot.advanced.score + le → log
+        # 24. action_token.score + le → log
         {
           name   = "cond-bot-le"
           action = "log"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "le", values = ["25"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "le", values = [0.25] }] }]
           }
         },
-        # 25. bot.advanced.score + ge → challenge
+        # 25. action_token.score + ge → challenge
         {
           name   = "cond-bot-ge"
           action = "challenge"
           condition = {
-            or = [{ and = [{ field = "bot.advanced.score", operator = "ge", values = ["75"] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "ge", values = ["0.75"] }] }]
           }
         }
       ]
@@ -1928,9 +1943,10 @@ resource "ioriver_service" "%s" {
               {
                 and = [
                   {
-                    field    = "bot.advanced.score"
+                    field    = "action_token.score"
+                    field_key = "web"
                     operator = "lt"
-                    values    = ["50"]
+                    values    = [0.5]
                   }
                 ]
               }
@@ -1988,9 +2004,10 @@ resource "ioriver_service" "%s" {
               {
                 and = [
                   {
-                    field    = "bot.advanced.score"
+                    field    = "action_token.score"
+                    field_key = "web"
                     operator = "lt"
-                    values    = ["50"]
+                    values    = [0.5]
                   }
                 ]
               }
@@ -2312,9 +2329,10 @@ resource "ioriver_service" "%s" {
               {
                 and = [
                   {
-                    field    = "bot.advanced.score"
+                    field    = "action_token.score"
+                    field_key = "web"
                     operator = "lt"
-                    values    = ["50"]
+                    values    = [0.5]
                   }
                 ]
               }

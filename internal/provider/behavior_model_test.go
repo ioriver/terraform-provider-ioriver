@@ -82,7 +82,7 @@ func TestBehaviorCondition_RoundTrip_Path(t *testing.T) {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
 
-	recovered, err := BehaviorModelfromMap(ctx, "api-behavior", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "api-behavior", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestBehaviorCondition_RoundTrip_PathPattern(t *testing.T) {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
 
-	recovered, err := BehaviorModelfromMap(ctx, "simple-behavior", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "simple-behavior", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestBehaviorCondition_RoundTrip_HeaderWithFieldKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
-	recovered, err := BehaviorModelfromMap(ctx, "mobile-header", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "mobile-header", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestBehaviorCondition_RoundTrip_ResponseHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
-	recovered, err := BehaviorModelfromMap(ctx, "cache-control-check", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "cache-control-check", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestBehaviorCondition_RoundTrip_StatusCode(t *testing.T) {
 		"children": []interface{}{},
 	}
 
-	recovered, err := BehaviorModelfromMap(ctx, "status-code-check", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "status-code-check", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestBehaviorCondition_RoundTrip_MultipleOrAndGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
-	recovered, err := BehaviorModelfromMap(ctx, "multi-or-and", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "multi-or-and", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -291,6 +291,10 @@ func TestBehaviorCondition_RoundTrip_MultipleOrAndGroups(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Validation tests
 // ---------------------------------------------------------------------------
+// ValidateBehaviorConditionModel validates field_key constraints and path field rules on behavior conditions.
+func ValidateBehaviorConditionModel(expr *BehaviorConditionExpressionModel, prefix string) []string {
+	return ValidateConditionModel(expr, prefix, BehaviorConditionSpec)
+}
 
 // field_key required for http.request.header.
 func TestValidateBehaviorCondition_HeaderMissingFieldKey(t *testing.T) {
@@ -741,7 +745,7 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 		t.Fatalf("ModelToMapWithCtx error: %v", err)
 	}
 
-	recovered, err := BehaviorModelfromMap(ctx, "all-actions", apiMap, true)
+	recovered, err := BehaviorModelfromMap(ctx, "all-actions", apiMap, true, nil)
 	if err != nil {
 		t.Fatalf("BehaviorModelfromMap error: %v", err)
 	}
@@ -2147,7 +2151,7 @@ resource "ioriver_service" "%s" {
 									{
 										field    = "http.request.path"
 										operator = "match"
-										values    = ["/api/v1/*"]
+										value    = "/api/v1/*"
 									},
 									{
 										field     = "http.request.header"

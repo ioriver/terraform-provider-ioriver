@@ -3,8 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net"
-	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -29,43 +27,6 @@ import (
 // ---------------------------------------------------------------------------
 // Enums (mirroring backend WAFConditionField / WAFConditionOperator)
 // ---------------------------------------------------------------------------
-
-var wafConditionFields = []string{
-	"http.request.header",
-	"http.request.method",
-	"http.request.uri_raw",
-	"http.request.path",
-	"http.request.json_param",
-	"http.request.query_param",
-	"http.request.cookie",
-	"http.request.body",
-	"client.ip.address",
-	"client.ip.asn",
-	"client.geo.country",
-	"bot.advanced.score",
-	"client.ja3",
-	"client.ja4",
-}
-
-// Fields that require a field_key (collection fields)
-var wafCollectionFields = map[string]bool{
-	"http.request.header":      true,
-	"http.request.json_param":  true,
-	"http.request.query_param": true,
-	"http.request.cookie":      true,
-}
-
-var wafConditionOperators = []string{
-	"eq", "ne", "in", "not_in",
-	"contains", "not_contains",
-	"regex", "not_regex",
-	"begins_with", "not_begins_with",
-	"ends_with", "not_ends_with",
-	"contains_word", "not_contains_word",
-	"ip_match", "not_ip_match",
-	"exists", "does_not_exist",
-	"lt", "le", "gt", "ge",
-}
 
 var wafCustomRuleActions = []string{"block", "log", "allow", "bypass_managed", "ignore", "challenge", "interactive_challenge"}
 var wafRateLimitActions = []string{"block", "log", "challenge", "interactive_challenge"}
@@ -265,87 +226,6 @@ type SecurityModel struct {
 // ---------------------------------------------------------------------------
 // Schema attribute builders
 // ---------------------------------------------------------------------------
-
-func wafConditionAttributes() map[string]schema.Attribute {
-	return map[string]schema.Attribute{
-		"field": schema.StringAttribute{
-			MarkdownDescription: "Request field to evaluate.\n" +
-				"  - Plain fields (no `field_key` needed):\n" +
-				"    - `http.request.method` (HTTP verb)\n" +
-				"    - `http.request.path` (URL path, e.g. `/api/users`)\n" +
-				"    - `http.request.uri_raw` (full raw URI including query string)\n" +
-				"    - `http.request.body` (request body text)\n" +
-				"    - `client.ip.address` (client IPv4/IPv6 — use `ip_match`/`not_ip_match`)\n" +
-				"    - `client.ip.asn` (autonomous system number)\n" +
-				"    - `client.geo.country` (ISO 3166-1 alpha-2 country code)\n" +
-				"    - `bot.advanced.score` (IO River bot score 0-100 — supports `lt`/`le`/`gt`/`ge`)\n" +
-				"    - `client.ja3` (JA3 TLS fingerprint hash)\n" +
-				"    - `client.ja4` (JA4 TLS fingerprint hash)\n" +
-				"  - Collection fields (require `field_key`):\n" +
-				"    - `http.request.header`\n" +
-				"    - `http.request.cookie`\n" +
-				"    - `http.request.query_param`\n" +
-				"    - `http.request.json_param` \n  -",
-			Required: true,
-			Validators: []validator.String{
-				stringvalidator.OneOf(wafConditionFields...),
-			},
-		},
-		"operator": schema.StringAttribute{
-			MarkdownDescription: "Match operator to apply.\n" +
-				"  - **String:**\n " +
-				"    - `eq` (exact match),\n" +
-				"    - `ne` (not equal),\n" +
-				"    - `begins_with` / `not_begins_with`,\n" +
-				"    - `ends_with` / `not_ends_with`,\n" +
-				"    - `contains` / `not_contains` (substring),\n" +
-				"    - `contains_word` / `not_contains_word` (word-boundary match),\n" +
-				"    - `regex` / `not_regex` (Python-compatible regular expression).\n" +
-				"  - **List:**\n" +
-				"    - `in` / `not_in` (value is in the supplied list).\n" +
-				"  - **IP/CIDR:**\n" +
-				"    - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).\n" +
-				"  - **Existence** (set `value = []`):\n" +
-				"    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).\n" +
-				"  - **Numeric** (use with `bot.advanced.score`):\n" +
-				"    - `lt`, `le`, `gt`, `ge`. \n  -",
-			Required: true,
-			Validators: []validator.String{
-				stringvalidator.OneOf(wafConditionOperators...),
-			},
-		},
-		"values": conditionValuesAttr(),
-		"value":  conditionValueAttr(),
-		"field_key": schema.StringAttribute{
-			MarkdownDescription: "Name of the specific header, cookie, query parameter, or JSON body field to inspect.\n" +
-				"  - **Required** when `field` is one of `http.request.header`, `http.request.cookie`, `http.request.query_param`, or `http.request.json_param`.\n" +
-				"  - For example: `field_key = \"User-Agent\"` when `field = \"http.request.header\"`. \n  -",
-			Optional: true,
-		},
-	}
-}
-
-func wafConditionExpressionAttributes() map[string]schema.Attribute {
-	return map[string]schema.Attribute{
-		"or": schema.ListNestedAttribute{
-			MarkdownDescription: "OR-of-ANDs match expression.\n" +
-				"  - The rule matches when **at least one** OR group matches.\n" +
-				"  - Each OR group contains one or more `and` conditions that must **all** match simultaneously. \n  -",
-			Required: true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"and": schema.ListNestedAttribute{
-						MarkdownDescription: "List of conditions that must ALL match for this OR group to be satisfied.",
-						Required:            true,
-						NestedObject: schema.NestedAttributeObject{
-							Attributes: wafConditionAttributes(),
-						},
-					},
-				},
-			},
-		},
-	}
-}
 
 func WafAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
@@ -636,18 +516,6 @@ func (w *WafModel) ModelToMap(ctx context.Context) map[string]interface{} {
 	return wafMap
 }
 
-// wafConditionExpressionToMap serialises the OR-of-ANDs expression.
-// client.ip.address is a WAF-only field that the backend expects as a comma-separated
-// string rather than a list; all other fields use the default list form.
-func wafConditionExpressionToMap(ctx context.Context, expr *WafConditionExpressionModel) map[string]interface{} {
-	return ConditionExpressionToMap(ctx, expr, func(field string, vals []string) interface{} {
-		if field == "client.ip.address" {
-			return strings.Join(vals, ",")
-		}
-		return vals
-	})
-}
-
 // toFloat64 coerces int, float64 or json.Number to float64 for safe map reads.
 func toFloat64(v interface{}) (float64, bool) {
 	switch n := v.(type) {
@@ -766,12 +634,6 @@ func wafMapToModelWithCtx(ctx context.Context, wafRaw interface{}, transformCtx 
 	return model
 }
 
-// wafConditionExpressionFromMap deserialises the OR-of-ANDs API map for WAF conditions.
-// Delegates to the shared ConditionExpressionFromMap with WafValueDeserializer.
-func wafConditionExpressionFromMap(ctx context.Context, raw map[string]interface{}, prior *WafConditionExpressionModel) *WafConditionExpressionModel {
-	return ConditionExpressionFromMap(ctx, raw, prior, WafValueDeserializer)
-}
-
 // strOrEmpty is a small helper to safely read a string from a map.
 func strOrEmpty(m map[string]interface{}, key string) string {
 	if v, ok := m[key].(string); ok {
@@ -784,19 +646,14 @@ func strOrEmpty(m map[string]interface{}, key string) string {
 // Validation helpers (called from service_resource or plan modifiers)
 // ---------------------------------------------------------------------------
 
-// ValidateWafModel validates cross-field rules that cannot be expressed
-// purely with schema validators (e.g. field_key required for collection fields,
-// ignore_params required when action=ignore).
+// No validation here, only schema validation.
 func ValidateWafModel(ctx context.Context, waf *WafModel) []string {
-	if waf == nil {
-		return nil
-	}
 	return nil
 }
 
 // ValidateCustomRules validates cross-field rules on custom WAF rules.
 // Called from ValidateSecurityModel since custom now lives under security.
-func ValidateCustomRules(rules []WafCustomRuleModel) []string {
+func ValidateCustomRules(ctx context.Context, rules []WafCustomRuleModel) []string {
 	var errs []string
 
 	// Duplicate rule names (backend rejects duplicates).
@@ -818,22 +675,14 @@ func ValidateCustomRules(rules []WafCustomRuleModel) []string {
 			errs = append(errs, fmt.Sprintf("%s: ignore_params is only valid when action = 'ignore', got '%s'", prefix, rule.Action.ValueString()))
 		}
 
-		if rule.Condition != nil {
-			for j, andGroup := range rule.Condition.Or {
-				for k, cond := range andGroup.And {
-					loc := fmt.Sprintf("%s.condition.or[%d].and[%d]", prefix, j, k)
-					errs = append(errs, validateCondition(loc, cond)...)
-				}
-			}
-		}
+		errs = append(errs, ValidateConditionModel(rule.Condition, prefix, WafConditionSpec)...)
 	}
 
 	return errs
 }
 
 // ValidateRateLimitRules validates rate-limit rule conditions.
-// Called from ValidateSecurityModel since rate_limit now lives under security.
-func ValidateRateLimitRules(rules []WafRateLimitRuleModel) []string {
+func ValidateRateLimitRules(ctx context.Context, rules []WafRateLimitRuleModel) []string {
 	var errs []string
 
 	// Duplicate rule names (backend rejects duplicates).
@@ -845,75 +694,14 @@ func ValidateRateLimitRules(rules []WafRateLimitRuleModel) []string {
 
 	for i, rule := range rules {
 		prefix := fmt.Sprintf("security.rate_limit[%d] (%s)", i, rule.Name.ValueString())
-		if rule.Condition != nil {
-			for j, andGroup := range rule.Condition.Or {
-				for k, cond := range andGroup.And {
-					loc := fmt.Sprintf("%s.condition.or[%d].and[%d]", prefix, j, k)
-					errs = append(errs, validateCondition(loc, cond)...)
-				}
-			}
-		}
+		errs = append(errs, ValidateConditionModel(rule.Condition, prefix, WafConditionSpec)...)
 	}
 	return errs
 }
 
 // ---------------------------------------------------------------------------
-// validateCondition — mirrors backend validate_waf_condition in config_validator.py
-//
-// Rules grouped to match exactly what the backend enforces:
-//
-//  A. field_key:
-//     - collection fields (header, cookie, query_param, json_param) → required
-//     - all other fields → must NOT be set
-//
-//  B. uri_raw operator restrictions (backend raises ValidationError):
-//     - ip_match, not_ip_match, exists, does_not_exist, lt, le, gt, ge → forbidden
-//     - eq, ne         → value must be a valid full URL (http:// or https://)
-//     - in, not_in     → each value must be a valid full URL
-//     - begins_with, not_begins_with → value must be a valid URL prefix
-//     - regex, not_regex             → value must compile as a regexp
-//     - contains, not_contains, ends_with, not_ends_with,
-//       contains_word, not_contains_word → free-form, no value restriction
-//
-//  C. path operator restrictions:
-//     - eq, ne          → every value must start with '/'
-//     - regex, not_regex → every value must compile as a regexp
-//
-//  D. client.ip.address:
-//     - every value must be a valid IP address or CIDR block
-//
-//  E. General value-presence:
-//     - exists / does_not_exist → value must be empty []
-//     - all other operators     → value must have at least one element
+// Validate helpers
 // ---------------------------------------------------------------------------
-
-// wafURIRawForbiddenOps are operators the backend explicitly rejects for uri_raw.
-var wafURIRawForbiddenOps = map[string]bool{
-	"ip_match": true, "not_ip_match": true,
-	"exists": true, "does_not_exist": true,
-	"lt": true, "le": true, "gt": true, "ge": true,
-}
-
-// wafURIRawURLRequiredOps are operators that require a valid full URL for uri_raw.
-var wafURIRawURLRequiredOps = map[string]bool{"eq": true, "ne": true}
-
-// wafURIRawURLListOps are operators that require every value to be a valid full URL.
-var wafURIRawURLListOps = map[string]bool{"in": true, "not_in": true}
-
-// wafURIRawURLPrefixOps require the value to look like a URL prefix.
-var wafURIRawURLPrefixOps = map[string]bool{"begins_with": true, "not_begins_with": true}
-
-// wafURIRawRegexOps require the value to compile as a regexp.
-var wafURIRawRegexOps = map[string]bool{"regex": true, "not_regex": true}
-
-// wafPathMustStartSlashOps require each path value to start with '/'.
-var wafPathMustStartSlashOps = map[string]bool{"eq": true, "ne": true}
-
-// wafPathRegexOps require path values to compile as a regexp.
-var wafPathRegexOps = map[string]bool{"regex": true, "not_regex": true}
-
-// wafExistenceOps are operators that must have an empty value list.
-var wafExistenceOps = map[string]bool{"exists": true, "does_not_exist": true}
 
 // isValidURLPrefix returns true if s looks like a valid URL or URL prefix
 // (mirrors the backend's begins_with check: "https://".startswith(value) || is_valid_url(value)).
@@ -929,124 +717,6 @@ func isValidFullURL(s string) bool {
 	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
 }
 
-// validateCondition checks all cross-field invariants for a single condition,
-// matching the backend validate_waf_condition logic exactly.
-func validateCondition(loc string, cond WafConditionModel) []string {
-	var errs []string
-	field := cond.Field.ValueString()
-	op := cond.Operator.ValueString()
-
-	// Collect the string values once for reuse below.
-	// Coalesce: `value` (single-string shorthand, read from config) or `values` (set form).
-	var vals []string
-	if !cond.Value.IsNull() && !cond.Value.IsUnknown() {
-		vals = []string{cond.Value.ValueString()}
-	} else if !cond.Values.IsNull() && !cond.Values.IsUnknown() {
-		_ = cond.Values.ElementsAs(context.Background(), &vals, false)
-	}
-
-	// ── A. field_key ─────────────────────────────────────────────────────────
-	if wafCollectionFields[field] {
-		if cond.FieldKey.IsNull() || cond.FieldKey.ValueString() == "" {
-			errs = append(errs, fmt.Sprintf("%s: field '%s' requires field_key to be set", loc, field))
-		}
-	} else {
-		if !cond.FieldKey.IsNull() && cond.FieldKey.ValueString() != "" {
-			errs = append(errs, fmt.Sprintf(
-				"%s: field_key must not be set for non-collection field '%s'", loc, field))
-		}
-	}
-
-	// ── E. value-presence (checked first so B/C can assume vals is populated) ─
-	if wafExistenceOps[op] {
-		if len(vals) > 0 {
-			errs = append(errs, fmt.Sprintf(
-				"%s: operator '%s' requires an empty value list []", loc, op))
-		}
-	} else {
-		if len(vals) == 0 {
-			errs = append(errs, fmt.Sprintf(
-				"%s: operator '%s' requires at least one value", loc, op))
-		}
-	}
-
-	// ── B. uri_raw operator restrictions ─────────────────────────────────────
-	if field == "http.request.uri_raw" {
-		switch {
-		case wafURIRawForbiddenOps[op]:
-			errs = append(errs, fmt.Sprintf(
-				"%s: operator '%s' is not supported for field 'http.request.uri_raw'", loc, op))
-
-		case wafURIRawURLRequiredOps[op]:
-			for _, v := range vals {
-				if !isValidFullURL(v) {
-					errs = append(errs, fmt.Sprintf(
-						"%s: uri_raw + '%s' requires a full URL (http:// or https://), got %q", loc, op, v))
-				}
-			}
-
-		case wafURIRawURLListOps[op]:
-			for _, v := range vals {
-				if !isValidFullURL(v) {
-					errs = append(errs, fmt.Sprintf(
-						"%s: uri_raw + '%s' requires every value to be a full URL, got %q", loc, op, v))
-				}
-			}
-
-		case wafURIRawURLPrefixOps[op]:
-			for _, v := range vals {
-				if !isValidURLPrefix(v) {
-					errs = append(errs, fmt.Sprintf(
-						"%s: uri_raw + '%s' requires a valid URL prefix, got %q", loc, op, v))
-				}
-			}
-
-		case wafURIRawRegexOps[op]:
-			for _, v := range vals {
-				if _, err := regexp.Compile(v); err != nil {
-					errs = append(errs, fmt.Sprintf(
-						"%s: uri_raw + '%s' value %q is not a valid regexp: %s", loc, op, v, err))
-				}
-			}
-		}
-	}
-
-	// ── C. path operator restrictions ─────────────────────────────────────────
-	if field == "http.request.path" {
-		switch {
-		case wafPathMustStartSlashOps[op]:
-			for _, v := range vals {
-				if !strings.HasPrefix(v, "/") {
-					errs = append(errs, fmt.Sprintf(
-						"%s: path + '%s' value %q must start with '/'", loc, op, v))
-				}
-			}
-		case wafPathRegexOps[op]:
-			for _, v := range vals {
-				if _, err := regexp.Compile(v); err != nil {
-					errs = append(errs, fmt.Sprintf(
-						"%s: path + '%s' value %q is not a valid regexp: %s", loc, op, v, err))
-				}
-			}
-		}
-	}
-
-	// ── D. client.ip.address IP/CIDR validation ───────────────────────────────
-	if field == "client.ip.address" {
-		for _, v := range vals {
-			// backend splits on comma; we receive a list so each element is one entry
-			if net.ParseIP(v) == nil {
-				if _, _, err := net.ParseCIDR(v); err != nil {
-					errs = append(errs, fmt.Sprintf(
-						"%s: client.ip.address value %q is not a valid IP address or CIDR", loc, v))
-				}
-			}
-		}
-	}
-
-	return errs
-}
-
 // validateNoDuplicateNames returns an error for each duplicate name in the slice.
 func validateNoDuplicateNames(names []string, prefix string) []string {
 	seen := make(map[string]int)
@@ -1054,9 +724,11 @@ func validateNoDuplicateNames(names []string, prefix string) []string {
 		seen[n]++
 	}
 	var errs []string
+	reported := map[string]bool{}
 	for n, count := range seen {
-		if count > 1 {
+		if count > 1 && !reported[n] {
 			errs = append(errs, fmt.Sprintf("%s: duplicate rule name %q", prefix, n))
+			reported[n] = true
 		}
 	}
 	return errs
@@ -1071,8 +743,8 @@ func ValidateSecurityModel(ctx context.Context, sec *SecurityModel) []string {
 	}
 	var errs []string
 	errs = append(errs, ValidateWafModel(ctx, sec.Waf)...)
-	errs = append(errs, ValidateCustomRules(sec.CustomRules)...)
-	errs = append(errs, ValidateRateLimitRules(sec.RateLimit)...)
+	errs = append(errs, ValidateCustomRules(ctx, sec.CustomRules)...)
+	errs = append(errs, ValidateRateLimitRules(ctx, sec.RateLimit)...)
 	return errs
 }
 
@@ -1290,7 +962,7 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context) map[string]inter
 			ruleMap["enabled"] = rule.Enabled.ValueBool()
 		}
 		if rule.Condition != nil {
-			ruleMap["condition"] = wafConditionExpressionToMap(ctx, rule.Condition)
+			ruleMap["condition"] = ConditionExpressionToMapByCaller(ctx, rule.Condition, WafConditionSpec)
 		}
 		rateLimitArr = append(rateLimitArr, ruleMap)
 	}
@@ -1308,7 +980,7 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context) map[string]inter
 			ruleMap["enabled"] = rule.Enabled.ValueBool()
 		}
 		if rule.Condition != nil {
-			ruleMap["condition"] = wafConditionExpressionToMap(ctx, rule.Condition)
+			ruleMap["condition"] = ConditionExpressionToMapByCaller(ctx, rule.Condition, WafConditionSpec)
 		}
 		if rule.IgnoreParams != nil {
 			ruleMap["ignore_params"] = map[string]interface{}{
@@ -1327,18 +999,18 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context) map[string]inter
 // The backend places all WAF fields (custom, enabled, checkpoint,
 // limit_body_size, rate_limit) directly inside the "waf" config key, so the
 // argument here IS the waf object — not a "security" envelope.
-func SecurityMapToModel(ctx context.Context, secRaw interface{}) *SecurityModel {
+func SecurityMapToModel(ctx context.Context, secRaw interface{}) (*SecurityModel, error) {
 	return securityMapToModelWithCtx(ctx, secRaw, nil, nil)
 }
 
-func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transformCtx *ServiceTransformContext, priorSec *SecurityModel) *SecurityModel {
+func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transformCtx *ServiceTransformContext, priorSec *SecurityModel) (*SecurityModel, error) {
 	if secRaw == nil {
-		return nil
+		return nil, nil
 	}
 	wafMap, ok := secRaw.(map[string]interface{})
 	if !ok {
 		tflog.Warn(ctx, fmt.Sprintf("[SecurityMapToModel] unexpected waf type: %T", secRaw))
-		return nil
+		return nil, fmt.Errorf("unexpected waf type: %T", secRaw)
 	}
 	model := &SecurityModel{}
 	// enabled comes from the waf object on the backend.
@@ -1390,7 +1062,11 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 				if priorSec != nil && rlIdx < len(priorSec.RateLimit) {
 					priorCond = priorSec.RateLimit[rlIdx].Condition
 				}
-				rule.Condition = wafConditionExpressionFromMap(ctx, condRaw, priorCond)
+				cond, err := ConditionExpressionFromMap(ctx, condRaw, priorCond, WafConditionSpec)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse rate_limit[%d].condition: %v", rlIdx, err)
+				}
+				rule.Condition = cond
 			}
 			model.RateLimit = append(model.RateLimit, rule)
 		}
@@ -1415,7 +1091,11 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 				if priorSec != nil && rIdx < len(priorSec.CustomRules) {
 					priorCond = priorSec.CustomRules[rIdx].Condition
 				}
-				rule.Condition = wafConditionExpressionFromMap(ctx, condRaw, priorCond)
+				cond, err := ConditionExpressionFromMap(ctx, condRaw, priorCond, WafConditionSpec)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse custom[%d].condition: %v", rIdx, err)
+				}
+				rule.Condition = cond
 			}
 			if ipRaw, ok := rMap["ignore_params"].(map[string]interface{}); ok {
 				rule.IgnoreParams = &WafIgnoreParamsModel{
@@ -1426,7 +1106,7 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 			model.CustomRules = append(model.CustomRules, rule)
 		}
 	}
-	return model
+	return model, nil
 }
 
 // ---------------------------------------------------------------------------

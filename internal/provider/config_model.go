@@ -332,10 +332,14 @@ func ServiceConfigMapToModel(
 	ctx context.Context,
 	configMap map[string]interface{},
 	updateTransformCtx *ServiceTransformContext,
-	priorConfig *ServiceConfigModel) (*ServiceConfigModel, error) {
+	planConfig *ServiceConfigModel) (*ServiceConfigModel, error) {
 
 	if configMap == nil {
 		return nil, nil
+	}
+
+	if planConfig != nil {
+		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] plan config: %+v\n", planConfig))
 	}
 
 	config := &ServiceConfigModel{}
@@ -365,9 +369,9 @@ func ServiceConfigMapToModel(
 
 		// credentials_version is TF-only and never returned by the API.
 		// Restore it from the prior config so state stays consistent with the plan.
-		if priorConfig != nil && !priorConfig.Origins.IsNull() && !priorConfig.Origins.IsUnknown() {
+		if planConfig != nil && !planConfig.Origins.IsNull() && !planConfig.Origins.IsUnknown() {
 			var priorOrigins []OriginModel
-			if diags := priorConfig.Origins.ElementsAs(ctx, &priorOrigins, false); !diags.HasError() {
+			if diags := planConfig.Origins.ElementsAs(ctx, &priorOrigins, false); !diags.HasError() {
 				priorVerByName := make(map[string]types.Int64)
 				for _, o := range priorOrigins {
 					if o.S3Origin != nil && !o.Name.IsNull() {
@@ -443,10 +447,10 @@ func ServiceConfigMapToModel(
 
 		// credentials_version is TF-only and never returned by the API.
 		// Restore it from the prior config so state stays consistent with the plan.
-		if priorConfig != nil && priorConfig.LogDestinations != nil {
+		if planConfig != nil && planConfig.LogDestinations != nil {
 			priorAwsByName := make(map[string]types.Int64)
 			priorCompatByName := make(map[string]types.Int64)
-			for _, ld := range *priorConfig.LogDestinations {
+			for _, ld := range *planConfig.LogDestinations {
 				name := ld.Name.ValueString()
 				if ld.AwsS3 != nil {
 					priorAwsByName[name] = ld.AwsS3.CredentialsVersion
@@ -480,7 +484,7 @@ func ServiceConfigMapToModel(
 	// ObjectNullClearsStateModifier handles the plan-time null when user omits the block.
 	if behaviorsDict, ok := configMap["behaviors"].(map[string]interface{}); ok {
 		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] 🔍 Behaviors dict: %+v\n", behaviorsDict))
-		behaviorModels, err := BehaviorsModelFromMap(ctx, behaviorsDict, updateTransformCtx)
+		behaviorModels, err := BehaviorsModelFromMap(ctx, behaviorsDict, updateTransformCtx, planConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert behaviors: %w", err)
 		}
@@ -541,13 +545,16 @@ func ServiceConfigMapToModel(
 	if wafRaw, ok := configMap["waf"]; ok && wafRaw != nil {
 		if updateTransformCtx != nil && updateTransformCtx.SecurityConfigured {
 			var priorSec *SecurityModel
-			if priorConfig != nil && !priorConfig.Security.IsNull() && !priorConfig.Security.IsUnknown() {
+			if planConfig != nil && !planConfig.Security.IsNull() && !planConfig.Security.IsUnknown() {
 				var s SecurityModel
-				if diags := priorConfig.Security.As(ctx, &s, basetypes.ObjectAsOptions{}); !diags.HasError() {
+				if diags := planConfig.Security.As(ctx, &s, basetypes.ObjectAsOptions{}); !diags.HasError() {
 					priorSec = &s
 				}
 			}
-			sec := securityMapToModelWithCtx(ctx, wafRaw, updateTransformCtx, priorSec)
+			sec, err := securityMapToModelWithCtx(ctx, wafRaw, updateTransformCtx, priorSec)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse security map: %v", err)
+			}
 			if sec != nil {
 				// bot_management is a top-level sibling of waf on the wire.
 				if bmRaw, ok := configMap["bot_management"]; ok && bmRaw != nil {

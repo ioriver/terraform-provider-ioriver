@@ -1248,12 +1248,13 @@ func TestAccIORiverService_WafRules(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.0.and.0.field_key", "debug"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.0.and.0.operator", "exists"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.0.and.0.values.#", "0"),
-					// r-challenge: bot.advanced.score + lt (numeric operator)
+					// r-challenge: action_token.score + lt (numeric operator)
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.name", "r-challenge"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.action", "challenge"),
-					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.field", "bot.advanced.score"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.field", "action_token.score"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.field_key", "web"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.operator", "lt"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.values.*", "50"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "config.security.custom_rules.5.condition.or.0.and.0.values.*", "0.5"),
 					// r-ichallenge: client.geo.country + in (multi-value)
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.6.name", "r-ichallenge"),
 					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.6.action", "interactive_challenge"),
@@ -1556,12 +1557,12 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 					resource.TestCheckNoResourceAttr(resourceName, "config.behaviors.custom.0.path_pattern"),
 					// 2-group OR
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.#", "2"),
-					// group[0]: path AND header
+					// group[0]: path AND header, using single value as 1 of the AND conditions
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.#", "2"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.field", "http.request.path"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.operator", "match"),
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.values.#", "1"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.values.*", "/api/v1/*"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.values.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.value", "/api/v1/*"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.1.field", "http.request.header"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.1.operator", "eq"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.1.field_key", "Content-Type"),
@@ -1780,4 +1781,280 @@ func TestAccIORiverService_GeoFencing(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccIORiverService_ConditionValidationRejections(t *testing.T) {
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+
+	for _, tc := range conditionValidationRejectionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				PreCheck:                 func() { testAccPreCheckV2(t) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				CheckDestroy: func(s *terraform.State) error {
+					return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+				},
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccConditionValidationRejection(rndName, certId, tc),
+						PlanOnly:    true,
+						ExpectError: regexp.MustCompile(tc.err),
+					},
+				},
+			})
+		})
+	}
+}
+
+func TestAccIORiverService_BehaviorConditionAllOperators(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBehaviorConditionAllOperators(rndName, certId),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.#", "22"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.operator", "eq"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.1.condition.or.0.and.0.operator", "ne"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.2.condition.or.0.and.0.operator", "lt"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.3.condition.or.0.and.0.operator", "gt"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.4.condition.or.0.and.0.operator", "le"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.5.condition.or.0.and.0.operator", "ge"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.10.condition.or.0.and.0.operator", "matches_one_of"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.11.condition.or.0.and.0.operator", "does_not_match_any_of"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.12.condition.or.0.and.0.operator", "exists"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.13.condition.or.0.and.0.operator", "does_not_exist"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.14.condition.or.0.and.0.field", "client.ip"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.14.condition.or.0.and.0.values.#", "2"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.17.condition.or.0.and.0.field", "http.request.header"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.17.condition.or.0.and.0.field_key", "X-Test"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.18.condition.or.0.and.0.field", "http.response.header"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.19.condition.or.0.and.0.field", "http.request.query_param"),
+				),
+			},
+			{
+				Config:             testAccBehaviorConditionAllOperators(rndName, certId),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+// TestAccIORiverService_WafConditionAllOperators reuses the existing exhaustive WAF
+// matrix helper and focuses assertions on condition value-shape edge cases.
+func TestAccIORiverService_WafConditionAllOperators(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccWafConditions(rndName, certId, 0),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.#", "25"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.8.condition.or.0.and.0.field", "client.ip.address"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.8.condition.or.0.and.0.operator", "ip_match"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.15.condition.or.1.and.1.operator", "not_ip_match"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.20.condition.or.0.and.0.operator", "exists"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.21.condition.or.0.and.0.operator", "does_not_exist"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.22.condition.or.0.and.0.operator", "lt"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.23.condition.or.0.and.0.operator", "le"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.12.condition.or.0.and.0.operator", "gt"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.24.condition.or.0.and.0.operator", "ge"),
+				),
+			},
+			{
+				Config:             testAccWafConditions(rndName, certId, 0),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+// BEFORE FIX: backend returns 500 because TF sends scalar operators as
+//
+//	"value": ["..."] instead of a scalar value.
+//
+// AFTER FIX: scalar operators send scalar JSON values, list operators keep arrays,
+//
+//	and exists/does_not_exist send null.
+func TestAccIORiverService_ConditionScalarValueShape(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Step 0: scalar operators authored with `value` shorthand.
+				Config: testAccConditionScalarValueShape(rndName, certId, 0),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.#", "5"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.0.condition.or.0.and.0.field", "http.request.uri_raw"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.0.condition.or.0.and.0.value", "https://example.com/"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.1.condition.or.0.and.0.field", "client.ip.asn"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.1.condition.or.0.and.0.value", "16509"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.2.condition.or.0.and.0.operator", "in"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.3.condition.or.0.and.0.field", "client.ip.address"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.1.and.0.operator", "does_not_exist"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.field", "http.response.status_code"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.value", "404"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.1.and.0.field", "http.request.path"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.1.and.0.value", "/api/*"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.2.and.0.operator", "in"),
+				),
+			},
+			{
+				// Step 1: same conditions authored with `values` form (single-element for scalar ops).
+				Config: testAccConditionScalarValueShape(rndName, certId, 1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.#", "5"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.0.condition.or.0.and.0.field", "http.request.uri_raw"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.0.condition.or.0.and.0.values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.1.condition.or.0.and.0.field", "client.ip.asn"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.1.condition.or.0.and.0.values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.2.condition.or.0.and.0.operator", "in"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.3.condition.or.0.and.0.field", "client.ip.address"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.1.and.0.operator", "does_not_exist"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.0.and.0.values.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "config.security.custom_rules.4.condition.or.1.and.0.values.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.field", "http.response.status_code"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.0.and.0.values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.1.and.0.field", "http.request.path"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.1.and.0.values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.2.and.0.operator", "in"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.3.and.0.values.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.condition.or.4.and.0.values.#", "0"),
+				),
+			},
+		},
+	})
+}
+
+func testAccConditionScalarValueShape(name, certId string, idx int) string {
+	wafURIRawScalar := `value = "https://example.com/"`
+	wafASNScalar := `value = "16509"`
+	behaviorStatusScalar := `value = "404"`
+	behaviorPathScalar := `value = "/api/*"`
+
+	if idx == 1 {
+		wafURIRawScalar = `values = ["https://example.com/"]`
+		wafASNScalar = `values = ["16509"]`
+		behaviorStatusScalar = `values = ["404"]`
+		behaviorPathScalar = `values = ["/api/*"]`
+	}
+
+	return fmt.Sprintf(`
+resource "ioriver_service" "%s" {
+	name        = "%s"
+	description = "Condition scalar value shape acceptance test"
+	certificate = "%s"
+
+	config = {
+		security = {
+			enabled = true
+			waf     = {}
+
+			custom_rules = [
+				{
+					name   = "waf-uri-eq"
+					action = "block"
+					condition = {
+						or = [{ and = [{ field = "http.request.uri_raw", operator = "eq", %s }] }]
+					}
+				},
+				{
+					name   = "waf-asn-eq"
+					action = "log"
+					condition = {
+						or = [{ and = [{ field = "client.ip.asn", operator = "eq", %s }] }]
+					}
+				},
+				{
+					name   = "waf-method-in"
+					action = "challenge"
+					condition = {
+						or = [{ and = [{ field = "http.request.method", operator = "in", values = ["GET", "POST"] }] }]
+					}
+				},
+				{
+					name   = "waf-ip-address-ip-match"
+					action = "allow"
+					condition = {
+						or = [{ and = [{ field = "client.ip.address", operator = "ip_match", values = ["10.0.0.0/8", "1.2.3.4"] }] }]
+					}
+				},
+				{
+					name   = "waf-existence"
+					action = "log"
+					condition = {
+						or = [
+							{ and = [{ field = "http.request.header", operator = "exists", values = [], field_key = "X-Test" }] },
+							{ and = [{ field = "http.request.query_param", operator = "does_not_exist", values = [], field_key = "debug" }] }
+						]
+					}
+				}
+			]
+		}
+
+		behaviors = {
+			custom = [
+				{
+					name = "behavior-value-shape"
+					condition = {
+						or = [
+							{ and = [{ field = "http.response.status_code", operator = "eq", %s }] },
+							{ and = [{ field = "http.request.path", operator = "match", %s }] },
+							{ and = [{ field = "http.request.method", operator = "in", values = ["GET", "POST"] }] },
+							{ and = [{ field = "http.request.domain", operator = "exists", values = [] }] }
+						]
+					}
+					actions = {
+						cache_behavior = "BYPASS"
+					}
+				}
+			]
+		}
+	}
+}
+	`, name, name, certId, wafURIRawScalar, wafASNScalar, behaviorStatusScalar, behaviorPathScalar)
 }
