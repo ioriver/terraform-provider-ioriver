@@ -68,12 +68,6 @@ type ConditionSpec struct {
 
 type conditionNativeKind string
 
-const (
-	nativeKindInt   conditionNativeKind = "int"
-	nativeKindFloat conditionNativeKind = "float"
-	nativeKindBool  conditionNativeKind = "bool"
-)
-
 var EmptyValueOperators = map[string]bool{
 	"exists":         true,
 	"does_not_exist": true,

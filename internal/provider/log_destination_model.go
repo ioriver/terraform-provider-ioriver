@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -259,6 +260,15 @@ func CompatibleS3LogDestinationAttributes() map[string]schema.Attribute {
 	}
 }
 
+// redactedLogDestinationsForLog returns a printable representation of the outbound
+// log-destinations array with the JSON-serialized credentials blob replaced so it
+// is safe to hand to tflog. The original slice is never mutated.
+func redactedLogDestinationsForLog(logDests []interface{}) string {
+	return redactedCollectionForLog(logDests, func(copyMap map[string]interface{}) {
+		redactMapKeys(copyMap, "credentials")
+	})
+}
+
 func LogDestinationsToMap(ctx context.Context, logDestinations *[]LogDestinationModel, updateTransformCtx *ServiceTransformContext) ([]map[string]interface{}, error) {
 	if logDestinations == nil {
 		return nil, nil
@@ -303,27 +313,42 @@ func mergeLogDestCredentialsFromConfig(planData, configData, stateData *ServiceR
 	if planData.Config == nil || configData.Config == nil {
 		return
 	}
-	if planData.Config.LogDestinations == nil || configData.Config.LogDestinations == nil {
+	if planData.Config.LogDestinations.IsNull() || planData.Config.LogDestinations.IsUnknown() ||
+		configData.Config.LogDestinations.IsNull() || configData.Config.LogDestinations.IsUnknown() {
+		return
+	}
+
+	planLogDests, err := ListElementsAs[LogDestinationModel](context.Background(), planData.Config.LogDestinations)
+	if err != nil {
+		return
+	}
+
+	configLogDests, err := ListElementsAs[LogDestinationModel](context.Background(), configData.Config.LogDestinations)
+	if err != nil {
 		return
 	}
 
 	// Build state lookup by name (nil-safe)
 	stateByName := make(map[string]*LogDestinationModel)
-	if stateData != nil && stateData.Config != nil && stateData.Config.LogDestinations != nil {
-		for i := range *stateData.Config.LogDestinations {
-			ld := &(*stateData.Config.LogDestinations)[i]
-			stateByName[ld.Name.ValueString()] = ld
+	if stateData != nil && stateData.Config != nil && !stateData.Config.LogDestinations.IsNull() && !stateData.Config.LogDestinations.IsUnknown() {
+		stateLogDests, err := ListElementsAs[LogDestinationModel](context.Background(), stateData.Config.LogDestinations)
+		if err == nil {
+			for i := range stateLogDests {
+				ld := &stateLogDests[i]
+				stateByName[ld.Name.ValueString()] = ld
+			}
 		}
 	}
 
-	configByName := make(map[string]*LogDestinationModel, len(*configData.Config.LogDestinations))
-	for i := range *configData.Config.LogDestinations {
-		ld := &(*configData.Config.LogDestinations)[i]
+	configByName := make(map[string]*LogDestinationModel, len(configLogDests))
+	for i := range configLogDests {
+		ld := &configLogDests[i]
 		configByName[ld.Name.ValueString()] = ld
 	}
 
-	for i := range *planData.Config.LogDestinations {
-		ld := &(*planData.Config.LogDestinations)[i]
+	changed := false
+	for i := range planLogDests {
+		ld := &planLogDests[i]
 		configLd, ok := configByName[ld.Name.ValueString()]
 		if !ok {
 			continue
@@ -336,8 +361,9 @@ func mergeLogDestCredentialsFromConfig(planData, configData, stateData *ServiceR
 			if stateLd != nil && stateLd.AwsS3 != nil {
 				stateVer = stateLd.AwsS3.CredentialsVersion
 			}
-			if !planVer.Equal(stateVer) {
+			if shouldRotateLogDestinationCredentials(planVer, stateVer) {
 				ld.AwsS3.Credentials = configLd.AwsS3.Credentials
+				changed = true
 			}
 		}
 		if ld.CompatibleS3 != nil && configLd.CompatibleS3 != nil {
@@ -346,11 +372,200 @@ func mergeLogDestCredentialsFromConfig(planData, configData, stateData *ServiceR
 			if stateLd != nil && stateLd.CompatibleS3 != nil {
 				stateVer = stateLd.CompatibleS3.CredentialsVersion
 			}
-			if !planVer.Equal(stateVer) {
+			if shouldRotateLogDestinationCredentials(planVer, stateVer) {
 				ld.CompatibleS3.Credentials = configLd.CompatibleS3.Credentials
+				changed = true
 			}
 		}
 	}
+
+	if !changed {
+		return
+	}
+
+	newList, err := ListObjectValueFrom(context.Background(), LogDestinationAttrTypes(), planLogDests)
+	if err != nil {
+		return
+	}
+	planData.Config.LogDestinations = newList
+}
+
+// shouldRotateLogDestinationCredentials returns true only when the plan sets a
+// concrete credentials_version and it differs from state.
+// Omitting credentials_version in config (null/unknown) is treated as "no
+// explicit rotation request" and does not require (or inject) credentials.
+func shouldRotateLogDestinationCredentials(planVer, stateVer types.Int64) bool {
+	if planVer.IsNull() || planVer.IsUnknown() {
+		return false
+	}
+	return !planVer.Equal(stateVer)
+}
+
+func hasConcreteLogDestinationCredentials(creds *AwsCredsModel) bool {
+	if creds == nil {
+		return false
+	}
+
+	if creds.AccessKey != nil {
+		if creds.AccessKey.AccessKey.IsUnknown() && creds.AccessKey.SecretKey.IsUnknown() {
+			return true
+		}
+		accessKeySet := !creds.AccessKey.AccessKey.IsNull() &&
+			(creds.AccessKey.AccessKey.IsUnknown() || creds.AccessKey.AccessKey.ValueString() != "")
+		secretKeySet := !creds.AccessKey.SecretKey.IsNull() &&
+			(creds.AccessKey.SecretKey.IsUnknown() || creds.AccessKey.SecretKey.ValueString() != "")
+		return accessKeySet && secretKeySet
+	}
+
+	if creds.AssumeRole != nil {
+		if creds.AssumeRole.RoleArn.IsUnknown() && creds.AssumeRole.ExternalId.IsUnknown() {
+			return true
+		}
+		roleArnSet := !creds.AssumeRole.RoleArn.IsNull() &&
+			(creds.AssumeRole.RoleArn.IsUnknown() || creds.AssumeRole.RoleArn.ValueString() != "")
+		externalIDSet := !creds.AssumeRole.ExternalId.IsNull() &&
+			(creds.AssumeRole.ExternalId.IsUnknown() || creds.AssumeRole.ExternalId.ValueString() != "")
+		return roleArnSet && externalIDSet
+	}
+
+	return false
+}
+
+func requireLogDestinationCredentials(name, reason string, creds *AwsCredsModel) error {
+	if hasConcreteLogDestinationCredentials(creds) {
+		return nil
+	}
+	return fmt.Errorf("log destination %q: %s requires credentials in config", name, reason)
+}
+
+func logDestinationNameOrUnnamed(name types.String) string {
+	if name.IsNull() || name.IsUnknown() || name.ValueString() == "" {
+		return "<unnamed>"
+	}
+	return name.ValueString()
+}
+
+func validateCreateLogDestinationCredentials(data *ServiceResourceModel) error {
+	if data == nil || data.Config == nil || data.Config.LogDestinations.IsNull() || data.Config.LogDestinations.IsUnknown() {
+		return nil
+	}
+
+	logDestinations, err := ListElementsAs[LogDestinationModel](context.Background(), data.Config.LogDestinations)
+	if err != nil {
+		return nil
+	}
+
+	for _, ld := range logDestinations {
+		name := logDestinationNameOrUnnamed(ld.Name)
+
+		if ld.AwsS3 != nil {
+			if !ld.AwsS3.CredentialsVersion.IsNull() && !ld.AwsS3.CredentialsVersion.IsUnknown() {
+				if err := requireLogDestinationCredentials(name, "setting aws_s3.credentials_version", ld.AwsS3.Credentials); err != nil {
+					return err
+				}
+			}
+		}
+
+		if ld.CompatibleS3 != nil {
+			if !ld.CompatibleS3.CredentialsVersion.IsNull() && !ld.CompatibleS3.CredentialsVersion.IsUnknown() {
+				if err := requireLogDestinationCredentials(name, "setting compatible_s3.credentials_version", ld.CompatibleS3.Credentials); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateUpdateLogDestinationCredentials(planData, stateData *ServiceResourceModel) error {
+	if planData == nil || planData.Config == nil || planData.Config.LogDestinations.IsNull() || planData.Config.LogDestinations.IsUnknown() {
+		return nil
+	}
+
+	planLogDests, err := ListElementsAs[LogDestinationModel](context.Background(), planData.Config.LogDestinations)
+	if err != nil {
+		return nil
+	}
+
+	stateByName := make(map[string]*LogDestinationModel)
+	if stateData != nil && stateData.Config != nil && !stateData.Config.LogDestinations.IsNull() && !stateData.Config.LogDestinations.IsUnknown() {
+		stateLogDests, err := ListElementsAs[LogDestinationModel](context.Background(), stateData.Config.LogDestinations)
+		if err == nil {
+			for i := range stateLogDests {
+				ld := &stateLogDests[i]
+				stateByName[ld.Name.ValueString()] = ld
+			}
+		}
+	}
+
+	for i := range planLogDests {
+		planLD := &planLogDests[i]
+		name := logDestinationNameOrUnnamed(planLD.Name)
+		stateLD, exists := stateByName[planLD.Name.ValueString()]
+
+		if planLD.AwsS3 != nil {
+			if !exists || stateLD == nil || stateLD.AwsS3 == nil {
+				if !planLD.AwsS3.CredentialsVersion.IsNull() && !planLD.AwsS3.CredentialsVersion.IsUnknown() {
+					if err := requireLogDestinationCredentials(name, "adding aws_s3 with credentials_version", planLD.AwsS3.Credentials); err != nil {
+						return err
+					}
+				}
+			} else if shouldRotateLogDestinationCredentials(planLD.AwsS3.CredentialsVersion, stateLD.AwsS3.CredentialsVersion) {
+				if err := requireLogDestinationCredentials(name, "bumping aws_s3.credentials_version", planLD.AwsS3.Credentials); err != nil {
+					return err
+				}
+			}
+		}
+
+		if planLD.CompatibleS3 != nil {
+			if !exists || stateLD == nil || stateLD.CompatibleS3 == nil {
+				if !planLD.CompatibleS3.CredentialsVersion.IsNull() && !planLD.CompatibleS3.CredentialsVersion.IsUnknown() {
+					if err := requireLogDestinationCredentials(name, "adding compatible_s3 with credentials_version", planLD.CompatibleS3.Credentials); err != nil {
+						return err
+					}
+				}
+			} else if shouldRotateLogDestinationCredentials(planLD.CompatibleS3.CredentialsVersion, stateLD.CompatibleS3.CredentialsVersion) {
+				if err := requireLogDestinationCredentials(name, "bumping compatible_s3.credentials_version", planLD.CompatibleS3.Credentials); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func credentialsPayloadJSON(creds *AwsCredsModel) (string, bool) {
+	if creds == nil {
+		return "", false
+	}
+
+	if creds.AccessKey != nil {
+		payload := map[string]string{
+			"access_key": creds.AccessKey.AccessKey.ValueString(),
+			"secret_key": creds.AccessKey.SecretKey.ValueString(),
+		}
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(b), true
+	}
+
+	if creds.AssumeRole != nil {
+		payload := map[string]string{
+			"role_arn":    creds.AssumeRole.RoleArn.ValueString(),
+			"external_id": creds.AssumeRole.ExternalId.ValueString(),
+		}
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(b), true
+	}
+
+	return "", false
 }
 
 // ModelToMap converts LogDestinationModel to the service config API format.
@@ -376,20 +591,8 @@ func (l *LogDestinationModel) ModelToMap() map[string]interface{} {
 		logDestMap["s3_path"] = l.AwsS3.Path.ValueString()
 		logDestMap["s3_region"] = l.AwsS3.Region.ValueString()
 		logDestMap["s3_domain"] = "" // not used for AWS S3; empty string avoids JSON null
-		if l.AwsS3.Credentials != nil {
-			if l.AwsS3.Credentials.AccessKey != nil {
-				logDestMap["credentials"] = fmt.Sprintf(
-					`{"access_key":"%s","secret_key":"%s"}`,
-					l.AwsS3.Credentials.AccessKey.AccessKey.ValueString(),
-					l.AwsS3.Credentials.AccessKey.SecretKey.ValueString(),
-				)
-			} else if l.AwsS3.Credentials.AssumeRole != nil {
-				logDestMap["credentials"] = fmt.Sprintf(
-					`{"role_arn":"%s","external_id":"%s"}`,
-					l.AwsS3.Credentials.AssumeRole.RoleArn.ValueString(),
-					l.AwsS3.Credentials.AssumeRole.ExternalId.ValueString(),
-				)
-			}
+		if payload, ok := credentialsPayloadJSON(l.AwsS3.Credentials); ok {
+			logDestMap["credentials"] = payload
 		}
 	} else if l.CompatibleS3 != nil {
 		logDestMap["type"] = "S3_COMPATIBLE"
@@ -397,20 +600,8 @@ func (l *LogDestinationModel) ModelToMap() map[string]interface{} {
 		logDestMap["s3_path"] = l.CompatibleS3.Path.ValueString()
 		logDestMap["s3_region"] = l.CompatibleS3.Region.ValueString()
 		logDestMap["s3_domain"] = l.CompatibleS3.Domain.ValueString()
-		if l.CompatibleS3.Credentials != nil {
-			if l.CompatibleS3.Credentials.AccessKey != nil {
-				logDestMap["credentials"] = fmt.Sprintf(
-					`{"access_key":"%s","secret_key":"%s"}`,
-					l.CompatibleS3.Credentials.AccessKey.AccessKey.ValueString(),
-					l.CompatibleS3.Credentials.AccessKey.SecretKey.ValueString(),
-				)
-			} else if l.CompatibleS3.Credentials.AssumeRole != nil {
-				logDestMap["credentials"] = fmt.Sprintf(
-					`{"role_arn":"%s","external_id":"%s"}`,
-					l.CompatibleS3.Credentials.AssumeRole.RoleArn.ValueString(),
-					l.CompatibleS3.Credentials.AssumeRole.ExternalId.ValueString(),
-				)
-			}
+		if payload, ok := credentialsPayloadJSON(l.CompatibleS3.Credentials); ok {
+			logDestMap["credentials"] = payload
 		}
 	}
 

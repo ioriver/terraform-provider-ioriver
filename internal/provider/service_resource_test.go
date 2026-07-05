@@ -397,6 +397,7 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.compression", "true"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access", "false"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.true_client_ip", "true"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.request_collapsing", "true"),
 					// allowed_methods
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.allowed_methods.#", "3"),
 					// deny_access_by_ip
@@ -1476,6 +1477,7 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.follow_redirects", "true"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.compression", "true"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.true_client_ip", "true"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.request_collapsing", "true"),
 					// methods
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.allowed_methods.#", "3"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.cached_methods.#", "2"),
@@ -2057,4 +2059,101 @@ resource "ioriver_service" "%s" {
 	}
 }
 	`, name, name, certId, wafURIRawScalar, wafASNScalar, behaviorStatusScalar, behaviorPathScalar)
+}
+
+// TestAccIORiverService_LogDestinationCredsLifecycle_AwsS3 validates the same
+// create/update invariant style used by private S3 origins, but for aws_s3 log
+// destination credentials_version behavior.
+func TestAccIORiverService_LogDestinationCredsLifecycle_AwsS3(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certID := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			// Create-time invariant: version without credentials must fail.
+			{
+				Config:      testAccLogDestCredsConfigAWSNoCreds(rndName, certID, 1),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?is)setting\s+aws_s3\.credentials_version\s+requires\s+credentials`),
+			},
+			// Baseline apply: create with credentials.
+			{
+				Config: testAccLogDestCredsConfigAWSWithCreds(rndName, certID, 1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.name", "aws-dest"),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.aws_s3.credentials_version", "1"),
+				),
+			},
+			// Update-time invariant: version bump without credentials must fail.
+			{
+				Config:      testAccLogDestCredsConfigAWSNoCreds(rndName, certID, 2),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?is)bumping\s+aws_s3\.credentials_version\s+requires\s+credentials`),
+			},
+			// Rotation apply: version bump with credentials succeeds.
+			{
+				Config: testAccLogDestCredsConfigAWSWithCreds(rndName, certID, 2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.aws_s3.credentials_version", "2"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccIORiverService_LogDestinationCredsLifecycle_CompatibleS3 verifies the
+// same credential invariants for compatible_s3 destinations.
+func TestAccIORiverService_LogDestinationCredsLifecycle_CompatibleS3(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certID := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccLogDestCredsConfigCompatibleNoCreds(rndName, certID, 1),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?is)setting\s+compatible_s3\.credentials_version\s+requires\s+credentials`),
+			},
+			{
+				Config: testAccLogDestCredsConfigCompatibleWithCreds(rndName, certID, 1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.name", "compat-dest"),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.compatible_s3.credentials_version", "1"),
+				),
+			},
+			{
+				Config:      testAccLogDestCredsConfigCompatibleNoCreds(rndName, certID, 2),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?is)bumping\s+compatible_s3\.credentials_version\s+requires\s+credentials`),
+			},
+			{
+				Config: testAccLogDestCredsConfigCompatibleWithCreds(rndName, certID, 2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.compatible_s3.credentials_version", "2"),
+				),
+			},
+		},
+	})
 }
