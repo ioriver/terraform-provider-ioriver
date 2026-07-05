@@ -16,18 +16,18 @@ import (
 )
 
 type ServiceConfigModel struct {
-	UUId            types.String           `tfsdk:"uuid" json:"uuid"`
-	Name            types.String           `tfsdk:"creation_name" json:"name"`
-	ServiceUid      types.String           `tfsdk:"service_uid" json:"service_uid"`
-	Protocol        *ProtocolConfigModel   `tfsdk:"protocol" json:"protocol,omitempty"`
-	GeoFencing      *GeoFencingModel       `tfsdk:"geo_fencing" json:"geo_fencing,omitempty"`
-	Domains         *[]DomainModel         `tfsdk:"domains" json:"domains,omitempty"`
-	Origins         types.List             `tfsdk:"origins"`
-	OriginSets      []OriginSetModel       `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
-	Behaviors       types.Object           `tfsdk:"behaviors"`
-	LogDestinations *[]LogDestinationModel `tfsdk:"log_destinations" json:"log_destinations,omitempty"`
-	Compute         *ComputeModel          `tfsdk:"compute" json:"compute,omitempty"`
-	Security        types.Object           `tfsdk:"security" json:"security,omitempty"`
+	UUId            types.String         `tfsdk:"uuid" json:"uuid"`
+	Name            types.String         `tfsdk:"creation_name" json:"name"`
+	ServiceUid      types.String         `tfsdk:"service_uid" json:"service_uid"`
+	Protocol        *ProtocolConfigModel `tfsdk:"protocol" json:"protocol,omitempty"`
+	GeoFencing      *GeoFencingModel     `tfsdk:"geo_fencing" json:"geo_fencing,omitempty"`
+	Domains         types.List           `tfsdk:"domains" json:"domains,omitempty"`
+	Origins         types.List           `tfsdk:"origins"`
+	OriginSets      types.List           `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
+	Behaviors       types.Object         `tfsdk:"behaviors"`
+	LogDestinations types.List           `tfsdk:"log_destinations" json:"log_destinations,omitempty"`
+	Compute         *ComputeModel        `tfsdk:"compute" json:"compute,omitempty"`
+	Security        types.Object         `tfsdk:"security" json:"security,omitempty"`
 }
 
 func ConfigAttrTypes() map[string]attr.Type {
@@ -217,8 +217,12 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 
 	// Convert Log Destinations - before behaviors (UUID must be known before behavior translation)
 	logDestArray := []interface{}{}
-	if c.LogDestinations != nil {
-		logDestMaps, err := LogDestinationsToMap(ctx, c.LogDestinations, updateTransformCtx)
+	if !c.LogDestinations.IsNull() && !c.LogDestinations.IsUnknown() {
+		logDestModels, err := ListElementsAs[LogDestinationModel](ctx, c.LogDestinations)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode log destinations: %w", err)
+		}
+		logDestMaps, err := LogDestinationsToMap(ctx, &logDestModels, updateTransformCtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert log destinations: %w", err)
 		}
@@ -227,22 +231,23 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 		}
 	}
 	configMap["log_destinations"] = logDestArray
-	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Log Destinations converted: %+v", logDestArray))
+	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Log Destinations converted: %s", redactedLogDestinationsForLog(logDestArray)))
 
 	// Record whether the user explicitly set origins/origin_sets (even as [])
 	// so ServiceConfigMapToModel can return [] instead of null when API returns nothing.
 	if updateTransformCtx != nil {
 		updateTransformCtx.OriginsExplicitlySet = !c.Origins.IsNull()
-		updateTransformCtx.OriginSetsExplicitlySet = c.OriginSets != nil
+		updateTransformCtx.OriginSetsExplicitlySet = !c.OriginSets.IsNull()
 	}
 
 	// Convert Origins and add UUID to each
 	var originsSlice *[]OriginModel
 	if !c.Origins.IsNull() && !c.Origins.IsUnknown() {
-		var singulars []OriginModel
-		if diags := c.Origins.ElementsAs(ctx, &singulars, false); !diags.HasError() {
-			originsSlice = &singulars
+		singulars, err := ListElementsAs[OriginModel](ctx, c.Origins)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode origins: %w", err)
 		}
+		originsSlice = &singulars
 	}
 	originsArray, err := OriginsToMap(ctx, originsSlice, updateTransformCtx)
 	if err != nil {
@@ -252,10 +257,18 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 		originsArray = []interface{}{}
 	}
 	configMap["origins"] = originsArray
-	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Origins converted: %+v\n", originsArray))
+	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Origins converted: %s", redactedOriginsForLog(originsArray)))
 
 	// Convert OriginSets — must happen before Domains so namesToUUIDs is available
-	originSetsArray, originSetNamesToUUIDs, err := OriginSetsToMap(ctx, c.OriginSets, updateTransformCtx)
+	originSetModels := []OriginSetModel{}
+	if !c.OriginSets.IsNull() && !c.OriginSets.IsUnknown() {
+		var err error
+		originSetModels, err = ListElementsAs[OriginSetModel](ctx, c.OriginSets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode origin_sets: %w", err)
+		}
+	}
+	originSetsArray, originSetNamesToUUIDs, err := OriginSetsToMap(ctx, originSetModels, updateTransformCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert origin_sets: %w", err)
 	}
@@ -263,7 +276,15 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ OriginSets converted: %+v\n", originSetsArray))
 
 	// Convert Domains — pass both origin and origin-set name→UUID maps
-	domainsArray, err := DomainsToMap(ctx, c.Domains, updateTransformCtx, originSetNamesToUUIDs)
+	var domainsSlice *[]DomainModel
+	if !c.Domains.IsNull() && !c.Domains.IsUnknown() {
+		domainModels, err := ListElementsAs[DomainModel](ctx, c.Domains)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode domains: %w", err)
+		}
+		domainsSlice = &domainModels
+	}
+	domainsArray, err := DomainsToMap(ctx, domainsSlice, updateTransformCtx, originSetNamesToUUIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert domains: %w", err)
 	}
@@ -370,8 +391,7 @@ func ServiceConfigMapToModel(
 		// credentials_version is TF-only and never returned by the API.
 		// Restore it from the prior config so state stays consistent with the plan.
 		if planConfig != nil && !planConfig.Origins.IsNull() && !planConfig.Origins.IsUnknown() {
-			var priorOrigins []OriginModel
-			if diags := planConfig.Origins.ElementsAs(ctx, &priorOrigins, false); !diags.HasError() {
+			if priorOrigins, err := ListElementsAs[OriginModel](ctx, planConfig.Origins); err == nil {
 				priorVerByName := make(map[string]types.Int64)
 				for _, o := range priorOrigins {
 					if o.S3Origin != nil && !o.Name.IsNull() {
@@ -389,16 +409,16 @@ func ServiceConfigMapToModel(
 			}
 		}
 
-		originsList, diags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: GetOriginAttrTypes()}, *originModels)
-		if diags.HasError() {
-			return nil, fmt.Errorf("failed to build origins list")
+		originsList, err := ListObjectValueFrom(ctx, GetOriginAttrTypes(), *originModels)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build origins list: %w", err)
 		}
 		config.Origins = originsList
 	} else {
 		// API returned no origins. Use null unless the user explicitly wrote
 		// origins = [] — OriginsExplicitlySet is set by ModelToMap from the plan.
 		if updateTransformCtx != nil && updateTransformCtx.OriginsExplicitlySet {
-			emptyList, _ := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: GetOriginAttrTypes()}, []OriginModel{})
+			emptyList, _ := ListObjectValueFrom(ctx, GetOriginAttrTypes(), []OriginModel{})
 			config.Origins = emptyList
 		} else {
 			config.Origins = types.ListNull(types.ObjectType{AttrTypes: GetOriginAttrTypes()})
@@ -413,14 +433,19 @@ func ServiceConfigMapToModel(
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert origin_sets: %w", err)
 		}
-		config.OriginSets = originSetModels
+		originSetsList, err := ListObjectValueFrom(ctx, OriginSetAttrTypes(), originSetModels)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build origin_sets list: %w", err)
+		}
+		config.OriginSets = originSetsList
 		uuidToOriginSetName = uuidMap
 	} else {
 		// nil (null) unless the user explicitly wrote origin_sets = [].
 		if updateTransformCtx != nil && updateTransformCtx.OriginSetsExplicitlySet {
-			config.OriginSets = []OriginSetModel{}
+			emptyList, _ := ListObjectValueFrom(ctx, OriginSetAttrTypes(), []OriginSetModel{})
+			config.OriginSets = emptyList
 		} else {
-			config.OriginSets = nil
+			config.OriginSets = types.ListNull(types.ObjectType{AttrTypes: OriginSetAttrTypes()})
 		}
 	}
 
@@ -430,10 +455,14 @@ func ServiceConfigMapToModel(
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert domains: %w", err)
 		}
-		config.Domains = domainModels
+		domainsList, err := ListObjectValueFrom(ctx, DomainAttrTypes(), *domainModels)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build domains list: %w", err)
+		}
+		config.Domains = domainsList
 	} else {
-		empty := []DomainModel{}
-		config.Domains = &empty
+		emptyList, _ := ListObjectValueFrom(ctx, DomainAttrTypes(), []DomainModel{})
+		config.Domains = emptyList
 	}
 
 	// Convert LogDestinations FIRST — must populate LogDestNamesToUUIDs before behaviors
@@ -447,10 +476,14 @@ func ServiceConfigMapToModel(
 
 		// credentials_version is TF-only and never returned by the API.
 		// Restore it from the prior config so state stays consistent with the plan.
-		if planConfig != nil && planConfig.LogDestinations != nil {
+		if planConfig != nil && !planConfig.LogDestinations.IsNull() && !planConfig.LogDestinations.IsUnknown() {
+			priorLogDests, err := ListElementsAs[LogDestinationModel](ctx, planConfig.LogDestinations)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode prior log destinations: %w", err)
+			}
 			priorAwsByName := make(map[string]types.Int64)
 			priorCompatByName := make(map[string]types.Int64)
-			for _, ld := range *planConfig.LogDestinations {
+			for _, ld := range priorLogDests {
 				name := ld.Name.ValueString()
 				if ld.AwsS3 != nil {
 					priorAwsByName[name] = ld.AwsS3.CredentialsVersion
@@ -475,9 +508,13 @@ func ServiceConfigMapToModel(
 			}
 		}
 
-		config.LogDestinations = logDestModels
+		logDestinationsList, err := ListObjectValueFrom(ctx, LogDestinationAttrTypes(), *logDestModels)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build log_destinations list: %w", err)
+		}
+		config.LogDestinations = logDestinationsList
 	} else {
-		config.LogDestinations = nil
+		config.LogDestinations = types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})
 	}
 
 	// Convert Behaviors - API returns dict, we need array.

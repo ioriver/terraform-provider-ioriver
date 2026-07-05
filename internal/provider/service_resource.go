@@ -20,6 +20,7 @@ import (
 var _ resource.Resource = &ServiceResource{}
 var _ resource.ResourceWithImportState = &ServiceResource{}
 var _ resource.ResourceWithValidateConfig = &ServiceResource{}
+var _ resource.ResourceWithModifyPlan = &ServiceResource{}
 
 func NewServiceResource() resource.Resource {
 	return &ServiceResource{}
@@ -119,10 +120,56 @@ func (r *ServiceResource) Configure(ctx context.Context, req resource.ConfigureR
 	r.client = client
 }
 
+// ModifyPlan validates private-S3-origin credential invariants during planning.
+// Create-time rules require both s3_aws_key + s3_aws_secret whenever is_private=true.
+// Update-time rules require credentials whenever the user rotates credentials_version
+// or flips an existing origin public → private (state cannot supply the WriteOnly
+// values, so config must).
+func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Destroy plan: nothing to validate.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var configData ServiceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Create plan: current state is null.
+	if req.State.Raw.IsNull() {
+		if err := validateCreatePrivateS3Credentials(&configData); err != nil {
+			resp.Diagnostics.AddError("Invalid private S3 origin credentials for create", err.Error())
+		}
+		if err := validateCreateLogDestinationCredentials(&configData); err != nil {
+			resp.Diagnostics.AddError("Invalid log destination credentials for create", err.Error())
+		}
+		return
+	}
+
+	// Update plan.
+	var stateData ServiceResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := validateUpdatePrivateS3Credentials(&configData, &stateData); err != nil {
+		resp.Diagnostics.AddError("Invalid private S3 origin credentials for update", err.Error())
+	}
+	if err := validateUpdateLogDestinationCredentials(&configData, &stateData); err != nil {
+		resp.Diagnostics.AddError("Invalid log destination credentials for update", err.Error())
+	}
+}
+
 // Create Service resource
 func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data ServiceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// This is used during this flow for storing adapting fields
 	data.updateTransformCtx = &ServiceTransformContext{
@@ -416,8 +463,8 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 		var bBlock BehaviorsBlockModel
 		if diags := data.Config.Behaviors.As(ctx, &bBlock, basetypes.ObjectAsOptions{}); !diags.HasError() {
 			if !bBlock.Custom.IsNull() && !bBlock.Custom.IsUnknown() {
-				var behaviors []BehaviorModel
-				resp.Diagnostics.Append(bBlock.Custom.ElementsAs(ctx, &behaviors, false)...)
+				behaviors, bDiags := ListElementsAsDiags[BehaviorModel](ctx, bBlock.Custom)
+				resp.Diagnostics.Append(bDiags...)
 				if !resp.Diagnostics.HasError() {
 					for i, b := range behaviors {
 						prefix := fmt.Sprintf("behaviors.custom[%d]", i)
@@ -438,19 +485,54 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	// Collect origin names defined in config.origins.
 	originNames := map[string]struct{}{}
 	if !data.Config.Origins.IsNull() && !data.Config.Origins.IsUnknown() {
-		var origins []OriginModel
-		if diags := data.Config.Origins.ElementsAs(ctx, &origins, false); !diags.HasError() {
+		origins, oDiags := ListElementsAsDiags[OriginModel](ctx, data.Config.Origins)
+		resp.Diagnostics.Append(oDiags...)
+		if !resp.Diagnostics.HasError() {
 			for _, o := range origins {
 				if !o.Name.IsNull() && !o.Name.IsUnknown() {
 					originNames[o.Name.ValueString()] = struct{}{}
 				}
 			}
+
+			// Validate S3 private-only fields when is_private is false.
+			for i, o := range origins {
+				if o.S3Origin == nil {
+					continue
+				}
+				originName := o.Name.ValueString()
+				if originName == "" {
+					originName = "<unnamed>"
+				}
+				if err := validatePrivateS3OriginNegativeFields(&o, originName); err != nil {
+					resp.Diagnostics.AddAttributeError(
+						path.Root("config").AtName("origins").AtListIndex(i).AtName("s3_origin"),
+						"Invalid private S3 origin configuration",
+						err.Error(),
+					)
+				}
+			}
 		}
 	}
 	// Only validate when we have at least one origin defined (skip on unknown/partial configs).
-	if len(originNames) > 0 && data.Config.Domains != nil {
-		for di, domain := range *data.Config.Domains {
-			for mi, mapping := range domain.Mappings {
+	if len(originNames) > 0 && !data.Config.Domains.IsNull() && !data.Config.Domains.IsUnknown() {
+		domains, dDiags := ListElementsAsDiags[DomainModel](ctx, data.Config.Domains)
+		resp.Diagnostics.Append(dDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for di, domain := range domains {
+			if domain.Mappings.IsNull() || domain.Mappings.IsUnknown() {
+				continue
+			}
+
+			mappings, mDiags := ListElementsAsDiags[DomainMappingModelV1](ctx, domain.Mappings)
+			resp.Diagnostics.Append(mDiags...)
+			if resp.Diagnostics.HasError() {
+				continue
+			}
+
+			for mi, mapping := range mappings {
 				tm := mapping.TargetMapping.ValueString()
 				if mapping.TargetMapping.IsNull() || mapping.TargetMapping.IsUnknown() || tm == "" {
 					continue
@@ -471,8 +553,14 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// --- origin_sets: each set must have at least 2 origins ---
-	if data.Config.OriginSets != nil {
-		for i, os := range data.Config.OriginSets {
+	if !data.Config.OriginSets.IsNull() && !data.Config.OriginSets.IsUnknown() {
+		originSets, osDiags := ListElementsAsDiags[OriginSetModel](ctx, data.Config.OriginSets)
+		resp.Diagnostics.Append(osDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for i, os := range originSets {
 			if len(os.Origins) < 2 {
 				resp.Diagnostics.AddAttributeError(
 					path.Root("config").AtName("origin_sets").AtListIndex(i).AtName("origins"),
@@ -487,8 +575,14 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	// --- stream_logs.log_destination must reference a known log destination name ---
 	// Collect log destination names from config.log_destinations.
 	logDestNames := map[string]struct{}{}
-	if data.Config.LogDestinations != nil {
-		for _, ld := range *data.Config.LogDestinations {
+	if !data.Config.LogDestinations.IsNull() && !data.Config.LogDestinations.IsUnknown() {
+		logDestinations, ldDiags := ListElementsAsDiags[LogDestinationModel](ctx, data.Config.LogDestinations)
+		resp.Diagnostics.Append(ldDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, ld := range logDestinations {
 			if !ld.Name.IsNull() && !ld.Name.IsUnknown() {
 				logDestNames[ld.Name.ValueString()] = struct{}{}
 			}
@@ -517,8 +611,7 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 			}
 			// Check custom behaviors.
 			if !bBlock.Custom.IsNull() && !bBlock.Custom.IsUnknown() {
-				var customs []BehaviorModel
-				if diags := bBlock.Custom.ElementsAs(ctx, &customs, false); !diags.HasError() {
+				if customs, diags := ListElementsAsDiags[BehaviorModel](ctx, bBlock.Custom); !diags.HasError() {
 					for i, b := range customs {
 						if b.Actions == nil || b.Actions.StreamLogs == nil {
 							continue

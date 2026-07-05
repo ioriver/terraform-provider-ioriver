@@ -405,6 +405,9 @@ func isBehaviorActionsEmpty(a *BehaviorActionV2ResourceModel) bool {
 	if !a.DenyAccess.IsNull() && !a.DenyAccess.IsUnknown() {
 		return false
 	}
+	if !a.RequestCollapsing.IsNull() && !a.RequestCollapsing.IsUnknown() {
+		return false
+	}
 	return true
 }
 
@@ -438,6 +441,8 @@ type ServiceConfigAPIAction struct {
 	URLSigning             *bool                          `json:"url_signing,omitempty"`
 	TrueClientIP           *bool                          `json:"true_client_ip,omitempty"`
 	DenyAccess             *bool                          `json:"deny_access,omitempty"`
+	RequestCollapsing      *bool                          `json:"request_collapsing,omitempty"`
+
 	// Host header: backend uses flat fields, not nested object
 	HostHeaderOverride  *string `json:"host_header_override,omitempty"`
 	HostHeaderUseOrigin *bool   `json:"host_header_use_origin,omitempty"`
@@ -807,6 +812,7 @@ type BehaviorActionV2ResourceModel struct {
 	OriginResponseHeaders     *[]HeaderActionModelV2            `tfsdk:"origin_response_headers"`
 	StatusCodeCache           []StatusCodeCacheModelV2          `tfsdk:"status_codes_ttl"`
 	ProviderSpecific          []ProviderSpecificModel           `tfsdk:"provider_specific"`
+	RequestCollapsing         types.Bool                        `tfsdk:"request_collapsing"`
 }
 
 var behaviorPathAllowedChars = regexp.MustCompile(`^/[A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$`)
@@ -875,6 +881,7 @@ func BehaviorAttributes() map[string]schema.Attribute {
 			Optional: true,
 			Validators: []validator.String{
 				stringvalidator.LengthAtLeast(1),
+				stringvalidator.RegexMatches(behaviorPathAllowedChars, "must start with '/' and contain only valid path characters"),
 			},
 		},
 		"condition": schema.SingleNestedAttribute{
@@ -1082,6 +1089,7 @@ func BehaviorActionAttrTypes() map[string]attr.Type {
 			"provider": types.StringType,
 			"code":     jsontypes.NormalizedType{},
 		}}},
+		"request_collapsing": types.BoolType,
 	}
 }
 
@@ -1742,6 +1750,11 @@ func BehaviorActionAttributes() map[string]schema.Attribute {
 				},
 			},
 		},
+		"request_collapsing": schema.BoolAttribute{
+			MarkdownDescription: "Controls whether the CDN should collapse multiple requests for the same content into a single request to the origin.\n" +
+				"  - When enabled, if multiple clients request the same content at the same time, the CDN will only send one request to the origin and serve the response to all clients.",
+			Optional: true,
+		},
 	}
 }
 
@@ -2197,6 +2210,11 @@ func behaviorActionModelToAPIStruct(action BehaviorActionV2ResourceModel, apiAct
 			items = append(items, entry)
 		}
 		apiAction.ProviderSpecific = items
+	}
+
+	if !action.RequestCollapsing.IsNull() && !action.RequestCollapsing.IsUnknown() {
+		enabled := action.RequestCollapsing.ValueBool()
+		apiAction.RequestCollapsing = &enabled
 	}
 
 	// Status Code Cache
@@ -3091,6 +3109,10 @@ func apiActionStructToModel(apiAction ServiceConfigAPIAction) (*BehaviorActionV2
 			})
 		}
 		model.ProviderSpecific = items
+	}
+
+	if apiAction.RequestCollapsing != nil {
+		model.RequestCollapsing = types.BoolValue(*apiAction.RequestCollapsing)
 	}
 
 	return model, nil

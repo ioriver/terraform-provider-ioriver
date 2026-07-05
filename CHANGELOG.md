@@ -1,3 +1,13 @@
+## [1.3.0] - 2026-07-05
+
+### Fixed
+- Fixed private credentials in private origin.
+- Fixed private credentials in log-destination.
+- Fixed types of domain, origin, log-destination, protocol model to terraform native type.
+
+### Added
+- Added support for request collapsing behavior.
+
 ## [1.2.1] - 2026-06-30
 
 ### Fixed

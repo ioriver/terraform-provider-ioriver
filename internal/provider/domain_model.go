@@ -22,10 +22,10 @@ type DomainMappingModelV1 struct {
 }
 
 type DomainModel struct {
-	UUId     types.String           `tfsdk:"uuid"`
-	Domain   types.String           `tfsdk:"domain"`
-	Aliases  types.List             `tfsdk:"aliases"`
-	Mappings []DomainMappingModelV1 `tfsdk:"mappings"`
+	UUId     types.String `tfsdk:"uuid"`
+	Domain   types.String `tfsdk:"domain"`
+	Aliases  types.List   `tfsdk:"aliases"`
+	Mappings types.List   `tfsdk:"mappings"`
 }
 
 func (d DomainModel) GetName() string {
@@ -129,8 +129,15 @@ func DomainsToMap(ctx context.Context, domains *[]DomainModel, updateTransformCt
 		domainsArray = append(domainsArray, domainApiMap)
 		newDesiredOrder = append(newDesiredOrder, domain.Domain.ValueString())
 		// Record the desired mapping order for this domain (by path_pattern — unique per mapping).
-		mappingOrder := make([]string, 0, len(domain.Mappings))
-		for _, m := range domain.Mappings {
+		mappingModels := []DomainMappingModelV1{}
+		if !domain.Mappings.IsNull() && !domain.Mappings.IsUnknown() {
+			diags := domain.Mappings.ElementsAs(ctx, &mappingModels, false)
+			if diags.HasError() {
+				return nil, fmt.Errorf("failed to convert mappings for domain %q: %v", domain.Domain.ValueString(), diags.Errors())
+			}
+		}
+		mappingOrder := make([]string, 0, len(mappingModels))
+		for _, m := range mappingModels {
 			mappingOrder = append(mappingOrder, m.PathPattern.ValueString())
 		}
 		updateTransformCtx.DesiredMappingOrder[domain.Domain.ValueString()] = mappingOrder
@@ -167,8 +174,15 @@ func (d *DomainModel) ModelToMap(ctx context.Context, originNamesToUUIDs map[str
 	domainMap["aliases"] = aliasesArray
 
 	// convert mappings
+	mappingModels := []DomainMappingModelV1{}
+	if !d.Mappings.IsNull() && !d.Mappings.IsUnknown() {
+		diags := d.Mappings.ElementsAs(ctx, &mappingModels, false)
+		if diags.HasError() {
+			return nil, fmt.Errorf("failed to convert mappings for domain %q: %v", d.Domain.ValueString(), diags.Errors())
+		}
+	}
 	mappingsArray := make([]interface{}, 0)
-	for _, mapping := range d.Mappings {
+	for _, mapping := range mappingModels {
 		mappingMap, err := mapping.ModelToMap(ctx, originNamesToUUIDs, originSetNamesToUUIDs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert mapping for domain %q: %w", d.Domain.ValueString(), err)
@@ -276,6 +290,7 @@ func domainFromMap(ctx context.Context, domainMap map[string]interface{}, uuidTo
 	}
 
 	// Convert mappings
+	mappingModels := []DomainMappingModelV1{}
 	if mappings, ok := domainMap["mappings"].([]interface{}); ok {
 		for _, mapping := range mappings {
 			if mappingMap, ok := mapping.(map[string]interface{}); ok {
@@ -283,7 +298,7 @@ func domainFromMap(ctx context.Context, domainMap map[string]interface{}, uuidTo
 				if err != nil {
 					return domainModel, fmt.Errorf("failed to convert mapping: %w", err)
 				}
-				domainModel.Mappings = append(domainModel.Mappings, mappingModel)
+				mappingModels = append(mappingModels, mappingModel)
 			}
 		}
 	}
@@ -291,9 +306,15 @@ func domainFromMap(ctx context.Context, domainMap map[string]interface{}, uuidTo
 	// Reorder mappings to match the HCL-declared order (by path_pattern — unique within a domain).
 	if updateTransformCtx != nil && updateTransformCtx.DesiredMappingOrder != nil {
 		if desiredOrder, ok := updateTransformCtx.DesiredMappingOrder[domainModel.Domain.ValueString()]; ok {
-			domainModel.Mappings = alignItems(domainModel.Mappings, desiredOrder)
+			mappingModels = alignItems(mappingModels, desiredOrder)
 		}
 	}
+
+	mappingsListValue, diags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: DomainMappingAttrTypes()}, mappingModels)
+	if diags.HasError() {
+		return domainModel, fmt.Errorf("failed to convert mappings list: %v", diags.Errors())
+	}
+	domainModel.Mappings = mappingsListValue
 
 	tflog.Debug(ctx, fmt.Sprintf("[domainFromMap] Converted domain: %+v", domainModel))
 	return domainModel, nil
