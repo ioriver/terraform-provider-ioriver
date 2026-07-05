@@ -4,6 +4,9 @@ import (
 	"fmt"
 )
 
+const testAccLogDestCredsKey = "AKIAIOSFODNN7EXAMPLE"
+const testAccLogDestCredsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
 // ─── Config generators ────────────────────────────────────────────────────────
 
 // testAccServiceConfigLogDestSteps returns step HCL for the log destination
@@ -467,4 +470,110 @@ resource "ioriver_service" "%[1]s" {
 	d2 := fmt.Sprintf("%v", params[3])
 	bn := fmt.Sprintf("%v", params[4])
 	return fmt.Sprintf(steps[idx], rn, ci, "", d1, d2, bn)
+}
+
+func testAccLogDestCredsConfigAWSNoCreds(resourceName, certID string, version int) string {
+	return fmt.Sprintf(`
+resource "ioriver_service" "%s" {
+	name        = "%s"
+	certificate = "%s"
+	description = "log-dest-aws-creds"
+	config = {
+		log_destinations = [
+			{
+				name = "aws-dest"
+				aws_s3 = {
+					name                = "my-bucket"
+					path                = "/"
+					region              = "us-east-1"
+					credentials_version = %d
+				}
+			}
+		]
+	}
+}
+`, resourceName, resourceName, certID, version)
+}
+
+func testAccLogDestCredsConfigAWSWithCreds(resourceName, certID string, version int) string {
+	return fmt.Sprintf(`
+resource "ioriver_service" "%s" {
+	name        = "%s"
+	certificate = "%s"
+	description = "log-dest-aws-creds"
+	config = {
+		log_destinations = [
+			{
+				name = "aws-dest"
+				aws_s3 = {
+					name                = "my-bucket"
+					path                = "/"
+					region              = "us-east-1"
+					credentials_version = %d
+					credentials = {
+						access_key = {
+							access_key = %q
+							secret_key = %q
+						}
+					}
+				}
+			}
+		]
+	}
+}
+`, resourceName, resourceName, certID, version, testAccLogDestCredsKey, testAccLogDestCredsSecret)
+}
+
+func testAccLogDestCredsConfigCompatibleNoCreds(resourceName, certID string, version int) string {
+	return fmt.Sprintf(`
+resource "ioriver_service" "%s" {
+	name        = "%s"
+	certificate = "%s"
+	description = "log-dest-compatible-creds"
+	config = {
+		log_destinations = [
+			{
+				name = "compat-dest"
+				compatible_s3 = {
+					name                = "my-bucket"
+					path                = "/"
+					region              = "us-east-1"
+					domain              = "https://s3.example.com"
+					credentials_version = %d
+				}
+			}
+		]
+	}
+}
+`, resourceName, resourceName, certID, version)
+}
+
+func testAccLogDestCredsConfigCompatibleWithCreds(resourceName, certID string, version int) string {
+	return fmt.Sprintf(`
+resource "ioriver_service" "%s" {
+	name        = "%s"
+	certificate = "%s"
+	description = "log-dest-compatible-creds"
+	config = {
+		log_destinations = [
+			{
+				name = "compat-dest"
+				compatible_s3 = {
+					name                = "my-bucket"
+					path                = "/"
+					region              = "us-east-1"
+					domain              = "https://s3.example.com"
+					credentials_version = %d
+					credentials = {
+						access_key = {
+							access_key = %q
+							secret_key = %q
+						}
+					}
+				}
+			}
+		]
+	}
+}
+`, resourceName, resourceName, certID, version, testAccLogDestCredsKey, testAccLogDestCredsSecret)
 }

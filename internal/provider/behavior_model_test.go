@@ -464,6 +464,22 @@ func TestValidateBehaviorModel_ProviderSpecificOnly_Passes(t *testing.T) {
 	}
 }
 
+// POSITIVE: request_collapsing-only action should count as non-empty actions.
+func TestValidateBehaviorModel_RequestCollapsingOnly_Passes(t *testing.T) {
+	b := &BehaviorModel{
+		Name:        strVal("request-collapsing-only"),
+		PathPattern: types.StringValue("/rc/*"),
+		Actions: &BehaviorActionV2ResourceModel{
+			RequestCollapsing: types.BoolValue(true),
+		},
+	}
+
+	err := ValidateBehaviorModel(b, "behaviors[0]")
+	if len(err) != 0 {
+		t.Errorf("expected no errors for request_collapsing-only actions, got: %v", err)
+	}
+}
+
 func TestProviderSpecific_WriteTranslation_KnownAndUnknown(t *testing.T) {
 	action := BehaviorActionV2ResourceModel{
 		ProviderSpecific: []ProviderSpecificModel{
@@ -735,6 +751,9 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 				},
 			},
 
+			// --- request collapsing ---
+			RequestCollapsing: types.BoolValue(true),
+
 			// Fields intentionally skipped (not supported by new service config API):
 			// BypassCacheOnCookie, OverrideOrigin, OriginErrorPassThrough, ForwardClientHeader.
 		},
@@ -931,6 +950,9 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 		t.Fatalf("Expected code to be %q, but got %q",
 			exampleSpecificFastlyCode.ValueString(), a.ProviderSpecific[0].Code.ValueString())
 	}
+
+	// request_collapsing
+	assertBool(t, "request_collapsing", true, a.RequestCollapsing)
 
 	// --- validate: the model itself must pass validation ---
 	if errs := ValidateBehaviorModel(model, "behaviors[all-actions]"); len(errs) != 0 {
@@ -1479,6 +1501,7 @@ resource "ioriver_service" "%s" {
 						compression              = true
 						deny_access              = false
 						true_client_ip           = true
+						request_collapsing = true
 
 						cached_methods = [
 							{ method = "GET" },
@@ -1591,6 +1614,7 @@ resource "ioriver_service" "%s" {
 								code     = jsonencode(%s)
 							}
 						]
+						request_collapsing = true
 					}
 				}
 			]
@@ -1762,6 +1786,7 @@ resource "ioriver_service" "%s" {
 					compression              = true
 					viewer_protocol          = "HTTPS_ONLY"
 					true_client_ip           = true
+					request_collapsing = true
 
 					# ── methods ──────────────────────────────────────────────
 					allowed_methods = [
@@ -2005,6 +2030,7 @@ resource "ioriver_service" "%s" {
 								code     = jsonencode(%s)
 							}
 						]
+						request_collapsing = true
 					}
 				}
 			]

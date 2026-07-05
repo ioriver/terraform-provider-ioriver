@@ -167,35 +167,44 @@ func originBaseAttributes() map[string]schema.Attribute {
 					Default:             booldefault.StaticBool(false),
 				},
 				"s3_aws_region": schema.StringAttribute{
-					MarkdownDescription: "AWS region (required if is_private = true)",
+					MarkdownDescription: "AWS region (allowed to set only if is_private = true)",
 					Optional:            true,
+					Validators: []validator.String{
+						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("is_private")),
+					},
 				},
 				"s3_bucket_name": schema.StringAttribute{
-					MarkdownDescription: "S3 bucket name (required if is_private = true)",
+					MarkdownDescription: "S3 bucket name (allowed to set only if is_private = true)",
 					Optional:            true,
+					Validators: []validator.String{
+						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("is_private")),
+					},
 				},
 				"s3_aws_key": schema.StringAttribute{
-					MarkdownDescription: "AWS access key ID (required when is_private = true; write-only, never stored in state)",
+					MarkdownDescription: "AWS access key ID (allowed to set only if is_private = true; write-only, never stored in state)",
 					Optional:            true,
 					WriteOnly:           true,
 					Sensitive:           true,
 					Validators: []validator.String{
 						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("credentials_version")),
+						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("s3_aws_secret")),
 					},
 				},
 				"s3_aws_secret": schema.StringAttribute{
-					MarkdownDescription: "AWS secret access key (required when is_private = true; write-only, never stored in state)",
+					MarkdownDescription: "AWS secret access key (allowed to set only if is_private = true; write-only, never stored in state)",
 					Optional:            true,
 					WriteOnly:           true,
 					Sensitive:           true,
 					Validators: []validator.String{
 						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("credentials_version")),
+						stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("s3_aws_key")),
 					},
 				},
 				"credentials_version": schema.Int64Attribute{
 					MarkdownDescription: "Increment this value to trigger a credentials update. " +
 						"Credentials are only sent to the backend when this value changes. " +
-						"After import, set this to any value alongside credentials to push them.",
+						"After import, set this to any value alongside credentials to push them. " +
+						"(Allowed to set only if is_private = true)",
 					Optional: true,
 					Validators: []validator.Int64{
 						int64validator.AtLeast(1),
@@ -325,6 +334,21 @@ func GetOriginSetOriginAttrTypes() map[string]attr.Type {
 			},
 		},
 	}
+}
+
+// redactedOriginsForLog returns a copy of the outbound origins array with the
+// WriteOnly secret fields (s3_aws_key, s3_aws_secret) masked so it is safe to
+// pass to tflog. The original array is never mutated.
+func redactedOriginsForLog(origins []interface{}) string {
+	return redactedCollectionForLog(origins, func(copyMap map[string]interface{}) {
+		s3Raw, ok := copyMap["s3_origin"].(map[string]interface{})
+		if !ok {
+			return
+		}
+		s3Copy := cloneMapStringAny(s3Raw)
+		redactMapKeys(s3Copy, "s3_aws_key", "s3_aws_secret")
+		copyMap["s3_origin"] = s3Copy
+	})
 }
 
 // OriginsToMap converts slice of OriginModel to API array format
@@ -756,6 +780,216 @@ func shieldProviderNameFromBackend(name string) string {
 	}
 }
 
+// validateCreatePrivateS3Credentials enforces create-time credentials only for
+// private S3 origins. Update flows may choose to source credentials differently.
+func validateCreatePrivateS3Credentials(data *ServiceResourceModel) error {
+	if data == nil || data.Config == nil {
+		return nil
+	}
+	if data.Config.Origins.IsNull() || data.Config.Origins.IsUnknown() {
+		return nil
+	}
+
+	var origins []OriginModel
+	if diags := data.Config.Origins.ElementsAs(context.Background(), &origins, false); diags.HasError() {
+		return nil
+	}
+
+	for _, origin := range origins {
+		if origin.S3Origin == nil {
+			continue
+		}
+
+		originName := origin.Name.ValueString()
+		if originName == "" {
+			originName = "<unnamed>"
+		}
+
+		isPrivate := !origin.S3Origin.IsPrivate.IsNull() &&
+			!origin.S3Origin.IsPrivate.IsUnknown() &&
+			origin.S3Origin.IsPrivate.ValueBool()
+		if !isPrivate {
+			continue
+		}
+
+		if err := requireBothCredsPresent(&origin, originName, "creating a private S3 origin"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type s3OriginCredentialChange struct {
+	isNewS3Origin  bool
+	becamePrivate  bool
+	versionChanged bool
+}
+
+func classifyS3OriginCredentialChange(planOrigin, stateOrigin *OriginModel) s3OriginCredentialChange {
+	if planOrigin == nil || planOrigin.S3Origin == nil {
+		return s3OriginCredentialChange{}
+	}
+
+	if stateOrigin == nil || stateOrigin.S3Origin == nil {
+		return s3OriginCredentialChange{isNewS3Origin: true}
+	}
+
+	planIsPrivate := boolValueOrFalse(planOrigin.S3Origin.IsPrivate)
+	stateIsPrivate := boolValueOrFalse(stateOrigin.S3Origin.IsPrivate)
+
+	return s3OriginCredentialChange{
+		becamePrivate:  !stateIsPrivate && planIsPrivate,
+		versionChanged: !planOrigin.S3Origin.CredentialsVersion.Equal(stateOrigin.S3Origin.CredentialsVersion),
+	}
+}
+
+func boolValueOrFalse(v types.Bool) bool {
+	b := v.ValueBoolPointer()
+	return b != nil && *b
+}
+
+// validateUpdatePrivateS3Credentials enforces update-time credential invariants for
+// private S3 origins. WriteOnly credentials are never present in state, so plans that
+// rotate credentials_version or flip an existing origin public→private must supply
+// both s3_aws_key and s3_aws_secret from config.
+//
+// New origins added by an update plan are validated by the same create-time rules.
+func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceModel) error {
+	if planData == nil || planData.Config == nil {
+		return nil
+	}
+	if planData.Config.Origins.IsNull() || planData.Config.Origins.IsUnknown() {
+		return nil
+	}
+
+	var planOrigins []OriginModel
+	if diags := planData.Config.Origins.ElementsAs(context.Background(), &planOrigins, false); diags.HasError() {
+		return nil
+	}
+
+	stateByName := make(map[string]*OriginModel)
+	if stateData != nil && stateData.Config != nil &&
+		!stateData.Config.Origins.IsNull() && !stateData.Config.Origins.IsUnknown() {
+		var stateOrigins []OriginModel
+		if diags := stateData.Config.Origins.ElementsAs(context.Background(), &stateOrigins, false); !diags.HasError() {
+			for i := range stateOrigins {
+				o := &stateOrigins[i]
+				stateByName[o.Name.ValueString()] = o
+			}
+		}
+	}
+
+	for _, origin := range planOrigins {
+		if origin.S3Origin == nil {
+			continue
+		}
+
+		originName := origin.Name.ValueString()
+		if originName == "" {
+			originName = "<unnamed>"
+		}
+
+		planIsPrivate := !origin.S3Origin.IsPrivate.IsNull() &&
+			!origin.S3Origin.IsPrivate.IsUnknown() &&
+			origin.S3Origin.IsPrivate.ValueBool()
+
+		stateOrigin, existedInState := stateByName[originName]
+		if !existedInState {
+			stateOrigin = nil
+		}
+		change := classifyS3OriginCredentialChange(&origin, stateOrigin)
+
+		// Brand-new S3 origin added by an update: apply create-time rules.
+		if change.isNewS3Origin {
+			if !planIsPrivate {
+				continue
+			}
+			if err := requireBothCredsPresent(&origin, originName, "adding a new private S3 origin"); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if !planIsPrivate {
+			// Public origin: negative fields already enforced by create validator for new origins;
+			// for existing public origins nothing extra to check here.
+			continue
+		}
+
+		if change.becamePrivate {
+			if err := requireBothCredsPresent(&origin, originName, "changing an existing origin to is_private=true"); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if change.versionChanged {
+			if err := requireBothCredsPresent(&origin, originName, "bumping credentials_version"); err != nil {
+				return err
+			}
+			continue
+		}
+	}
+
+	return nil
+}
+
+// requireBothCredsPresent returns an error unless both s3_aws_key and s3_aws_secret
+// are set to concrete values in the plan. Both-unknown is deferred to apply.
+func requireBothCredsPresent(origin *OriginModel, originName, reason string) error {
+	keyUnknown := origin.S3Origin.S3AwsKey.IsUnknown()
+	secretUnknown := origin.S3Origin.S3AwsSecret.IsUnknown()
+
+	if keyUnknown && secretUnknown {
+		return nil
+	}
+
+	missingKey := origin.S3Origin.S3AwsKey.IsNull() ||
+		(!keyUnknown && origin.S3Origin.S3AwsKey.ValueString() == "")
+	missingSecret := origin.S3Origin.S3AwsSecret.IsNull() ||
+		(!secretUnknown && origin.S3Origin.S3AwsSecret.ValueString() == "")
+
+	if !missingKey && !missingSecret {
+		return nil
+	}
+
+	if missingKey && missingSecret {
+		return fmt.Errorf("origin %q: %s requires both s3_aws_key and s3_aws_secret in config (also bump credentials_version to trigger the push)", originName, reason)
+	}
+	if missingKey {
+		return fmt.Errorf("origin %q: %s requires s3_aws_key in config (must be provided together with s3_aws_secret)", originName, reason)
+	}
+	return fmt.Errorf("origin %q: %s requires s3_aws_secret in config (must be provided together with s3_aws_key)", originName, reason)
+}
+
+// validatePrivateS3OriginNegativeFields rejects private-only fields on a config
+// origin whose is_private is false/null/unknown.
+func validatePrivateS3OriginNegativeFields(origin *OriginModel, originName string) error {
+	isPrivate := !origin.S3Origin.IsPrivate.IsNull() &&
+		!origin.S3Origin.IsPrivate.IsUnknown() &&
+		origin.S3Origin.IsPrivate.ValueBool()
+	if isPrivate {
+		return nil
+	}
+	if !origin.S3Origin.S3AwsKey.IsNull() && !origin.S3Origin.S3AwsKey.IsUnknown() {
+		return fmt.Errorf("origin %q: s3_origin.is_private=false but s3_aws_key is set. Set is_private=true or remove s3_aws_key", originName)
+	}
+	if !origin.S3Origin.S3AwsSecret.IsNull() && !origin.S3Origin.S3AwsSecret.IsUnknown() {
+		return fmt.Errorf("origin %q: s3_origin.is_private=false but s3_aws_secret is set. Set is_private=true or remove s3_aws_secret", originName)
+	}
+	if !origin.S3Origin.CredentialsVersion.IsNull() && !origin.S3Origin.CredentialsVersion.IsUnknown() {
+		return fmt.Errorf("origin %q: s3_origin.is_private=false but credentials_version is set. Set is_private=true or remove credentials_version", originName)
+	}
+	if !origin.S3Origin.S3BucketName.IsNull() && !origin.S3Origin.S3BucketName.IsUnknown() {
+		return fmt.Errorf("origin %q: s3_origin.is_private=false but s3_bucket_name is set. Set is_private=true or remove s3_bucket_name", originName)
+	}
+	if !origin.S3Origin.S3AwsRegion.IsNull() && !origin.S3Origin.S3AwsRegion.IsUnknown() {
+		return fmt.Errorf("origin %q: s3_origin.is_private=false but s3_aws_region is set. Set is_private=true or remove s3_aws_region", originName)
+	}
+	return nil
+}
+
 // mergeS3OriginCredentialsFromConfig copies WriteOnly credentials (s3_aws_key /
 // s3_aws_secret) from a config-sourced model into a plan-sourced model, matching
 // origins by name. Credentials are only injected when credentials_version changed
@@ -807,13 +1041,15 @@ func mergeS3OriginCredentialsFromConfig(planData, configData, stateData *Service
 			continue
 		}
 
-		planVer := o.S3Origin.CredentialsVersion
-		var stateVer types.Int64
-		if stateOrigin, exists := stateByName[o.Name.ValueString()]; exists && stateOrigin.S3Origin != nil {
-			stateVer = stateOrigin.S3Origin.CredentialsVersion
+		stateOrigin, exists := stateByName[o.Name.ValueString()]
+		if !exists {
+			stateOrigin = nil
 		}
 
-		if !planVer.Equal(stateVer) {
+		change := classifyS3OriginCredentialChange(o, stateOrigin)
+
+		// Trigger the copy if it's a fresh S3 origin OR if an existing one rotated versions
+		if change.isNewS3Origin || change.versionChanged || change.becamePrivate {
 			o.S3Origin.S3AwsKey = configOrigin.S3Origin.S3AwsKey
 			o.S3Origin.S3AwsSecret = configOrigin.S3Origin.S3AwsSecret
 			changed = true
