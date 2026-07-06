@@ -61,8 +61,42 @@ type ServiceResourceModel struct {
 	Description        types.String             `tfsdk:"description"`
 	Cname              types.String             `tfsdk:"cname"`
 	Certificate        types.String             `tfsdk:"certificate"`
-	Config             *ServiceConfigModel      `tfsdk:"config"`
+	ConfigObject       types.Object             `tfsdk:"config"`
+	Config             *ServiceConfigModel      `tfsdk:"-"` // Internal typed view of ConfigObject
 	updateTransformCtx *ServiceTransformContext // No tfsdk tag - not in schema!
+}
+
+func (m *ServiceResourceModel) hydrateConfigModel(ctx context.Context) error {
+	if m == nil || m.Config != nil {
+		return nil
+	}
+	if m.ConfigObject.IsNull() || m.ConfigObject.IsUnknown() {
+		return nil
+	}
+
+	var cfg ServiceConfigModel
+	if diags := m.ConfigObject.As(ctx, &cfg, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return fmt.Errorf("failed to decode config object: %v", diags)
+	}
+	m.Config = &cfg
+	return nil
+}
+
+func (m *ServiceResourceModel) syncConfigObject(ctx context.Context) error {
+	if m == nil {
+		return nil
+	}
+	if m.Config == nil {
+		m.ConfigObject = types.ObjectNull(ConfigAttrTypes())
+		return nil
+	}
+
+	obj, diags := types.ObjectValueFrom(ctx, ConfigAttrTypes(), m.Config)
+	if diags.HasError() {
+		return fmt.Errorf("failed to encode config object: %v", diags)
+	}
+	m.ConfigObject = obj
+	return nil
 }
 
 func (r *ServiceResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -136,6 +170,10 @@ func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if err := configData.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode config", err.Error())
+		return
+	}
 
 	// Create plan: current state is null.
 	if req.State.Raw.IsNull() {
@@ -154,6 +192,10 @@ func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if err := stateData.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode state config", err.Error())
+		return
+	}
 
 	if err := validateUpdatePrivateS3Credentials(&configData, &stateData); err != nil {
 		resp.Diagnostics.AddError("Invalid private S3 origin credentials for update", err.Error())
@@ -168,6 +210,10 @@ func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest
 	var data ServiceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := data.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode plan config", err.Error())
 		return
 	}
 
@@ -187,7 +233,12 @@ func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest
 
 	if model, ok := newData.(ServiceResourceModel); ok {
 		tflog.Debug(ctx, fmt.Sprintf("[Create] service created with ID: %s config_present=%v",
-			model.Id.ValueString(), model.Config != nil))
+			model.Id.ValueString(), !model.ConfigObject.IsNull() && !model.ConfigObject.IsUnknown()))
+		if err := model.syncConfigObject(ctx); err != nil {
+			resp.Diagnostics.AddError("Failed to encode config", err.Error())
+			return
+		}
+		newData = model
 	}
 
 	// Save transform context in private state
@@ -207,6 +258,10 @@ func (r *ServiceResource) Read(ctx context.Context, req resource.ReadRequest, re
 	var data ServiceResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if err := data.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode state config", err.Error())
+		return
+	}
 
 	// Get/set transform context in state
 	existTransformCtxByteArray, diags := req.Private.GetKey(ctx, CurrentTransformCtxPrivateKeyName)
@@ -231,6 +286,13 @@ func (r *ServiceResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if newData == nil {
 		return
 	}
+	if model, ok := newData.(ServiceResourceModel); ok {
+		if err := model.syncConfigObject(ctx); err != nil {
+			resp.Diagnostics.AddError("Failed to encode config", err.Error())
+			return
+		}
+		newData = model
+	}
 
 	// Save transform context in private state
 	cfgJson, err := json.Marshal(data.updateTransformCtx)
@@ -251,10 +313,18 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if err := data.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode plan config", err.Error())
+		return
+	}
 
 	// Read current state to get Computed fields (e.g. config.uuid) that are not in the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := stateData.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode state config", err.Error())
 		return
 	}
 
@@ -263,6 +333,10 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 	// but only inject when credentials_version changed vs state.
 	var configData ServiceResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
+	if err := configData.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode config", err.Error())
+		return
+	}
 	if !resp.Diagnostics.HasError() {
 		mergeWriteOnlyCredentialsFromConfig(&data, &configData, &stateData)
 	}
@@ -290,6 +364,13 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 	if newData == nil {
 		return
 	}
+	if model, ok := newData.(ServiceResourceModel); ok {
+		if err := model.syncConfigObject(ctx); err != nil {
+			resp.Diagnostics.AddError("Failed to encode config", err.Error())
+			return
+		}
+		newData = model
+	}
 
 	// Save transform context in private state
 	cfgJson, err := json.Marshal(data.updateTransformCtx)
@@ -309,6 +390,10 @@ func (r *ServiceResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := data.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode state config", err.Error())
 		return
 	}
 	resourceDelete(r.client, ctx, req, resp, r, data)
@@ -356,6 +441,9 @@ func (ServiceResource) getId(data interface{}) interface{} {
 // Convert Service resource to Service API object
 func (ServiceResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
 	d := data.(ServiceResourceModel)
+	if err := d.hydrateConfigModel(ctx); err != nil {
+		return nil, fmt.Errorf("resourceToObj: %w", err)
+	}
 
 	var configMap map[string]interface{}
 	if d.Config != nil {
@@ -415,6 +503,15 @@ func (ServiceResource) objToResource(ctx context.Context, obj interface{}, data 
 
 	tflog.Debug(ctx, fmt.Sprintf("[objToResource] Update Transform Context: %+v", d.updateTransformCtx))
 
+	configObject := types.ObjectNull(ConfigAttrTypes())
+	if configModel != nil {
+		objVal, diags := types.ObjectValueFrom(ctx, ConfigAttrTypes(), configModel)
+		if diags.HasError() {
+			return nil, fmt.Errorf("objToResource: failed to encode config object: %v", diags)
+		}
+		configObject = objVal
+	}
+
 	// Debug: Print what we converted
 	if configModel == nil {
 		tflog.Warn(ctx, "[objToResource] ⚠️  configModel is NIL after conversion!")
@@ -423,12 +520,13 @@ func (ServiceResource) objToResource(ctx context.Context, obj interface{}, data 
 	}
 
 	return ServiceResourceModel{
-		Id:          types.StringValue(service.Id),
-		Name:        types.StringValue(service.Name),
-		Description: types.StringValue(service.Description),
-		Certificate: types.StringValue(service.Certificates[0]),
-		Cname:       types.StringValue(service.Cname),
-		Config:      configModel,
+		Id:           types.StringValue(service.Id),
+		Name:         types.StringValue(service.Name),
+		Description:  types.StringValue(service.Description),
+		Certificate:  types.StringValue(service.Certificates[0]),
+		Cname:        types.StringValue(service.Cname),
+		ConfigObject: configObject,
+		Config:       configModel,
 	}, nil
 }
 
@@ -438,7 +536,14 @@ func (ServiceResource) objToResource(ctx context.Context, obj interface{}, data 
 func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data ServiceResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() || data.Config == nil {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := data.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode config", err.Error())
+		return
+	}
+	if data.Config == nil {
 		return
 	}
 
