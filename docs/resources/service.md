@@ -1003,23 +1003,34 @@ Required:
 <a id="nestedatt--config--compute"></a>
 ### Nested Schema for `config.compute`
 
-Required:
+Optional:
 
-- `name` (String) Compute function name
-- `routes` (Attributes List) List of routes to apply the compute (see [below for nested schema](#nestedatt--config--compute--routes))
+- `report` (Attributes) Compute report settings (see [below for nested schema](#nestedatt--config--compute--report))
+- `user_compute` (Attributes List) User compute functions to run at the edge. Each function can have one or more host/path routes, and optional handlers for viewer request, origin request, origin response, and viewer response. (see [below for nested schema](#nestedatt--config--compute--user_compute))
+
+<a id="nestedatt--config--compute--report"></a>
+### Nested Schema for `config.compute.report`
 
 Optional:
 
-- `request_code` (String) Compute code for request phase
-- `response_code` (String) Compute code for response phase
+- `sending_reports_threshold` (Number) Threshold for sending reports
+- `trigger_send_interval` (Number) Report send trigger interval in seconds
 
-<a id="nestedatt--config--compute--routes"></a>
-### Nested Schema for `config.compute.routes`
+
+<a id="nestedatt--config--compute--user_compute"></a>
+### Nested Schema for `config.compute.user_compute`
 
 Required:
 
-- `domain` (String) Route domain name
-- `path` (String) Route path pattern
+- `function_name` (String) Compute function name
+- `routes` (Set of String) Set of host/path routes, e.g. example.com/some/api
+
+Optional:
+
+- `origin_request` (String) Origin request handler code
+- `origin_response` (String) Origin response handler code
+- `viewer_request` (String) Viewer request handler code
+- `viewer_response` (String) Viewer response handler code
 
 
 

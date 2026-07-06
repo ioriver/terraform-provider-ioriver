@@ -400,4 +400,4 @@ func ValidateFieldKeyRules(cond ConditionModel, loc string, collectionFields map
 }
 
 // pathAllowedChars mirrors the backend's path_pattern_contains_allowed_chars check.
-var pathAllowedChars = regexp.MustCompile(`^/[A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$`)
+var pathAllowedChars = regexp.MustCompile(`^[/A-Za-z0-9_\-\.\*\$/~"'\@:\+]*$`)
