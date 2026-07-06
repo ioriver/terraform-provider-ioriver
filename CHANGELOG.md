@@ -1,3 +1,13 @@
+## [1.4.0] - 2026-07-06
+
+### Added
+- Added an upgrade for compute model schema, support multiple compute functions.
+- Added new schema for service provider resource, support provider custom data for akamai.
+- Added service upgrader for service provider resource according to the change mentioned above.
+
+### Fixed
+- Fixed type of geo-fencing model to terraform native type.
+
 ## [1.3.1] - 2026-07-06
 
 ### Fixed

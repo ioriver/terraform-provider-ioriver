@@ -22,9 +22,14 @@ resource "ioriver_service_provider" "fastly" {
 
 // example 2 - Akamai provider with custom data
 resource "ioriver_service_provider" "akamai" {
-  service              = ioriver_service.service.id
-  account_provider     = ioriver_account_provider.akamai.id
-  provider_custom_data = "{\"group\":\"grp_1234\",\"cp_code\":\"cpc_5678\",\"contract_id\":\"ctr_W-ABCD123\"}"
+    service              = ioriver_service.service.id
+    account_provider     = ioriver_account_provider.akamai.id
+    provider_custom_data = {
+      property_group = "grp_1234"
+      contract_id    = "ctr_W-ABCD123"
+      product        = "prd_9012"
+      cp_code        = "cpc_5678"
+    }
 }
 ```
 
@@ -41,7 +46,7 @@ resource "ioriver_service_provider" "akamai" {
 - `cname` (String) CName of the ServiceProvider
 - `display_name` (String) Display name of the ServiceProvider
 - `is_unmanaged` (Boolean) Is this an unmanaged ServiceProvider, which means that the provider is not managed by IO River and will not be configured automatically. This is a write-only field required during creation of the service provider
-- `provider_custom_data` (String) ServiceProvider custom data in JSON format. This is a write-only field used to pass provider-specific information during creation or update of the service provider
+- `provider_custom_data` (Attributes) ServiceProvider custom data. This is a write-only field used to pass provider-specific information during creation or update of the service provider (see [below for nested schema](#nestedatt--provider_custom_data))
 
 ### Read-Only
 
@@ -51,6 +56,28 @@ resource "ioriver_service_provider" "akamai" {
 - `restored` (Boolean) Is ServiceProvider restored
 - `status` (String) ServiceProvider status, e.g., Active, Deploying, etc.
 - `status_details` (String) ServiceProvider detailed status, providing additional information about the current status of the ServiceProvider
+
+<a id="nestedatt--provider_custom_data"></a>
+### Nested Schema for `provider_custom_data`
+
+Optional:
+
+- `akamai` (Attributes) Akamai product information (see [below for nested schema](#nestedatt--provider_custom_data--akamai))
+- `fastly` (String, Sensitive) Custom data in JSON format, normalized to string
+
+<a id="nestedatt--provider_custom_data--akamai"></a>
+### Nested Schema for `provider_custom_data.akamai`
+
+Required:
+
+- `contract_id` (String) Akamai Contract ID
+- `cp_code` (String) Content provider code
+- `product` (String) Product within the Property Group
+- `property_group` (String) Akamai Property Group
+
+Optional:
+
+- `stream_type` (String) Stream type - only for relevant products
 
 ## Import
 

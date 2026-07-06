@@ -16,18 +16,18 @@ import (
 )
 
 type ServiceConfigModel struct {
-	UUId            types.String         `tfsdk:"uuid" json:"uuid"`
-	Name            types.String         `tfsdk:"creation_name" json:"name"`
-	ServiceUid      types.String         `tfsdk:"service_uid" json:"service_uid"`
-	Protocol        *ProtocolConfigModel `tfsdk:"protocol" json:"protocol,omitempty"`
-	GeoFencing      *GeoFencingModel     `tfsdk:"geo_fencing" json:"geo_fencing,omitempty"`
-	Domains         types.List           `tfsdk:"domains" json:"domains,omitempty"`
-	Origins         types.List           `tfsdk:"origins"`
-	OriginSets      types.List           `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
-	Behaviors       types.Object         `tfsdk:"behaviors"`
-	LogDestinations types.List           `tfsdk:"log_destinations" json:"log_destinations,omitempty"`
-	Compute         *ComputeModel        `tfsdk:"compute" json:"compute,omitempty"`
-	Security        types.Object         `tfsdk:"security" json:"security,omitempty"`
+	UUId            types.String `tfsdk:"uuid" json:"uuid"`
+	Name            types.String `tfsdk:"creation_name" json:"name"`
+	ServiceUid      types.String `tfsdk:"service_uid" json:"service_uid"`
+	Protocol        types.Object `tfsdk:"protocol" json:"protocol,omitempty"`
+	GeoFencing      types.Object `tfsdk:"geo_fencing" json:"geo_fencing,omitempty"`
+	Domains         types.List   `tfsdk:"domains" json:"domains,omitempty"`
+	Origins         types.List   `tfsdk:"origins"`
+	OriginSets      types.List   `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
+	Behaviors       types.Object `tfsdk:"behaviors"`
+	LogDestinations types.List   `tfsdk:"log_destinations" json:"log_destinations,omitempty"`
+	Compute         types.Object `tfsdk:"compute" json:"compute,omitempty"`
+	Security        types.Object `tfsdk:"security" json:"security,omitempty"`
 }
 
 func ConfigAttrTypes() map[string]attr.Type {
@@ -176,8 +176,9 @@ func ConfigAttributes() map[string]schema.Attribute {
 		"compute": schema.SingleNestedAttribute{
 			MarkdownDescription: "Compute configuration",
 			Optional:            true,
-			// Computed:            true,
-			Attributes: ComputeAttributes(),
+			Computed:            true,
+			Default:             objectdefault.StaticValue(defaultComputeValue),
+			Attributes:          ComputeAttributes(),
 		},
 	}
 }
@@ -200,19 +201,47 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 		configMap["name"] = c.Name.ValueString()
 	}
 
-	// Convert Protocol
-	if protocolMap := c.Protocol.ModelToMap(); c.Protocol != nil && protocolMap != nil {
-		configMap["protocol"] = protocolMap
-		tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Protocol converted: %+v\n", protocolMap))
+	// Convert Protocol — optional block; omit key entirely when null/unknown.
+	if !c.Protocol.IsNull() && !c.Protocol.IsUnknown() {
+		var protocolModel ProtocolConfigModel
+		if diags := c.Protocol.As(ctx, &protocolModel, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, fmt.Errorf("failed to decode protocol: %v", diags)
+		}
+		if protocolMap := protocolModel.ModelToMap(); protocolMap != nil {
+			configMap["protocol"] = protocolMap
+			tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Protocol converted: %+v\n", protocolMap))
+		}
 	}
 
 	// Convert GeoFencing — fully optional block; omit the key entirely when nil
 	// so the backend's `optional=True` semantics are preserved (no block ≠ empty
 	// block). Wire JSON key remains "geo_restriction" because the backend has not
 	// been renamed (see geo_fencing_model.go header for the asymmetry rationale).
-	if geoMap := c.GeoFencing.ModelToMap(ctx); c.GeoFencing != nil && geoMap != nil {
-		configMap["geo_restriction"] = geoMap
-		tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ GeoFencing converted: %+v\n", geoMap))
+	if !c.GeoFencing.IsNull() && !c.GeoFencing.IsUnknown() {
+		var geoModel GeoFencingModel
+		if diags := c.GeoFencing.As(ctx, &geoModel, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, fmt.Errorf("failed to decode geo_fencing: %v", diags)
+		}
+		if geoMap := geoModel.ModelToMap(ctx); geoMap != nil {
+			configMap["geo_restriction"] = geoMap
+			tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ GeoFencing converted: %+v\n", geoMap))
+		}
+	}
+
+	// Convert Compute — optional block; omit key entirely when null/unknown.
+	if !c.Compute.IsNull() && !c.Compute.IsUnknown() {
+		var computeModel ComputeModel
+		if diags := c.Compute.As(ctx, &computeModel, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, fmt.Errorf("failed to decode compute: %v", diags)
+		}
+		computeMap, err := computeModel.ModelToMap(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert compute: %w", err)
+		}
+		if computeMap != nil {
+			configMap["compute"] = computeMap
+			tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Compute converted: %+v\n", computeMap))
+		}
 	}
 
 	// Convert Log Destinations - before behaviors (UUID must be known before behavior translation)
@@ -344,7 +373,6 @@ func addRequiredFieldsEmpty(configMap map[string]interface{}) {
 	// TODO - impl them when done having basic service running
 	configMap["service_type"] = "generic"
 	configMap["log_based_stats_enabled"] = true
-	// configMap["compute"] = map[string]interface{}{}
 	configMap["internal"] = map[string]interface{}{}
 }
 
@@ -363,7 +391,11 @@ func ServiceConfigMapToModel(
 		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] plan config: %+v\n", planConfig))
 	}
 
-	config := &ServiceConfigModel{}
+	config := &ServiceConfigModel{
+		Protocol:   types.ObjectNull(ProtocolAttrTypes()),
+		GeoFencing: types.ObjectNull(GeoFencingAttrTypes()),
+		Compute:    types.ObjectNull(ComputeAttrTypes()),
+	}
 
 	// Convert computed string fields
 	if uuid, ok := configMap["uuid"].(string); ok {
@@ -559,7 +591,11 @@ func ServiceConfigMapToModel(
 	// Convert Protocol
 	if protocolMap, ok := configMap["protocol"].(map[string]interface{}); ok {
 		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] Received protocol map: %+v\n", protocolMap))
-		config.Protocol = ProtocolConfigMapToModel(ctx, protocolMap)
+		if protocolModel := ProtocolConfigMapToModel(ctx, protocolMap); protocolModel != nil {
+			if objVal, diags := types.ObjectValueFrom(ctx, ProtocolAttrTypes(), protocolModel); !diags.HasError() {
+				config.Protocol = objVal
+			}
+		}
 	}
 	tflog.Debug(ctx, fmt.Sprintf("[MapToModel] ✓ Protocol converted: %+v\n", config.Protocol))
 
@@ -569,11 +605,26 @@ func ServiceConfigMapToModel(
 	// header for the TF/wire naming asymmetry.
 	if geoMap, ok := configMap["geo_restriction"].(map[string]interface{}); ok {
 		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] Received geo_restriction map: %+v\n", geoMap))
-		config.GeoFencing = GeoFencingMapToModel(ctx, geoMap)
+		if geoModel := GeoFencingMapToModel(ctx, geoMap); geoModel != nil {
+			if objVal, diags := types.ObjectValueFrom(ctx, GeoFencingAttrTypes(), geoModel); !diags.HasError() {
+				config.GeoFencing = objVal
+			}
+		}
 	}
 	tflog.Debug(ctx, fmt.Sprintf("[MapToModel] ✓ GeoFencing converted: %+v\n", config.GeoFencing))
 
-	// TODO: Convert Compute similarly
+	// Convert Compute.
+	// compute is Optional+Computed, so omitted HCL can still be populated from
+	// backend/default values without plan/state inconsistencies.
+	if computeMap, ok := configMap["compute"].(map[string]interface{}); ok {
+		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] Received compute map: %+v\n", computeMap))
+		if computeModel := ComputeMapToModel(ctx, computeMap); computeModel != nil {
+			if objVal, diags := types.ObjectValueFrom(ctx, ComputeAttrTypes(), computeModel); !diags.HasError() {
+				config.Compute = objVal
+			}
+		}
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[MapToModel] ✓ Compute converted: %+v\n", config.Compute))
 
 	// Security (WAF).
 	// The backend always returns a waf block (even with empty defaults).

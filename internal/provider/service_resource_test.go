@@ -88,6 +88,52 @@ func TestAccIORiverService_Protocol(t *testing.T) {
 	})
 }
 
+// Compute test — verifies compute settings are persisted from HCL and that
+// omitting the block falls back to schema defaults without provider crashes.
+func TestAccIORiverService_Compute(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Step 1: compute block explicitly set
+				Config: testAccCheckServiceConfigWithCompute(rndName, certId),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.function_name", "edge-fn"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.viewer_request", "return request"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.origin_request", "return origin_request"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.origin_response", "return origin_response"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.viewer_response", "return response"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.0.routes.#", "2"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.report.sending_reports_threshold", "100"),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.report.trigger_send_interval", "60"),
+				),
+			},
+			{
+				// Step 2: omit compute block entirely — Optional+Computed should
+				// populate backend/default values in state.
+				Config: testAccCheckServiceConfigWithoutCompute(rndName, certId),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.compute.user_compute.#", "0"),
+				),
+			},
+		},
+	})
+}
+
 // Basic service test - without nested items
 func TestAccIORiverService_Basic(t *testing.T) {
 	var service ServiceWithConfig
