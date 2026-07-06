@@ -1,3 +1,8 @@
+## [1.3.1] - 2026-07-06
+
+### Fixed
+- Fixed type of config model within service resource to be terraform native type.
+
 ## [1.3.0] - 2026-07-05
 
 ### Fixed
