@@ -2,6 +2,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -38,3 +41,40 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+      - name: Verify Terraform release artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          assets_json="$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}")"
+
+          required=(
+            "terraform-provider-ioriver_${TAG#v}_SHA256SUMS"
+            "terraform-provider-ioriver_${TAG#v}_SHA256SUMS.sig"
+            "terraform-provider-ioriver_${TAG#v}_manifest.json"
+            "terraform-provider-ioriver_${TAG#v}_linux_amd64.zip"
+            "terraform-provider-ioriver_${TAG#v}_darwin_arm64.zip"
+            "terraform-provider-ioriver_${TAG#v}_windows_amd64.zip"
+          )
+
+          missing=0
+          for name in "${required[@]}"; do
+            if ! echo "${assets_json}" | grep -q "\"name\": \"${name}\""; then
+              echo "Missing required release asset: ${name}"
+              missing=1
+            fi
+          done
+
+          if [ "${missing}" -ne 0 ]; then
+            echo "Release ${TAG} is missing Terraform Registry required assets."
+            exit 1
+          fi
+
+          echo "Release ${TAG} includes required Terraform artifacts."
