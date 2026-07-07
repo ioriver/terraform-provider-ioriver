@@ -6,3 +6,5 @@ The documentation for the resource supported is available in [Terraform reposito
 
 [![Go Version](https://img.shields.io/badge/Go-1.24-blue.svg)](https://golang.org/)
 
+<!-- docs: no-op change to trigger patch release pipeline -->
+
