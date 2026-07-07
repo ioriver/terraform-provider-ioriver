@@ -100,13 +100,3 @@ jobs:
           changelog-file: true
           changelog-generator-opt: "emojis=true"
 
-      - name: Trigger Master Workflow
-        if: success()
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          # Use the GitHub API to trigger the target workflow
-          curl -X POST -u $PAT_TOKEN: \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
-          -d '{"ref":"master"}'
