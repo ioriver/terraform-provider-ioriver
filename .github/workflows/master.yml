@@ -100,3 +100,17 @@ jobs:
           changelog-file: true
           changelog-generator-opt: "emojis=true"
 
+      - name: Trigger Release workflow for new tag
+        if: success() && steps.semrel.outputs.version != ''
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          TAG: v${{ steps.semrel.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${PAT_TOKEN}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+            -d "{\"ref\":\"${TAG}\"}"
+
