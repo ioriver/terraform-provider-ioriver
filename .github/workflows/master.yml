@@ -64,6 +64,9 @@ jobs:
           IORIVER_TEST_SERVICE_ID: ${{ secrets.IORIVER_TEST_SERVICE_ID }}
           IORIVER_TEST_DOMAIN: ${{ secrets.IORIVER_TEST_DOMAIN }}
           IORIVER_TEST_CERT_ID: ${{ secrets.IORIVER_TEST_CERT_ID }}
+          IORIVER_TEST_CERT_ID_2: "facfcad9-7130-4919-9a35-57af655bf7ea"
+          IORIVER_TEST_CERT_ID_3: "c3b1667c-ff99-4c58-adc7-cd284fc107fd"
+          IORIVER_TEST_CERT_ID_4: "f06ea5eb-2571-42fa-8518-f99bf004086e"
           IORIVER_TEST_FASTLY_API_TOKEN: ${{ secrets.IORIVER_TEST_FASTLY_API_TOKEN }}
           IORIVER_TEST_SERVICE_PROVIDER_ID: ${{ secrets.IORIVER_TEST_SERVICE_PROVIDER_ID }}
           IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID: ${{ secrets.IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID }}
@@ -80,6 +83,13 @@ jobs:
           IORIVER_TEST_SERVICE_ID: ${{ secrets.IORIVER_TEST_SERVICE_ID }}
           IORIVER_TEST_DOMAIN: ${{ secrets.IORIVER_TEST_DOMAIN }}
           IORIVER_TEST_CERT_ID: ${{ secrets.IORIVER_TEST_CERT_ID }}
+          IORIVER_TEST_CERT_ID_2: "facfcad9-7130-4919-9a35-57af655bf7ea"
+          IORIVER_TEST_CERT_ID_3: "c3b1667c-ff99-4c58-adc7-cd284fc107fd"
+          IORIVER_TEST_CERT_ID_4: "f06ea5eb-2571-42fa-8518-f99bf004086e"
+          IORIVER_TEST_DOMAIN_1: "tf-test-1.ioriver-qa.com"
+          IORIVER_TEST_DOMAIN_2: "a.tf-test-multi-cert.ioriver-qa-2.com"
+          IORIVER_TEST_DOMAIN_3: "b.tf-test-multi-cert.ioriver-qa-2.com"
+          IORIVER_TEST_DOMAIN_4: "*.tf-test-multi-cert.ioriver-qa-2.com"
           IORIVER_TEST_FASTLY_API_TOKEN: ${{ secrets.IORIVER_TEST_FASTLY_API_TOKEN }}
           IORIVER_TEST_SERVICE_PROVIDER_ID: ${{ secrets.IORIVER_TEST_SERVICE_PROVIDER_ID }}
           IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID: ${{ secrets.IORIVER_TEST_DEFAULT_TRAFFIC_POLICY_ID }}
