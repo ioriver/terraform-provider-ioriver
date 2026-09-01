@@ -2,8 +2,8 @@
 # add one custom block rule, and one rate-limit on the login endpoint.
 
 resource "ioriver_service" "waf_simple" {
-  name        = "waf-simple"
-  certificate = ioriver_certificate.cert.id
+  name         = "waf-simple"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

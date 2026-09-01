@@ -70,6 +70,7 @@ resource "%s" "%s" {
 //     cleanly. This is the SizeAtLeast(1) boundary; backend rejects empty
 //     (HTTP 400), schema rejects empty at plan time.
 func TestGeoFencing_RoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// ── Build the model — mode=deny + 2 countries (happy path). ──────────────

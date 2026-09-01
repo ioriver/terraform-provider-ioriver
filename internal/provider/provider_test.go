@@ -57,6 +57,17 @@ func testAccPreCheckV2(t *testing.T) {
 	testAccPreEnvVariable(t, "IORIVER_TEST_FASTLY_API_TOKEN")
 }
 
+func testAccPreCheckV3(t *testing.T) {
+	testAccPreCheckV2(t)
+	testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID_2")
+	testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID_3")
+	testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID_4")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_1")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_2")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_3")
+	testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_4")
+}
+
 type TestedObj[T any] interface {
 	Get(client *ioriver.IORiverClient, id string) (*T, error)
 	List(client *ioriver.IORiverClient) ([]T, error)

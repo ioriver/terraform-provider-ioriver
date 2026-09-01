@@ -50,6 +50,7 @@ func (TestedService) Delete(client *ioriver.IORiverClient, object ServiceWithCon
 // Protocol test — verifies protocol settings are persisted and that omitting
 // the protocol block entirely does not cause a "null value" provider crash.
 func TestAccIORiverService_Protocol(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -91,6 +92,7 @@ func TestAccIORiverService_Protocol(t *testing.T) {
 // Compute test — verifies compute settings are persisted from HCL and that
 // omitting the block falls back to schema defaults without provider crashes.
 func TestAccIORiverService_Compute(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -136,6 +138,7 @@ func TestAccIORiverService_Compute(t *testing.T) {
 
 // Basic service test - without nested items
 func TestAccIORiverService_Basic(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -163,6 +166,7 @@ func TestAccIORiverService_Basic(t *testing.T) {
 }
 
 func TestAccIORiverService_WithOrigins(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -256,22 +260,24 @@ func TestAccIORiverService_WithOrigins(t *testing.T) {
 //     Without the fix: state[2]=d2(uuid=C) → d3 gets uuid=C → backend 500.
 //  4. Shrink to [d0, d3] — two domains remain.
 func TestAccIORiverService_WithDomains(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	domain := os.Getenv("IORIVER_TEST_DOMAIN")
 	rndName := generateRandomResourceName()
 	resourceName := serviceResourceType + "." + rndName
 	origins := []string{"example.com", "example2.com"}
 	domains := []string{
-		rndName + ".hey.com",
-		rndName + "2.hey.com",
-		rndName + "3.hey.com",
-		rndName + "4.hey.com",
+		rndName + "1." + domain,
+		rndName + "2." + domain,
+		rndName + "3." + domain,
+		rndName + "4." + domain,
 	}
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckV2(t) },
+		PreCheck:                 func() { testAccPreCheckV3(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy: func(s *terraform.State) error {
 			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
@@ -300,6 +306,14 @@ func TestAccIORiverService_WithDomains(t *testing.T) {
 				),
 			},
 			{
+				// Step 2b: plan-only idempotency after Step 2 apply and do some swaps.
+				// domains [d0,d1,d2] → [d2,d0,d1]
+				Config: testAccServiceConfigDomainsSteps(2, rndName, rndName, certId,
+					origins[0], origins[1], domains[2], domains[0], domains[1]),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
 				// Step 3: [d0,d1,d2] → [d0,d2,d3].
 				// d2 moves from idx=2 to idx=1; d3 is brand-new at idx=2.
 				// d3 lands at the same index d2 occupied in state — without the fix,
@@ -315,30 +329,73 @@ func TestAccIORiverService_WithDomains(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.domains.2.domain", domains[3]),
 				),
 			},
-			{
-				// Step 4: Shrink to two domains [d0, d3] — drop d2.
-				// Uses step 1 template: d0 at [0] → origin_1, d3 at [1] → origin_1.
-				Config: testAccServiceConfigDomainsSteps(1, rndName, rndName, certId,
-					origins[0], origins[1], domains[0], domains[3]),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
-					resource.TestCheckResourceAttr(resourceName, "config.domains.#", "2"),
-					resource.TestCheckResourceAttr(resourceName, "config.domains.0.domain", domains[0]),
-					resource.TestCheckResourceAttr(resourceName, "config.domains.1.domain", domains[3]),
-				),
-			},
 		},
 	})
 }
 
-func TestAccIORiverService_DomainMultiMapping(t *testing.T) {
+// TestAccIORiverService_DomainNeglected verifies that omitting the `domain`
+// attribute (Optional+Computed) lets the backend assign a domain, and that
+// the provider reconciles the backend-assigned value into state without
+// sending the "use_ioriver_domain" placeholder back on a subsequent plan.
+func TestAccIORiverService_DomainNeglected(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 	resourceName := serviceResourceType + "." + rndName
-	domainHost := rndName + ".example.com"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV2(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Explicit certificates + neglected (built-in) domain must be rejected.
+				// Terraform CLI word-wraps long diagnostics, so tolerate wrapped whitespace.
+				Config:      testAccServiceConfigDomainNeglected(rndName, certId, "example.com"),
+				ExpectError: regexp.MustCompile(`(?s)certificates\s+must\s+be\s+omitted\s+when\s+using\s+a\s+provided\s+domain`),
+			},
+			{
+				// Without certificates, backend auto-assigns its own internal cert.
+				Config: testAccServiceConfigDomainNeglected(rndName, "", "example.com"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.#", "1"),
+					resource.TestCheckResourceAttrSet(resourceName, "config.domains.0.uuid"),
+					resource.TestCheckResourceAttrSet(resourceName, "config.domains.0.domain"),
+					func(s *terraform.State) error {
+						domain := s.RootModule().Resources[resourceName].Primary.Attributes["config.domains.0.domain"]
+						if domain == useIORiverDomainPlaceholder {
+							return fmt.Errorf("expected backend-assigned domain, got unresolved placeholder %q", domain)
+						}
+						return nil
+					},
+				),
+			},
+			{
+				// Plan-only: backend-assigned domain must not drift on re-plan.
+				Config:             testAccServiceConfigDomainNeglected(rndName, "", "example.com"),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+func TestAccIORiverService_DomainMultiMapping(t *testing.T) {
+	t.Parallel()
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId := os.Getenv("IORIVER_TEST_CERT_ID")
+	domain := os.Getenv("IORIVER_TEST_DOMAIN")
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+	domainHost := rndName + "." + domain
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckV2(t) },
@@ -394,6 +451,7 @@ func TestAccIORiverService_DomainMultiMapping(t *testing.T) {
 }
 
 func TestAccIORiverService_WithBehaviors(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -503,6 +561,7 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 // TestAccIORiverService_EmptyActionsIsRejected verifies that an actions block with
 // no fields set is rejected at plan time by the provider validator.
 func TestAccIORiverService_EmptyActionsIsRejected(t *testing.T) {
+	t.Parallel()
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 	behaviorName := generateRandomResourceName()
@@ -515,7 +574,7 @@ func TestAccIORiverService_EmptyActionsIsRejected(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "ioriver_service" "%s" {
   name        = "%s"
-  certificate = "%s"
+  certificates = ["%s"]
   config = {
     behaviors = {
       custom = [
@@ -538,6 +597,7 @@ resource "ioriver_service" "%s" {
 // ValidateConfig catches a domain mapping that references an origin name which
 // does not exist in config.origins at plan time — no API call is made.
 func TestAccIORiverService_DomainMappingUnknownOriginIsRejected(t *testing.T) {
+	t.Parallel()
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 
@@ -549,7 +609,7 @@ func TestAccIORiverService_DomainMappingUnknownOriginIsRejected(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "ioriver_service" "%s" {
   name        = "%s"
-  certificate = "%s"
+  certificates = ["%s"]
   config = {
     origins = [
       {
@@ -583,6 +643,7 @@ resource "ioriver_service" "%s" {
 // destination name which does not exist in config.log_destinations at plan
 // time — no API call is made.
 func TestAccIORiverService_StreamLogsUnknownLogDestIsRejected(t *testing.T) {
+	t.Parallel()
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 	behaviorName := generateRandomResourceName()
@@ -595,7 +656,7 @@ func TestAccIORiverService_StreamLogsUnknownLogDestIsRejected(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "ioriver_service" "%s" {
   name        = "%s"
-  certificate = "%s"
+  certificates = ["%s"]
   config = {
     log_destinations = [
       {
@@ -646,6 +707,7 @@ resource "ioriver_service" "%s" {
 //	Step 8: Remove viewer_protocol — must become null, not keep old value.
 //	Step 8b: Plan-only with the same config — must produce no diff.
 func TestAccIORiverService_DefaultBehaviorLifecycle(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -756,6 +818,7 @@ func TestAccIORiverService_DefaultBehaviorLifecycle(t *testing.T) {
 //	Step 7:   Replace log dest 1 with a compatible_s3 type.
 //	Step 8:   Remove log dest 1 — only log dest 2 remains.
 func TestAccIORiverService_WithLogDestinations(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -874,8 +937,8 @@ locals {
 
 resource "%s" "%s" {
 	name = "%s"
-    certificate = "%s"
 	description = "basic service create"
+	certificates = ["%s"]
 
     config = {
     }
@@ -897,6 +960,7 @@ resource "%s" "%s" {
 //	Step 3:   Re-point domain mapping to a standalone origin (target_type=origin).
 //	Step 4:   Remove the origin set entirely (origin_sets=[]).
 func TestAccIORiverService_WithOriginSets(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1019,6 +1083,7 @@ func TestAccIORiverService_WithOriginSets(t *testing.T) {
 // TestAccIORiverService_OriginSetTooFewOriginsIsRejected verifies that
 // ValidateConfig catches an origin set with fewer than 2 origins at plan time.
 func TestAccIORiverService_OriginSetTooFewOriginsIsRejected(t *testing.T) {
+	t.Parallel()
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 
@@ -1030,7 +1095,7 @@ func TestAccIORiverService_OriginSetTooFewOriginsIsRejected(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "ioriver_service" "%s" {
   name        = "%s"
-  certificate = "%s"
+  certificates = ["%s"]
   config = {
     origin_sets = [
       {
@@ -1058,6 +1123,7 @@ resource "ioriver_service" "%s" {
 // It also exercises the rule UPDATE path (Step 2): mutates rule 0's operator and
 // a rate-limit's num_of_requests, then verifies the changes round-trip correctly.
 func TestAccIORiverService_WafConditions(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1150,6 +1216,7 @@ func TestAccIORiverService_WafConditions(t *testing.T) {
 //	Step 5:  mutate checkpoint: learn→prevent, limit_body_size, trusted_sources, minimal_num_sources.
 //	Step 6:  import (ImportStateVerify also catches any post-apply drift).
 func TestAccIORiverService_WafConfig(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1239,6 +1306,7 @@ func TestAccIORiverService_WafConfig(t *testing.T) {
 //	Step 2b: idempotency.
 //	Step 3:  import.
 func TestAccIORiverService_WafRules(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1424,6 +1492,7 @@ func TestAccIORiverService_WafRules(t *testing.T) {
 //	        while leaving behaviors[1][2][3] untouched — exercises the condition UPDATE path.
 //	Step 7b (plan-only): idempotency after the condition update — no drift.
 func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1766,6 +1835,261 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// Multi-certificate tests
+// ---------------------------------------------------------------------------
+
+// TestAccIORiverService_MultiCert creates a service with three certificates,
+// verifies all three are attached, then removes two, adds a domain, and finally
+// rotates the remaining cert — exercising the safe update order throughout.
+// Requires env vars:
+//
+//	IORIVER_TEST_CERT_ID   — first certificate UUID  (must already exist in the account)
+//	IORIVER_TEST_CERT_ID_2 — second certificate UUID
+//	IORIVER_TEST_CERT_ID_3 — third certificate UUID
+func TestAccIORiverService_MultiCert(t *testing.T) {
+	t.Parallel()
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId1 := os.Getenv("IORIVER_TEST_CERT_ID")
+	certId2 := os.Getenv("IORIVER_TEST_CERT_ID_2")
+	certId3 := os.Getenv("IORIVER_TEST_CERT_ID_3")
+
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckV3(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Step 1: Create service with three certificates (no domain yet).
+				Config: testAccCheckServiceConfigMultiCert(rndName, certId1, certId2, certId3),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "name", rndName),
+					resource.TestCheckResourceAttr(resourceName, "certificates.#", "3"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId1),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId2),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId3),
+				),
+			},
+			{
+				// Step 2 (plan-only): swap cert order in HCL — `certificates` is a set,
+				// so reordering must produce no diff.
+				Config:             testAccCheckServiceConfigMultiCert(rndName, certId3, certId1, certId2),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
+				// Step 3: Remove cert2 and cert3 — in-place update down to one cert.
+				Config: testAccCheckServiceConfigSingleCertFromSet(rndName, certId1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "certificates.#", "1"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId1),
+				),
+			},
+		},
+	})
+}
+
+// testAccCheckServiceConfigCertWithDomain returns HCL for a service with one cert
+// and one domain (with a minimal origin + mapping). Used to verify that cert
+// rotations do not leave the domain uncovered at any point during apply.
+func testAccCheckServiceConfigCertWithDomain(rndName, certId, domainHost string) string {
+	return fmt.Sprintf(`
+resource "%s" "%s" {
+	name        = "%s"
+	description = "multi-cert CRUD test"
+
+	certificates = ["%s"]
+
+	config = {
+		origins = [
+			{
+				name = "origin-1"
+				custom_origin = {
+					host     = "origin.example.com"
+					protocol = "https"
+				}
+			}
+		]
+		domains = [
+			{
+				domain = "%s"
+				mappings = [
+					{
+						target_mapping = "origin-1"
+					}
+				]
+			}
+		]
+	}
+}`, serviceResourceType, rndName, rndName, certId, domainHost)
+}
+
+// testAccCheckServiceConfigMultiCert returns HCL for a service with three certs
+// using the new `certificates` set field. IDs are passed directly (pre-existing resources).
+func testAccCheckServiceConfigMultiCert(rndName, certId1, certId2, certId3 string) string {
+	return fmt.Sprintf(`
+resource "%s" "%s" {
+	name        = "%s"
+	description = "multi-cert CRUD test"
+
+	certificates = ["%s", "%s", "%s"]
+
+	config = {}
+}`, serviceResourceType, rndName, rndName, certId1, certId2, certId3)
+}
+
+// testAccCheckServiceConfigSingleCertFromSet returns HCL with only one cert in
+// the `certificates` set (used to test in-place cert removal).
+func testAccCheckServiceConfigSingleCertFromSet(rndName, certId string) string {
+	return fmt.Sprintf(`
+resource "%s" "%s" {
+	name        = "%s"
+	description = "multi-cert CRUD test"
+
+	certificates = ["%s"]
+
+	config = {}
+}`, serviceResourceType, rndName, rndName, certId)
+}
+
+// ---------------------------------------------------------------------------
+// Domain ↔ cert binding test
+// ---------------------------------------------------------------------------
+
+// TestAccIORiverService_MultiCert_DomainCertBinding verifies a generic
+// cert/domain lifecycle using pre-provisioned cert/domain pairs from env vars
+// so certificate coverage and domains stay aligned:
+//
+//  1. Create with 1 cert-1 + domain-1.
+//  2. Add 1 cert-2 + domain-2 in the same update (ending with 2+2).
+//  3. Remove the older cert-1 + older domain-1 (back to 1+1).
+//
+// Plan-only checks after each transition ensure idempotency (no drift).
+func TestAccIORiverService_MultiCert_DomainCertBinding(t *testing.T) {
+	var service ServiceWithConfig
+	var testedObj TestedService
+
+	certId2 := os.Getenv("IORIVER_TEST_CERT_ID_2")
+	certId3 := os.Getenv("IORIVER_TEST_CERT_ID_3")
+	domain2 := os.Getenv("IORIVER_TEST_DOMAIN_2")
+	domain3 := os.Getenv("IORIVER_TEST_DOMAIN_3")
+
+	rndName := generateRandomResourceName()
+	resourceName := serviceResourceType + "." + rndName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheckV2(t)
+			testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID_2")
+			testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID_3")
+			testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_2")
+			testAccPreEnvVariable(t, "IORIVER_TEST_DOMAIN_3")
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+		},
+		Steps: []resource.TestStep{
+			{
+				// Step 1: Create with one cert and one domain (cert2/domain2).
+				Config: testAccCheckServiceConfigCertWithDomain(rndName, certId2, domain2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "certificates.#", "1"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId2),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.0.domain", domain2),
+				),
+			},
+			{
+				// Step 1b (plan-only): no drift after initial create.
+				Config:             testAccCheckServiceConfigCertWithDomain(rndName, certId2, domain2),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
+				// Step 2: Add cert3/domain3; end state is 2 certs + 2 domains.
+				Config: testAccServiceConfigTwoCertsTwoDomains(rndName, certId2, certId3, domain2, domain3),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "certificates.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId2),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId3),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.#", "2"),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.0.domain", domain2),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.1.domain", domain3),
+				),
+			},
+			{
+				// Step 2b (plan-only): no drift after add.
+				Config:             testAccServiceConfigTwoCertsTwoDomains(rndName, certId2, certId3, domain2, domain3),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
+				// Step 3: Remove the older cert/domain pair (cert2/domain2); final state is cert3/domain3.
+				Config: testAccCheckServiceConfigCertWithDomain(rndName, certId3, domain3),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "certificates.#", "1"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "certificates.*", certId3),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.domains.0.domain", domain3),
+				),
+			},
+			{
+				// Step 3b (plan-only): no drift after remove.
+				Config:             testAccCheckServiceConfigCertWithDomain(rndName, certId3, domain3),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+// testAccServiceConfigTwoCertsTwoDomains returns HCL for a service with two certs
+// and two domains, each domain mapped to the shared origin.
+func testAccServiceConfigTwoCertsTwoDomains(rndName, certId1, certId2, domain1, domain2 string) string {
+	return fmt.Sprintf(`
+resource "%s" "%s" {
+	name        = "%s"
+	description = "domain-cert binding test"
+
+	certificates = ["%s", "%s"]
+
+	config = {
+		origins = [
+			{
+				name = "origin-1"
+				custom_origin = {
+					host     = "origin.example.com"
+					protocol = "https"
+				}
+			}
+		]
+		domains = [
+			{
+				domain = "%s"
+				mappings = [{ target_mapping = "origin-1" }]
+			},
+			{
+				domain = "%s"
+				mappings = [{ target_mapping = "origin-1" }]
+			}
+		]
+	}
+}`, serviceResourceType, rndName, rndName, certId1, certId2, domain1, domain2)
+}
+
 // GeoFencing test — verifies that the optional geo_fencing block behaves
 // correctly across the three lifecycle transitions that exercise the full
 // design:
@@ -1777,6 +2101,7 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 //	        must become null in state (no diff loop), unlike the Protocol block
 //	        which would default-fill.
 func TestAccIORiverService_GeoFencing(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1832,6 +2157,7 @@ func TestAccIORiverService_GeoFencing(t *testing.T) {
 }
 
 func TestAccIORiverService_ConditionValidationRejections(t *testing.T) {
+	t.Parallel()
 	var testedObj TestedService
 
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
@@ -1858,6 +2184,7 @@ func TestAccIORiverService_ConditionValidationRejections(t *testing.T) {
 }
 
 func TestAccIORiverService_BehaviorConditionAllOperators(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1907,6 +2234,7 @@ func TestAccIORiverService_BehaviorConditionAllOperators(t *testing.T) {
 // TestAccIORiverService_WafConditionAllOperators reuses the existing exhaustive WAF
 // matrix helper and focuses assertions on condition value-shape edge cases.
 func TestAccIORiverService_WafConditionAllOperators(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -1954,6 +2282,7 @@ func TestAccIORiverService_WafConditionAllOperators(t *testing.T) {
 //
 //	and exists/does_not_exist send null.
 func TestAccIORiverService_ConditionScalarValueShape(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -2111,6 +2440,7 @@ resource "ioriver_service" "%s" {
 // create/update invariant style used by private S3 origins, but for aws_s3 log
 // destination credentials_version behavior.
 func TestAccIORiverService_LogDestinationCredsLifecycle_AwsS3(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -2161,6 +2491,7 @@ func TestAccIORiverService_LogDestinationCredsLifecycle_AwsS3(t *testing.T) {
 // TestAccIORiverService_LogDestinationCredsLifecycle_CompatibleS3 verifies the
 // same credential invariants for compatible_s3 destinations.
 func TestAccIORiverService_LogDestinationCredsLifecycle_CompatibleS3(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 

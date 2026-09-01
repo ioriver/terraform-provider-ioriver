@@ -2,8 +2,8 @@
 # No behavior configuration — the backend applies sensible defaults.
 
 resource "ioriver_service" "minimal" {
-  name        = "minimal-service"
-  certificate = ioriver_certificate.cert.id
+  name         = "minimal-service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

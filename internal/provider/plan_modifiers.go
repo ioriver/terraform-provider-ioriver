@@ -130,6 +130,7 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 
 	// Build a lookup: identity-name → state attrs, and preserve state order.
 	stateByName := make(map[string]map[string]attr.Value)
+	stateByUUID := make(map[string]map[string]attr.Value)
 	stateOrder := make([]string, 0)
 	for _, elem := range req.StateValue.Elements() {
 		obj, ok := elem.(types.Object)
@@ -141,6 +142,53 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 			stateByName[n.ValueString()] = attrs
 			stateOrder = append(stateOrder, n.ValueString())
 		}
+		if u, ok := attrs["uuid"].(types.String); ok && !u.IsNull() && !u.IsUnknown() {
+			stateByUUID[u.ValueString()] = attrs
+		}
+	}
+
+	// Authoritative identity per plan position taken from raw config, so a
+	// swap+edit at index i can't be confused by UseStateForUnknown having
+	// positionally copied another item's uuid onto planAttrs.
+	configNameAt := make(map[int]string)
+	if !req.ConfigValue.IsNull() && !req.ConfigValue.IsUnknown() {
+		for i, elem := range req.ConfigValue.Elements() {
+			obj, ok := elem.(types.Object)
+			if !ok {
+				continue
+			}
+			if n, ok := obj.Attributes()[m.nameField].(types.String); ok && !n.IsNull() && !n.IsUnknown() {
+				configNameAt[i] = n.ValueString()
+			}
+		}
+	}
+
+	stateElems := req.StateValue.Elements()
+	resolveStateAttrs := func(index int, planAttrs map[string]attr.Value) (map[string]attr.Value, bool) {
+		if name, ok := configNameAt[index]; ok {
+			if stateAttrs, found := stateByName[name]; found {
+				return stateAttrs, true
+			}
+		}
+		if n, ok := planAttrs[m.nameField].(types.String); ok && !n.IsNull() && !n.IsUnknown() {
+			if stateAttrs, found := stateByName[n.ValueString()]; found {
+				return stateAttrs, true
+			}
+		}
+		// Fallback when the primary key is unknown: try uuid, then position.
+		if n, ok := planAttrs[m.nameField].(types.String); ok && n.IsUnknown() {
+			if u, ok := planAttrs["uuid"].(types.String); ok && !u.IsNull() && !u.IsUnknown() {
+				if stateAttrs, found := stateByUUID[u.ValueString()]; found {
+					return stateAttrs, true
+				}
+			}
+			if index < len(stateElems) {
+				if obj, ok := stateElems[index].(types.Object); ok {
+					return obj.Attributes(), true
+				}
+			}
+		}
+		return nil, false
 	}
 
 	// Collect plan element names.
@@ -197,6 +245,7 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 			stateAttrs := stateByName[name]
 			// Find the matching plan element for this name.
 			var planAttrs map[string]attr.Value
+			var planObj types.Object
 			for _, elem := range planElems {
 				obj, ok := elem.(types.Object)
 				if !ok {
@@ -204,6 +253,7 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 				}
 				if n, ok := obj.Attributes()[m.nameField].(types.String); ok && n.ValueString() == name {
 					planAttrs = obj.Attributes()
+					planObj = obj
 					break
 				}
 			}
@@ -211,13 +261,21 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 				planAttrs = stateAttrs // shouldn't happen, but safe fallback
 			}
 			merged := shallowCopyAttrMap(planAttrs)
-			resolveUnknownString(merged, stateAttrs, "uuid")
+			bindStringFromState(merged, stateAttrs, "uuid")
 			if m.resolveNested != nil {
 				if updated, changed := m.resolveNested(ctx, merged, stateAttrs); changed {
 					merged = updated
 				}
 			}
-			newObj, diags := types.ObjectValue(elemType.(types.ObjectType).AttrTypes, merged)
+			attrTypes := map[string]attr.Type{}
+			if !planObj.IsNull() && !planObj.IsUnknown() {
+				attrTypes = planObj.AttributeTypes(ctx)
+			} else {
+				if ot, ok := elemType.(types.ObjectType); ok {
+					attrTypes = ot.AttrTypes
+				}
+			}
+			newObj, diags := types.ObjectValue(attrTypes, merged)
 			if diags.HasError() {
 				return
 			}
@@ -243,13 +301,7 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 		}
 		planAttrs := obj.Attributes()
 
-		n, ok := planAttrs[m.nameField].(types.String)
-		if !ok || n.IsNull() || n.IsUnknown() {
-			newElems[i] = elem
-			continue
-		}
-
-		stateAttrs, found := stateByName[n.ValueString()]
+		stateAttrs, found := resolveStateAttrs(i, planAttrs)
 		if !found {
 			// New item — no state entry. If any nested computed field used UseStateForUnknown(),
 			// Terraform may have positionally copied a UUID from a *different* item at the same list index.
@@ -269,7 +321,12 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 		}
 
 		newAttrs := shallowCopyAttrMap(planAttrs)
-		changed := resolveUnknownString(newAttrs, stateAttrs, "uuid")
+		changed := bindStringFromState(newAttrs, stateAttrs, "uuid")
+		// Only fill the identity key when the plan value is unknown (dynamic
+		// HCL reference) — never overwrite a user-provided rename.
+		if resolveUnknownString(newAttrs, stateAttrs, m.nameField) {
+			changed = true
+		}
 
 		if m.resolveNested != nil {
 			if updated, nestedChanged := m.resolveNested(ctx, newAttrs, stateAttrs); nestedChanged {
@@ -297,6 +354,27 @@ func (m namedListPlanModifier) PlanModifyList(ctx context.Context, req planmodif
 			resp.PlanValue = newList
 		}
 	}
+}
+
+// bindStringFromState force-binds field from matched state object.
+// This is used for provider-managed computed fields (like uuid) to prevent
+// stale index-based values from surviving list reorders/swaps.
+func bindStringFromState(planAttrs, stateAttrs map[string]attr.Value, field string) bool {
+	svRaw, ok := stateAttrs[field]
+	if !ok {
+		return false
+	}
+	sv, ok := svRaw.(types.String)
+	if !ok || sv.IsNull() || sv.IsUnknown() {
+		return false
+	}
+	if pvRaw, ok := planAttrs[field]; ok {
+		if pv, ok := pvRaw.(types.String); ok && !pv.IsUnknown() && !pv.IsNull() && pv.ValueString() == sv.ValueString() {
+			return false
+		}
+	}
+	planAttrs[field] = types.StringValue(sv.ValueString())
+	return true
 }
 
 // planAttrsMatchState returns true if every attribute in planAttrs that is
@@ -578,5 +656,5 @@ func (m conditionValueAlwaysNull) MarkdownDescription(_ context.Context) string 
 }
 
 func (m conditionValueAlwaysNull) PlanModifyString(_ context.Context, _ planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	resp.PlanValue = types.StringUnknown()
+	resp.PlanValue = types.StringNull()
 }

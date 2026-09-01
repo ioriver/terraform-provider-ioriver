@@ -6,8 +6,8 @@ resource "ioriver_service" "compute_example" {
     compute = {
       user_compute = [
         {
-          name   = "edge-function"
-          routes = ["www.example.com/api/*"]
+          function_name = "edge-function"
+          routes        = ["www.example.com/api/*"]
 
           viewer_request  = file("viewer_request.js")
           origin_request  = file("origin_request.js")

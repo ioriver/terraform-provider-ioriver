@@ -18,7 +18,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -42,7 +42,7 @@ locals {
 
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -76,7 +76,7 @@ locals {
 }
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -104,7 +104,7 @@ locals {
 }
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -139,7 +139,7 @@ locals {
 }
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -174,7 +174,7 @@ locals {
 }
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -216,7 +216,7 @@ locals {
 }
 resource "ioriver_service" "%%s" {
 	name        = "%%s"
-	certificate = "%%s"
+	certificates = ["%%s"]
 	description = "desc"
 	config = {
 		origins = [

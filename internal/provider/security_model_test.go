@@ -15,6 +15,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestWafModelToMap_Basic(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	sec := &SecurityModel{
@@ -38,6 +39,7 @@ func TestWafModelToMap_Basic(t *testing.T) {
 }
 
 func TestWafModelToMap_WithCustomRule(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	valSet, _ := stringSet([]string{"/admin"})
@@ -86,6 +88,7 @@ func TestWafModelToMap_WithCustomRule(t *testing.T) {
 }
 
 func TestWafRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	trustedSrcList, _ := stringListVal([]string{"192.168.1.1"})
@@ -189,6 +192,7 @@ func TestWafRoundTrip(t *testing.T) {
 }
 
 func TestValidateWafModel_IgnoreParamsMissing(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
 			Name:   strVal("bad-ignore"),
@@ -202,6 +206,7 @@ func TestValidateWafModel_IgnoreParamsMissing(t *testing.T) {
 }
 
 func TestValidateWafModel_FieldKeyMissingForCollectionField(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"X-Custom"})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
@@ -233,6 +238,7 @@ func TestValidateWafModel_FieldKeyMissingForCollectionField(t *testing.T) {
 // When the entire waf block is nil, ModelToMap returns nil and config_model
 // skips it — nothing is sent to the backend.
 func TestWafNilModel_ReturnsNilMap(t *testing.T) {
+	t.Parallel()
 	var w *WafModel
 	m := w.ModelToMap(context.Background())
 	if m != nil {
@@ -242,6 +248,7 @@ func TestWafNilModel_ReturnsNilMap(t *testing.T) {
 
 // When checkpoint is omitted (nil pointer), the key must not appear in the map.
 func TestWafModelToMap_CheckpointOmitted(t *testing.T) {
+	t.Parallel()
 	model := &WafModel{
 		Checkpoint: nil,
 	}
@@ -255,6 +262,7 @@ func TestWafModelToMap_CheckpointOmitted(t *testing.T) {
 // serialised as an empty string — the key should be absent so the backend
 // fills in its default.
 func TestWafModelToMap_CustomActionNull_NotSent(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"/x"})
 	sec := &SecurityModel{
 		Enabled: boolVal(true),
@@ -283,6 +291,7 @@ func TestWafModelToMap_CustomActionNull_NotSent(t *testing.T) {
 
 // Same check for rate_limit action — rate_limit now lives on SecurityModel.
 func TestSecurityModelToMap_RateLimitActionNull_NotSent(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"/x"})
 	sec := &SecurityModel{
 		Enabled: boolVal(true),
@@ -315,6 +324,7 @@ func TestSecurityModelToMap_RateLimitActionNull_NotSent(t *testing.T) {
 // WafMapToModel with a map that has checkpoint filled with backend
 // defaults — verifies round-trip for Computed fields coming back from the API.
 func TestWafMapToModel_BackendDefaults(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Simulate what the backend returns when the user sent nothing for checkpoint
@@ -382,6 +392,7 @@ func TestWafMapToModel_BackendDefaults(t *testing.T) {
 // one level up in ServiceConfigMapToModel via SecurityConfigured — not here.
 // The backend ALWAYS returns checkpoint with defaults, even when enabled=false.
 func TestWafMapToModelWithCtx_CheckpointAlwaysParsed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	apiMap := map[string]interface{}{
@@ -424,6 +435,7 @@ func TestWafMapToModelWithCtx_CheckpointAlwaysParsed(t *testing.T) {
 
 // wafMapToModelWithCtx populates checkpoint from whatever the backend returns.
 func TestWafMapToModelWithCtx_CheckpointPopulatedWhenConfigured(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	apiMap := map[string]interface{}{
@@ -472,6 +484,7 @@ func TestWafMapToModelWithCtx_CheckpointPopulatedWhenConfigured(t *testing.T) {
 
 // field_key is correctly round-tripped for a collection-type field.
 func TestWafRoundTrip_WithFieldKey(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	valSet, _ := stringSet([]string{"Bearer"})
 
@@ -519,6 +532,7 @@ func TestWafRoundTrip_WithFieldKey(t *testing.T) {
 
 // ignore_params is correctly round-tripped.
 func TestWafRoundTrip_WithIgnoreParams(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	valSet, _ := stringSet([]string{"anything"})
 
@@ -567,6 +581,7 @@ func TestWafRoundTrip_WithIgnoreParams(t *testing.T) {
 
 // validate passes for a valid model with no issues.
 func TestValidateWafModel_Clean(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"/ok"})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
@@ -588,6 +603,7 @@ func TestValidateWafModel_Clean(t *testing.T) {
 
 // validate catches field_key missing on query_param and json_param too.
 func TestValidateWafModel_FieldKeyRequired_QueryParam(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"admin"})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
@@ -609,6 +625,7 @@ func TestValidateWafModel_FieldKeyRequired_QueryParam(t *testing.T) {
 
 // validate passes when field_key IS set for a collection field.
 func TestValidateWafModel_FieldKeyPresent_OK(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"admin"})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{
 		{
@@ -637,6 +654,7 @@ func TestValidateWafModel_FieldKeyPresent_OK(t *testing.T) {
 // that WafMapToModel returns them in the exact same order — no reordering.
 // This tests the assumption that the backend preserves array insertion order.
 func TestWafRoundTrip_OrderPreserved(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	valSet, _ := stringSet([]string{"/path"})
 
@@ -730,6 +748,7 @@ func TestWafRoundTrip_OrderPreserved(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestValidateSecurityModel_Nil(t *testing.T) {
+	t.Parallel()
 	errs := ValidateSecurityModel(context.Background(), nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for nil security, got: %v", errs)
@@ -737,6 +756,7 @@ func TestValidateSecurityModel_Nil(t *testing.T) {
 }
 
 func TestValidateSecurityModel_Clean(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"/ok"})
 	sec := &SecurityModel{
 		CustomRules: []WafCustomRuleModel{
@@ -769,6 +789,7 @@ func TestValidateSecurityModel_Clean(t *testing.T) {
 }
 
 func TestValidateSecurityModel_RateLimitFieldKeyMissing(t *testing.T) {
+	t.Parallel()
 	valSet, _ := stringSet([]string{"admin"})
 	sec := &SecurityModel{
 		RateLimit: []WafRateLimitRuleModel{
@@ -799,6 +820,7 @@ func TestValidateSecurityModel_RateLimitFieldKeyMissing(t *testing.T) {
 }
 
 func TestValidateSecurityModel_WafIgnoreParamsMissing(t *testing.T) {
+	t.Parallel()
 	sec := &SecurityModel{
 		CustomRules: []WafCustomRuleModel{
 			{Name: strVal("bad"), Action: strVal("ignore")}, // ignore_params missing
@@ -817,6 +839,7 @@ func TestValidateSecurityModel_WafIgnoreParamsMissing(t *testing.T) {
 // ── A. field_key ─────────────────────────────────────────────────────────────
 
 func TestValidateCondition_FieldKeyOnPlainField(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), strVal("oops")),
@@ -827,6 +850,7 @@ func TestValidateCondition_FieldKeyOnPlainField(t *testing.T) {
 }
 
 func TestValidateCondition_CollectionFieldMissingFieldKey(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("contains"), mustStringSet([]string{"x"}), nullStr()),
@@ -837,6 +861,7 @@ func TestValidateCondition_CollectionFieldMissingFieldKey(t *testing.T) {
 }
 
 func TestValidateCondition_CollectionFieldWithFieldKey_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("contains"), mustStringSet([]string{"x"}), strVal("X-Custom")),
@@ -849,6 +874,7 @@ func TestValidateCondition_CollectionFieldWithFieldKey_OK(t *testing.T) {
 // ── B. uri_raw operator restrictions ─────────────────────────────────────────
 
 func TestValidateCondition_URIRaw_IpMatchForbidden(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8"}), nullStr()),
@@ -859,6 +885,7 @@ func TestValidateCondition_URIRaw_IpMatchForbidden(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_ExistsForbidden(t *testing.T) {
+	t.Parallel()
 	emptySet, _ := stringSet([]string{})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
@@ -870,6 +897,7 @@ func TestValidateCondition_URIRaw_ExistsForbidden(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_LtForbidden(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("lt"), mustStringSet([]string{"50"}), nullStr()),
@@ -880,6 +908,7 @@ func TestValidateCondition_URIRaw_LtForbidden(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_EqRequiresFullURL_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("eq"), mustStringSet([]string{"/not-a-url"}), nullStr()),
@@ -890,6 +919,7 @@ func TestValidateCondition_URIRaw_EqRequiresFullURL_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_EqWithFullURL_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("eq"), mustStringSet([]string{"https://example.com/path"}), nullStr()),
@@ -900,6 +930,7 @@ func TestValidateCondition_URIRaw_EqWithFullURL_OK(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_InRequiresFullURL_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("in"), mustStringSet([]string{"https://example.com", "not-a-url"}), nullStr()),
@@ -910,6 +941,7 @@ func TestValidateCondition_URIRaw_InRequiresFullURL_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_BeginsWith_InvalidPrefix_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("begins_with"), mustStringSet([]string{"ftp://bad"}), nullStr()),
@@ -920,6 +952,7 @@ func TestValidateCondition_URIRaw_BeginsWith_InvalidPrefix_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_BeginsWith_ValidPrefix_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("begins_with"), mustStringSet([]string{"https://example.com"}), nullStr()),
@@ -930,6 +963,7 @@ func TestValidateCondition_URIRaw_BeginsWith_ValidPrefix_OK(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_Regex_InvalidRegex_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("regex"), mustStringSet([]string{"[invalid"}), nullStr()),
@@ -940,6 +974,7 @@ func TestValidateCondition_URIRaw_Regex_InvalidRegex_Error(t *testing.T) {
 }
 
 func TestValidateCondition_URIRaw_Regex_ValidRegex_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("regex"), mustStringSet([]string{"https://example\\.com/.*"}), nullStr()),
@@ -951,6 +986,7 @@ func TestValidateCondition_URIRaw_Regex_ValidRegex_OK(t *testing.T) {
 
 // contains on uri_raw is free-form → OK.
 func TestValidateCondition_URIRaw_Contains_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.uri_raw"), strVal("contains"), mustStringSet([]string{"/api/v"}), nullStr()),
@@ -962,6 +998,7 @@ func TestValidateCondition_URIRaw_Contains_OK(t *testing.T) {
 
 // ip_match on http.request.path is NOT forbidden by the backend → OK.
 func TestValidateCondition_IpMatchOnPath_NotForbidden(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8"}), nullStr()),
@@ -974,6 +1011,7 @@ func TestValidateCondition_IpMatchOnPath_NotForbidden(t *testing.T) {
 // ── C. path operator restrictions ────────────────────────────────────────────
 
 func TestValidateCondition_Path_EqNoSlash_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("eq"), mustStringSet([]string{"no-leading-slash"}), nullStr()),
@@ -984,6 +1022,7 @@ func TestValidateCondition_Path_EqNoSlash_Error(t *testing.T) {
 }
 
 func TestValidateCondition_Path_EqWithSlash_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("eq"), mustStringSet([]string{"/login"}), nullStr()),
@@ -994,6 +1033,7 @@ func TestValidateCondition_Path_EqWithSlash_OK(t *testing.T) {
 }
 
 func TestValidateCondition_Path_Regex_InvalidRegex_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("regex"), mustStringSet([]string{"[broken"}), nullStr()),
@@ -1004,6 +1044,7 @@ func TestValidateCondition_Path_Regex_InvalidRegex_Error(t *testing.T) {
 }
 
 func TestValidateCondition_Path_Regex_ValidRegex_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("regex"), mustStringSet([]string{"/api/v[0-9]+/.*"}), nullStr()),
@@ -1016,6 +1057,7 @@ func TestValidateCondition_Path_Regex_ValidRegex_OK(t *testing.T) {
 // ── D. client.ip.address IP/CIDR validation ───────────────────────────────────
 
 func TestValidateCondition_IPAddress_InvalidCIDR_Error(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("client.ip.address"), strVal("ip_match"), mustStringSet([]string{"not-an-ip"}), nullStr()),
@@ -1026,6 +1068,7 @@ func TestValidateCondition_IPAddress_InvalidCIDR_Error(t *testing.T) {
 }
 
 func TestValidateCondition_IPAddress_ValidCIDR_OK(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
 		Condition: cond1(strVal("client.ip.address"), strVal("ip_match"), mustStringSet([]string{"10.0.0.0/8", "1.2.3.4"}), nullStr()),
@@ -1038,6 +1081,7 @@ func TestValidateCondition_IPAddress_ValidCIDR_OK(t *testing.T) {
 // ── E. value-presence rules ───────────────────────────────────────────────────
 
 func TestValidateCondition_ExistsWithNonEmptyValue(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.header"), strVal("exists"), mustStringSet([]string{"oops"}), strVal("X-Debug")),
@@ -1048,6 +1092,7 @@ func TestValidateCondition_ExistsWithNonEmptyValue(t *testing.T) {
 }
 
 func TestValidateCondition_DoesNotExistEmptyValue_OK(t *testing.T) {
+	t.Parallel()
 	emptySet, _ := stringSet([]string{})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("ok"), Action: strVal("block"),
@@ -1059,6 +1104,7 @@ func TestValidateCondition_DoesNotExistEmptyValue_OK(t *testing.T) {
 }
 
 func TestValidateCondition_ContainsWithEmptyValue(t *testing.T) {
+	t.Parallel()
 	emptySet, _ := stringSet([]string{})
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
@@ -1072,6 +1118,7 @@ func TestValidateCondition_ContainsWithEmptyValue(t *testing.T) {
 // ── ignore_params ─────────────────────────────────────────────────────────────
 
 func TestValidateCondition_IgnoreParamsOnNonIgnoreAction(t *testing.T) {
+	t.Parallel()
 	errs := ValidateCustomRules(t.Context(), []WafCustomRuleModel{{
 		Name: strVal("bad"), Action: strVal("block"),
 		Condition:    cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), nullStr()),
@@ -1085,6 +1132,7 @@ func TestValidateCondition_IgnoreParamsOnNonIgnoreAction(t *testing.T) {
 // ── duplicate names ───────────────────────────────────────────────────────────
 
 func TestValidateCondition_DuplicateCustomRuleNames(t *testing.T) {
+	t.Parallel()
 	rule := WafCustomRuleModel{
 		Name: strVal("dup"), Action: strVal("block"),
 		Condition: cond1(strVal("http.request.path"), strVal("contains"), mustStringSet([]string{"/x"}), nullStr()),
@@ -1096,6 +1144,7 @@ func TestValidateCondition_DuplicateCustomRuleNames(t *testing.T) {
 }
 
 func TestValidateCondition_DuplicateRateLimitNames(t *testing.T) {
+	t.Parallel()
 	rule := WafRateLimitRuleModel{
 		Name: strVal("dup"), Action: strVal("block"),
 		NumOfRequests: int64Val(100), TimeWindowSeconds: int64Val(60), BlockDurationSeconds: int64Val(300),
@@ -1126,7 +1175,7 @@ func testAccWafNoCheckpoint(name, certId string, enabled bool) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1149,7 +1198,7 @@ func testAccWafExplicitDefaults(name, certId string) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1193,7 +1242,7 @@ func testAccWafBlockOmitted(name, certId string) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1216,7 +1265,7 @@ func testAccWafConditions(name, certId string, idx int) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF conditions acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1527,7 +1576,7 @@ func testAccServiceConfigWithWaf(name, certId string, idx int) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1614,7 +1663,7 @@ resource "ioriver_service" "%s" {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1718,7 +1767,7 @@ resource "ioriver_service" "%s" {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -1811,7 +1860,7 @@ func testAccWafRulesSteps(name, certId string, idx int) string {
 resource "ioriver_service" "%s" {
   name        = "%s"
   description = "WAF rules acceptance test"
-  certificate = "%s"
+  certificates = ["%s"]
 
   config = {
     security = {
@@ -2376,6 +2425,7 @@ resource "ioriver_service" "%s" {
 
 // 1. All fields fully populated — all must appear in the serialized map.
 func TestBotManagementToMap_AllFields(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sec := &SecurityModel{
 		BotManagement: &BotManagementModel{
@@ -2401,6 +2451,7 @@ func TestBotManagementToMap_AllFields(t *testing.T) {
 
 // 2. Nil BotManagement pointer → method must return nil (caller omits the key).
 func TestBotManagementToMap_Nil(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sec := &SecurityModel{BotManagement: nil}
 	m := sec.BotManagementToMap(ctx)
@@ -2411,6 +2462,7 @@ func TestBotManagementToMap_Nil(t *testing.T) {
 
 // 3. Null TF fields must not appear in the serialized map.
 func TestBotManagementToMap_NullFields_NotSent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sec := &SecurityModel{
 		BotManagement: &BotManagementModel{
@@ -2436,6 +2488,7 @@ func TestBotManagementToMap_NullFields_NotSent(t *testing.T) {
 
 // 4. Feed a typical backend response (includes uuid) and assert TF fields + uuid dropped.
 func TestBotManagementMapToModel_BackendDefaults(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	raw := map[string]interface{}{
 		"web_key":                "",
@@ -2460,6 +2513,7 @@ func TestBotManagementMapToModel_BackendDefaults(t *testing.T) {
 
 // 5. Full round-trip: serialize → deserialize and compare field-by-field.
 func TestBotManagementRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	orig := &SecurityModel{
 		BotManagement: &BotManagementModel{
@@ -2487,6 +2541,7 @@ func TestBotManagementRoundTrip(t *testing.T) {
 // 6. Regression: security block with only bot_management set (no Waf, no rules).
 // BotManagementToMap must work and SecurityModelToMap must not crash.
 func TestSecurityModel_BotManagementOnly_NoWaf(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sec := &SecurityModel{
 		Enabled:     boolVal(false),
@@ -2520,6 +2575,7 @@ func TestSecurityModel_BotManagementOnly_NoWaf(t *testing.T) {
 // test, since float range is enforced by the schema validator at plan time).
 // This test confirms the model can hold boundary values correctly.
 func TestBotManagementValidation_ThresholdBoundary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// Valid boundaries must produce no error at serialization level.
 	for _, v := range []float64{0.0, 0.5, 1.0} {

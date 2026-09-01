@@ -58,6 +58,7 @@ func (TestedCertificate) Delete(client *ioriver.IORiverClient, object ioriver.Ce
 }
 
 func TestAccIORiverCertificate_Basic(t *testing.T) {
+	t.Parallel()
 	var certificate ioriver.Certificate
 	var testedObj TestedCertificate
 
@@ -93,6 +94,7 @@ func TestAccIORiverCertificate_Basic(t *testing.T) {
 }
 
 func TestAccIORiverCertificate_BasicManaged(t *testing.T) {
+	t.Parallel()
 	var certificate ioriver.Certificate
 	var testedObj TestedCertificate
 
@@ -126,6 +128,7 @@ func TestAccIORiverCertificate_BasicManaged(t *testing.T) {
 }
 
 func TestAccIORiverCertificate_Update(t *testing.T) {
+	t.Parallel()
 	var certificate ioriver.Certificate
 	var testedObj TestedCertificate
 

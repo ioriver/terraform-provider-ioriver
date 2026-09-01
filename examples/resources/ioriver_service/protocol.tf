@@ -3,8 +3,8 @@
 # apply its own defaults. Set them explicitly to lock the values in state.
 
 resource "ioriver_service" "protocol_example" {
-  name        = "protocol-service"
-  certificate = ioriver_certificate.cert.id
+  name         = "protocol-service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     protocol = {

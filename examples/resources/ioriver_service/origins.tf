@@ -4,8 +4,8 @@
 # 1. Simple HTTPS custom origin
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "custom_origin_simple" {
-  name        = "custom-origin-simple"
-  certificate = ioriver_certificate.cert.id
+  name         = "custom-origin-simple"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -36,8 +36,8 @@ resource "ioriver_service" "custom_origin_simple" {
 #    - custom_https_port: non-standard HTTPS port
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "custom_origin_full" {
-  name        = "custom-origin-full"
-  certificate = ioriver_certificate.cert.id
+  name         = "custom-origin-full"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -69,8 +69,8 @@ resource "ioriver_service" "custom_origin_full" {
 # 3. Public S3 bucket origin
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "s3_origin_public" {
-  name        = "s3-origin-public"
-  certificate = ioriver_certificate.cert.id
+  name         = "s3-origin-public"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -97,8 +97,8 @@ resource "ioriver_service" "s3_origin_public" {
 #    s3_aws_region and s3_bucket_name are required when is_private = true.
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "s3_origin_private" {
-  name        = "s3-origin-private"
-  certificate = ioriver_certificate.cert.id
+  name         = "s3-origin-private"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -135,8 +135,8 @@ resource "ioriver_service" "s3_origin_private" {
 #    reducing origin load. Specify which CDN providers should use the shield.
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "origin_with_shield" {
-  name        = "origin-with-shield"
-  certificate = ioriver_certificate.cert.id
+  name         = "origin-with-shield"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

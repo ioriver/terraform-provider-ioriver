@@ -17,9 +17,9 @@ Service resource
 # One HTTPS origin, one domain, 60-minute edge cache, compression enabled.
 
 resource "ioriver_service" "example" {
-  name        = "my-service"
-  description = "My IO River CDN service"
-  certificate = ioriver_certificate.cert.id
+  name         = "my-service"
+  description  = "My IO River CDN service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -60,12 +60,13 @@ resource "ioriver_service" "example" {
 
 ### Required
 
-- `certificate` (String) ID of the certificate to be used with the service
 - `config` (Attributes) Service configuration (see [below for nested schema](#nestedatt--config))
 - `name` (String) Service name
 
 ### Optional
 
+- `certificate` (String, Deprecated) ID of the certificate to be used with the service. Deprecated: use `certificates` instead. Mutually exclusive with `certificates`.
+- `certificates` (Set of String) List of certificate IDs to be used with the service. Mutually exclusive with `certificate`.
 - `description` (String) Service description
 
 ### Read-Only
@@ -1039,13 +1040,13 @@ Optional:
 
 Required:
 
-- `domain` (String) Domain name
 - `mappings` (Attributes List) A list of mappings between path pattern and target.
   - Order of paths are performed by ioriver internally. (see [below for nested schema](#nestedatt--config--domains--mappings))
 
 Optional:
 
 - `aliases` (List of String) A list of domain aliases
+- `domain` (String) Domain name
 
 Read-Only:
 

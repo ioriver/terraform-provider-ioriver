@@ -14,7 +14,7 @@ func testAccCheckServiceConfigWithProtocol(resourceName string, certId string, h
 	return fmt.Sprintf(`
 resource "%s" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "A generic service"
 
 	config = {
@@ -31,7 +31,7 @@ func testAccCheckServiceConfigWithoutProtocol(resourceName string, certId string
 	return fmt.Sprintf(`
 resource "%s" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "A generic service"
 
 	config = {
@@ -40,6 +40,7 @@ resource "%s" "%s" {
 }
 
 func TestProtocolConfig_RoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	in := &ProtocolConfigModel{
@@ -78,6 +79,7 @@ func TestProtocolConfig_RoundTrip(t *testing.T) {
 }
 
 func TestProtocolConfig_NilContracts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	var nilModel *ProtocolConfigModel

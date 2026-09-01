@@ -8,8 +8,8 @@
 #    Terraform will not manage these settings; the CDN uses platform defaults.
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "default_behavior_omitted" {
-  name        = "service-defaults-omitted"
-  certificate = ioriver_certificate.cert.id
+  name         = "service-defaults-omitted"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
