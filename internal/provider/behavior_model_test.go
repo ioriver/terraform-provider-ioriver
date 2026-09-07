@@ -726,12 +726,14 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 			// --- generate response ---
 			StatusCodeCustomResponse: []StatusCodeCustomResponseModelV2{
 				{
-					StatusCode:  types.StringValue("404"),
-					ResponseURL: types.StringValue("https://example.com/404.html"),
+					StatusCode:          types.StringValue("404"),
+					ResponseURL:         types.StringValue("https://example.com/404.html"),
+					ReplaceResponseCode: types.StringValue("200"),
 				},
 				{
-					StatusCode:  types.StringValue("5xx"),
-					ResponseURL: types.StringValue("https://example.com/error.html"),
+					StatusCode:          types.StringValue("5xx"),
+					ResponseURL:         types.StringValue("https://example.com/error.html"),
+					ReplaceResponseCode: types.StringValue("503"),
 				},
 			},
 
@@ -933,8 +935,10 @@ func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
 	}
 	assertStr(t, "generate_response[0].status_code", "404", a.StatusCodeCustomResponse[0].StatusCode)
 	assertStr(t, "generate_response[0].response_url", "https://example.com/404.html", a.StatusCodeCustomResponse[0].ResponseURL)
+	assertStr(t, "generate_response[0].replace_response_code", "200", a.StatusCodeCustomResponse[0].ReplaceResponseCode)
 	assertStr(t, "generate_response[1].status_code", "5xx", a.StatusCodeCustomResponse[1].StatusCode)
 	assertStr(t, "generate_response[1].response_url", "https://example.com/error.html", a.StatusCodeCustomResponse[1].ResponseURL)
+	assertStr(t, "generate_response[1].replace_response_code", "503", a.StatusCodeCustomResponse[1].ReplaceResponseCode)
 
 	// request headers
 	if a.RequestHeaders == nil || len(*a.RequestHeaders) != 2 {
