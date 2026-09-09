@@ -15,10 +15,6 @@ import (
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
-const maxConcurrentIORiverOperations = 1
-
-var operationSem = make(chan struct{}, maxConcurrentIORiverOperations)
-
 type Resource interface {
 	create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error)
 	read(ctx context.Context, client *ioriver.IORiverClient, id interface{}) (interface{}, error)
@@ -71,7 +67,8 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 		return nil
 	}
 
-	obj, err := r.read(ctx, client, r.getId(data))
+	readOp := func() (interface{}, error) { return r.read(ctx, client, r.getId(data)) }
+	obj, err := performOperation(ctx, func() (interface{}, error) { return readOp() })
 
 	tflog.Debug(ctx, fmt.Sprintf("Object: %#v", obj))
 
@@ -203,14 +200,6 @@ func ConfigureBase(ctx context.Context, req resource.ConfigureRequest, resp *res
 
 // ensures that IO River operations are done sequentially
 func performOperation(ctx context.Context, operation func() (interface{}, error)) (interface{}, error) {
-	select {
-	case operationSem <- struct{}{}:
-		defer func() { <-operationSem }()
-	case <-ctx.Done():
-		// User canceled the run.
-		return nil, ctx.Err()
-	}
-
 	const retryTimeout = 60 * time.Minute
 	var result interface{}
 
@@ -222,8 +211,23 @@ func performOperation(ctx context.Context, operation func() (interface{}, error)
 		}
 
 		var apiErr *ioriver.APIError
-		if errors.As(opErr, &apiErr) && apiErr.StatusCode == 409 {
-			return retry.RetryableError(opErr)
+		if errors.As(opErr, &apiErr) {
+			switch apiErr.StatusCode {
+			case 429:
+				tflog.Warn(ctx, "Rate limit exceeded, waiting 60 seconds and then retrying")
+
+				// Additional wait due to 429
+				select {
+				case <-time.After(60 * time.Second):
+				case <-ctx.Done():
+					// Canceled during delay, abort immediately
+					return retry.NonRetryableError(ctx.Err())
+				}
+				return retry.RetryableError(opErr)
+			case 409:
+				tflog.Warn(ctx, "Conflict occurred, retrying operation")
+				return retry.RetryableError(opErr)
+			}
 		}
 
 		return retry.NonRetryableError(opErr)

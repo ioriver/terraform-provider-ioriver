@@ -586,8 +586,9 @@ type ServiceConfigAPIStreamLogs struct {
 }
 
 type ServiceConfigAPIStatusCodeCustomResponse struct {
-	Code        string `json:"code"`
-	ResponseURL string `json:"response_url"`
+	Code                string `json:"code"`
+	ResponseURL         string `json:"response_url"`
+	ReplaceResponseCode *int   `json:"replace_response_code,omitempty"`
 }
 
 type ServiceConfigAPIIP struct {
@@ -710,8 +711,9 @@ type StreamLogsModelV2 struct {
 }
 
 type StatusCodeCustomResponseModelV2 struct {
-	StatusCode  types.String `tfsdk:"status_code"`
-	ResponseURL types.String `tfsdk:"response_url"`
+	StatusCode          types.String `tfsdk:"status_code"`
+	ResponseURL         types.String `tfsdk:"response_url"`
+	ReplaceResponseCode types.String `tfsdk:"replace_response_code"`
 }
 
 type IPModelV2 struct {
@@ -1073,8 +1075,9 @@ func BehaviorActionAttrTypes() map[string]attr.Type {
 			"log_sampling_rate": types.Int64Type,
 		}},
 		"generate_response": types.ListType{ElemType: types.ObjectType{AttrTypes: map[string]attr.Type{
-			"status_code":  types.StringType,
-			"response_url": types.StringType,
+			"status_code":           types.StringType,
+			"response_url":          types.StringType,
+			"replace_response_code": types.StringType,
 		}}},
 		"redirect": types.ObjectType{AttrTypes: map[string]attr.Type{
 			"destination": types.StringType,
@@ -1551,6 +1554,13 @@ func BehaviorActionAttributes() map[string]schema.Attribute {
 					"response_url": schema.StringAttribute{
 						MarkdownDescription: "URL of the custom response page",
 						Required:            true,
+					},
+					"replace_response_code": schema.StringAttribute{
+						MarkdownDescription: "Optional HTTP status code to return to the client instead of the original status code.",
+						Optional:            true,
+						Validators: []validator.String{
+							stringvalidator.RegexMatches(regexp.MustCompile(`^(?:1xx|2xx|3xx|4xx|5xx|[1-5]\d\d)$`), "must be a valid HTTP status code like 403 or 4xx"),
+						},
 					},
 				},
 			},
@@ -2549,10 +2559,18 @@ func behaviorActionModelToAPIStruct(action BehaviorActionV2ResourceModel, apiAct
 	if len(action.StatusCodeCustomResponse) > 0 {
 		items := []ServiceConfigAPIStatusCodeCustomResponse{}
 		for _, item := range action.StatusCodeCustomResponse {
-			items = append(items, ServiceConfigAPIStatusCodeCustomResponse{
+			entry := ServiceConfigAPIStatusCodeCustomResponse{
 				Code:        item.StatusCode.ValueString(),
 				ResponseURL: item.ResponseURL.ValueString(),
-			})
+			}
+			if !item.ReplaceResponseCode.IsNull() && !item.ReplaceResponseCode.IsUnknown() {
+				v, err := statusCodeToInt(item.ReplaceResponseCode.ValueString())
+				if err != nil {
+					return fmt.Errorf("invalid replace_response_code %q: %w", item.ReplaceResponseCode.ValueString(), err)
+				}
+				entry.ReplaceResponseCode = &v
+			}
+			items = append(items, entry)
 		}
 		apiAction.StatusCodeCustomResponse = items
 	}
@@ -3087,10 +3105,15 @@ func apiActionStructToModel(apiAction ServiceConfigAPIAction) (*BehaviorActionV2
 	if len(apiAction.StatusCodeCustomResponse) > 0 {
 		items := []StatusCodeCustomResponseModelV2{}
 		for _, item := range apiAction.StatusCodeCustomResponse {
-			items = append(items, StatusCodeCustomResponseModelV2{
-				StatusCode:  types.StringValue(item.Code),
-				ResponseURL: types.StringValue(item.ResponseURL),
-			})
+			entry := StatusCodeCustomResponseModelV2{
+				StatusCode:          types.StringValue(item.Code),
+				ResponseURL:         types.StringValue(item.ResponseURL),
+				ReplaceResponseCode: types.StringNull(),
+			}
+			if item.ReplaceResponseCode != nil {
+				entry.ReplaceResponseCode = types.StringValue(statusCodeToString(*item.ReplaceResponseCode))
+			}
+			items = append(items, entry)
 		}
 		model.StatusCodeCustomResponse = items
 	}
