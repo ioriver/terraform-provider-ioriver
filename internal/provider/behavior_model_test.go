@@ -58,6 +58,7 @@ func simpleBehaviorConditionExpr(field, operator string, values []string, fieldK
 
 // Simple path condition via condition block: collapses back to path_pattern on read.
 func TestBehaviorCondition_RoundTrip_Path(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	model := &BehaviorModel{
@@ -109,6 +110,7 @@ func TestBehaviorCondition_RoundTrip_Path(t *testing.T) {
 
 // path_pattern shorthand round-trip: set path_pattern, read back as path_pattern.
 func TestBehaviorCondition_RoundTrip_PathPattern(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	model := &BehaviorModel{
@@ -137,6 +139,7 @@ func TestBehaviorCondition_RoundTrip_PathPattern(t *testing.T) {
 
 // http.request.header with field_key.
 func TestBehaviorCondition_RoundTrip_HeaderWithFieldKey(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	model := &BehaviorModel{
@@ -168,6 +171,7 @@ func TestBehaviorCondition_RoundTrip_HeaderWithFieldKey(t *testing.T) {
 
 // http.response.header with field_key.
 func TestBehaviorCondition_RoundTrip_ResponseHeader(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	model := &BehaviorModel{
@@ -196,6 +200,7 @@ func TestBehaviorCondition_RoundTrip_ResponseHeader(t *testing.T) {
 
 // http.response.status_code — API returns value as a number, must be coerced to string.
 func TestBehaviorCondition_RoundTrip_StatusCode(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	apiMap := map[string]interface{}{
@@ -236,6 +241,7 @@ func TestBehaviorCondition_RoundTrip_StatusCode(t *testing.T) {
 
 // OR-of-ANDs: two OR groups, each with two AND conditions.
 func TestBehaviorCondition_RoundTrip_MultipleOrAndGroups(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	valA, _ := stringSet([]string{"/images/*"})
@@ -298,6 +304,7 @@ func ValidateBehaviorConditionModel(expr *BehaviorConditionExpressionModel, pref
 
 // field_key required for http.request.header.
 func TestValidateBehaviorCondition_HeaderMissingFieldKey(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.header", "eq", []string{"mobile"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[0]")
 	if len(errs) == 0 {
@@ -307,6 +314,7 @@ func TestValidateBehaviorCondition_HeaderMissingFieldKey(t *testing.T) {
 
 // field_key required for http.response.header.
 func TestValidateBehaviorCondition_ResponseHeaderMissingFieldKey(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.response.header", "contains", []string{"no-cache"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[0]")
 	if len(errs) == 0 {
@@ -316,6 +324,7 @@ func TestValidateBehaviorCondition_ResponseHeaderMissingFieldKey(t *testing.T) {
 
 // field_key required for http.request.query_param.
 func TestValidateBehaviorCondition_QueryParamMissingFieldKey(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.query_param", "eq", []string{"admin"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[0]")
 	if len(errs) == 0 {
@@ -325,6 +334,7 @@ func TestValidateBehaviorCondition_QueryParamMissingFieldKey(t *testing.T) {
 
 // No field_key needed for non-collection fields.
 func TestValidateBehaviorCondition_PathNoFieldKeyRequired(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "match", []string{"/api/*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[0]")
 	if len(errs) != 0 {
@@ -343,6 +353,7 @@ func TestValidateBehaviorCondition_ClientIPNoFieldKey(t *testing.T) {
 
 // Valid: collection field with field_key set.
 func TestValidateBehaviorCondition_HeaderWithFieldKey_OK(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.header", "eq", []string{"mobile"}, "X-Client-Type")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[0]")
 	if len(errs) != 0 {
@@ -352,6 +363,7 @@ func TestValidateBehaviorCondition_HeaderWithFieldKey_OK(t *testing.T) {
 
 // nil expression is valid.
 func TestValidateBehaviorCondition_Nil(t *testing.T) {
+	t.Parallel()
 	errs := ValidateBehaviorConditionModel(nil, "behaviors[0]")
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for nil condition, got: %v", errs)
@@ -360,6 +372,7 @@ func TestValidateBehaviorCondition_Nil(t *testing.T) {
 
 // Error message includes the correct location and field name.
 func TestValidateBehaviorCondition_ErrorLocation(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.header", "eq", []string{"x"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "behaviors[2]")
 	if len(errs) == 0 {
@@ -379,6 +392,7 @@ func TestValidateBehaviorCondition_ErrorLocation(t *testing.T) {
 
 // NEGATIVE: actions block is completely empty — should error.
 func TestValidateBehaviorModel_EmptyActions_Fails(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("empty-actions"),
 		PathPattern: types.StringValue("/api/*"),
@@ -401,6 +415,7 @@ func TestValidateBehaviorModel_EmptyActions_Fails(t *testing.T) {
 
 // NEGATIVE: nil actions pointer — should also error.
 func TestValidateBehaviorModel_NilActions_Fails(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("nil-actions"),
 		PathPattern: types.StringValue("/x/*"),
@@ -414,6 +429,7 @@ func TestValidateBehaviorModel_NilActions_Fails(t *testing.T) {
 
 // POSITIVE: single scalar field set — should pass.
 func TestValidateBehaviorModel_SingleAction_Passes(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("cache-only"),
 		PathPattern: types.StringValue("/images/*"),
@@ -429,6 +445,7 @@ func TestValidateBehaviorModel_SingleAction_Passes(t *testing.T) {
 
 // POSITIVE: only a nested pointer field set — should pass.
 func TestValidateBehaviorModel_NestedAction_Passes(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("cors-only"),
 		PathPattern: types.StringValue("/cors/*"),
@@ -448,6 +465,7 @@ func TestValidateBehaviorModel_NestedAction_Passes(t *testing.T) {
 
 // POSITIVE: provider_specific-only action should count as non-empty actions.
 func TestValidateBehaviorModel_ProviderSpecificOnly_Passes(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("provider-specific-only"),
 		PathPattern: types.StringValue("/ps/*"),
@@ -466,6 +484,7 @@ func TestValidateBehaviorModel_ProviderSpecificOnly_Passes(t *testing.T) {
 
 // POSITIVE: request_collapsing-only action should count as non-empty actions.
 func TestValidateBehaviorModel_RequestCollapsingOnly_Passes(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:        strVal("request-collapsing-only"),
 		PathPattern: types.StringValue("/rc/*"),
@@ -481,6 +500,7 @@ func TestValidateBehaviorModel_RequestCollapsingOnly_Passes(t *testing.T) {
 }
 
 func TestProviderSpecific_WriteTranslation_KnownAndUnknown(t *testing.T) {
+	t.Parallel()
 	action := BehaviorActionV2ResourceModel{
 		ProviderSpecific: []ProviderSpecificModel{
 			{Provider: types.StringValue("fastly"), Code: exampleSpecificFastlyCode},
@@ -506,6 +526,7 @@ func TestProviderSpecific_WriteTranslation_KnownAndUnknown(t *testing.T) {
 }
 
 func TestProviderSpecific_ReadTranslation_Known(t *testing.T) {
+	t.Parallel()
 	apiAction := ServiceConfigAPIAction{
 		ProviderSpecific: []ServiceConfigAPIProviderSpecific{
 			{Name: "Cloudflare", Value: "known"},
@@ -530,6 +551,7 @@ func TestProviderSpecific_ReadTranslation_Known(t *testing.T) {
 }
 
 func TestProviderSpecific_ReadTranslation_UnknownFails(t *testing.T) {
+	t.Parallel()
 	apiAction := ServiceConfigAPIAction{
 		ProviderSpecific: []ServiceConfigAPIProviderSpecific{
 			{Name: "BackendCustomName", Value: "unknown"},
@@ -547,6 +569,7 @@ func TestProviderSpecific_ReadTranslation_UnknownFails(t *testing.T) {
 
 // NEGATIVE: empty actions AND missing path/condition — both errors returned.
 func TestValidateBehaviorModel_EmptyActions_AndMissingCondition_BothErrors(t *testing.T) {
+	t.Parallel()
 	b := &BehaviorModel{
 		Name:    strVal("bad"),
 		Actions: &BehaviorActionV2ResourceModel{},
@@ -570,6 +593,7 @@ func TestValidateBehaviorModel_EmptyActions_AndMissingCondition_BothErrors(t *te
 // Fields that are intentionally skipped (not supported by the new service config
 // API) are noted in comments below.
 func TestBehaviorAction_RoundTrip_AllActions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	originList := []types.String{types.StringValue("https://example.com")}
@@ -1131,6 +1155,7 @@ func containsStr(s, substr string) bool {
 //	"include" + params → backend "include" + params
 //	"exclude" + params → backend "exclude" + params
 func TestCacheKeyQueryStrings_WriteTranslation(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		tfType        string
 		params        []string
@@ -1212,6 +1237,7 @@ func TestCacheKeyQueryStrings_WriteTranslation(t *testing.T) {
 //	backend "include" + params → TF "include"
 //	backend "exclude" + params → TF "exclude"
 func TestCacheKeyQueryStrings_ReadTranslation(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		apiMode    string
 		apiParams  []string
@@ -1272,6 +1298,7 @@ func TestCacheKeyQueryStrings_ReadTranslation(t *testing.T) {
 
 // eq / ne must start with "/".
 func TestValidateBehaviorCondition_Path_EQ_NoSlash(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "eq", []string{"api/foo"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1280,6 +1307,7 @@ func TestValidateBehaviorCondition_Path_EQ_NoSlash(t *testing.T) {
 }
 
 func TestValidateBehaviorCondition_Path_NE_NoSlash(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "ne", []string{"noslash"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1288,6 +1316,7 @@ func TestValidateBehaviorCondition_Path_NE_NoSlash(t *testing.T) {
 }
 
 func TestValidateBehaviorCondition_Path_Match_NoSlash(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "match", []string{"api/*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1297,6 +1326,7 @@ func TestValidateBehaviorCondition_Path_Match_NoSlash(t *testing.T) {
 
 // eq with "*" is forbidden.
 func TestValidateBehaviorCondition_Path_EQ_StarForbidden(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "eq", []string{"/api/*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1306,6 +1336,7 @@ func TestValidateBehaviorCondition_Path_EQ_StarForbidden(t *testing.T) {
 
 // match with "*" is allowed (wildcard pattern).
 func TestValidateBehaviorCondition_Path_Match_StarAllowed(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "match", []string{"/api/*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) != 0 {
@@ -1315,6 +1346,7 @@ func TestValidateBehaviorCondition_Path_Match_StarAllowed(t *testing.T) {
 
 // eq with valid path — OK.
 func TestValidateBehaviorCondition_Path_EQ_OK(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "eq", []string{"/api/v1/resource"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) != 0 {
@@ -1324,6 +1356,7 @@ func TestValidateBehaviorCondition_Path_EQ_OK(t *testing.T) {
 
 // eq path exceeding 255 chars.
 func TestValidateBehaviorCondition_Path_EQ_TooLong(t *testing.T) {
+	t.Parallel()
 	longPath := "/" + strings.Repeat("a", 255)
 	expr := simpleBehaviorConditionExpr("http.request.path", "eq", []string{longPath}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
@@ -1334,6 +1367,7 @@ func TestValidateBehaviorCondition_Path_EQ_TooLong(t *testing.T) {
 
 // regex — valid.
 func TestValidateBehaviorCondition_Path_Regex_OK(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "regex", []string{"^/api/.*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) != 0 {
@@ -1343,6 +1377,7 @@ func TestValidateBehaviorCondition_Path_Regex_OK(t *testing.T) {
 
 // not_regex — valid.
 func TestValidateBehaviorCondition_Path_NotRegex_OK(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "not_regex", []string{"^/static/.*"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) != 0 {
@@ -1352,6 +1387,7 @@ func TestValidateBehaviorCondition_Path_NotRegex_OK(t *testing.T) {
 
 // regex — invalid pattern.
 func TestValidateBehaviorCondition_Path_Regex_Invalid(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "regex", []string{"[unclosed"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1361,6 +1397,7 @@ func TestValidateBehaviorCondition_Path_Regex_Invalid(t *testing.T) {
 
 // in — valid paths (no leading slash required by backend for "in").
 func TestValidateBehaviorCondition_Path_In_OK(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "in", []string{"/a", "/b"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) != 0 {
@@ -1370,6 +1407,7 @@ func TestValidateBehaviorCondition_Path_In_OK(t *testing.T) {
 
 // matches_one_of with invalid chars.
 func TestValidateBehaviorCondition_Path_MatchesOneOf_InvalidChars(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "matches_one_of", []string{"/api/ bad"}, "")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1379,6 +1417,7 @@ func TestValidateBehaviorCondition_Path_MatchesOneOf_InvalidChars(t *testing.T) 
 
 // field_key forbidden on non-collection field.
 func TestValidateBehaviorCondition_NonCollection_FieldKeyForbidden(t *testing.T) {
+	t.Parallel()
 	expr := simpleBehaviorConditionExpr("http.request.path", "eq", []string{"/api"}, "should-not-be-set")
 	errs := ValidateBehaviorConditionModel(expr, "b[0]")
 	if len(errs) == 0 {
@@ -1396,7 +1435,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "desc"
 	config = {
        	origins = [
@@ -1470,7 +1509,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -1715,7 +1754,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "desc"
 	config = {
 		origins = [
@@ -1751,7 +1790,7 @@ func testAccBehaviorLifecycleConfig(idx int, resourceName, certId string, behavi
 	header := fmt.Sprintf(`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "behavior lifecycle test"
 	config = {`, resourceName, resourceName, certId)
 
@@ -1845,7 +1884,7 @@ resource "ioriver_service" "%s" {
 						{ status_code = "404", response_url = "https://example.com/404.html" },
 					]
 					status_codes_ttl = [
-						{ status_code = "5xx", cache_behavior = "CACHE", cache_ttl = 0 },
+						{ status_code = "5xx", cache_behavior = "CACHE", cache_ttl = 10 },
 						{ status_code = "4xx", cache_behavior = "CACHE", cache_ttl = 10 },
 					]
 
@@ -1951,7 +1990,7 @@ resource "ioriver_service" "%s" {
 							{ status_code = "404", cache_ttl = 3600 }
 						]
 						status_codes_ttl = [
-							{ status_code = "5xx", cache_behavior = "CACHE", cache_ttl = 0 },
+							{ status_code = "5xx", cache_behavior = "CACHE", cache_ttl = 10 },
 							{ status_code = "4xx", cache_behavior = "CACHE", cache_ttl = 10 },
 						]
 

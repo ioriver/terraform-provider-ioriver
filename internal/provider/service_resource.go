@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -61,6 +64,7 @@ type ServiceResourceModel struct {
 	Description        types.String             `tfsdk:"description"`
 	Cname              types.String             `tfsdk:"cname"`
 	Certificate        types.String             `tfsdk:"certificate"`
+	Certificates       types.Set                `tfsdk:"certificates"`
 	ConfigObject       types.Object             `tfsdk:"config"`
 	Config             *ServiceConfigModel      `tfsdk:"-"` // Internal typed view of ConfigObject
 	updateTransformCtx *ServiceTransformContext // No tfsdk tag - not in schema!
@@ -123,10 +127,27 @@ func (r *ServiceResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional:            true,
 			},
 			"certificate": schema.StringAttribute{
-				MarkdownDescription: "ID of the certificate to be used with the service",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+				MarkdownDescription: "ID of the certificate to be used with the service. " +
+					"Deprecated: use `certificates` instead. " +
+					"Mutually exclusive with `certificates`.",
+				Optional:           true,
+				DeprecationMessage: "Use `certificates` instead. This field will be removed in a future version.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("certificates"),
+					),
+				},
+			},
+			"certificates": schema.SetAttribute{
+				ElementType: types.StringType,
+				MarkdownDescription: "List of certificate IDs to be used with the service. " +
+					"Mutually exclusive with `certificate`.",
+				Optional: true,
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(
+						path.MatchRoot("certificate"),
+					),
+					setvalidator.SizeAtLeast(1),
 				},
 			},
 			"cname": schema.StringAttribute{
@@ -426,7 +447,7 @@ func (ServiceResource) read(ctx context.Context, client *ioriver.IORiverClient, 
 }
 
 func (ServiceResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
-	return UpdateServiceWithConfig(client, obj.(ServiceWithConfig))
+	return UpdateServiceWithConfig(ctx, client, obj.(ServiceWithConfig))
 }
 
 func (ServiceResource) delete(ctx context.Context, client *ioriver.IORiverClient, id interface{}) error {
@@ -468,13 +489,22 @@ func (ServiceResource) resourceToObj(ctx context.Context, data interface{}) (int
 		d.updateTransformCtx.SecurityConfigured = !d.Config.Security.IsNull() && !d.Config.Security.IsUnknown()
 	}
 
-	certificate := d.Certificate.ValueString()
+	// Resolve the desired certificate list from either the legacy single-cert
+	// field or the new multi-cert list (mutually exclusive, validated in ValidateConfig).
+	// resourceToObj is only called at apply time, so all cert IDs are known here.
+	desiredCerts, err := resolveDesiredCertificates(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	if desiredCerts == nil {
+		tflog.Warn(ctx, "[resourceToObj] resolveDesiredCertificates returned nil at apply time — cert IDs were unexpectedly unknown; proceeding with empty list")
+	}
 
 	return ServiceWithConfig{
 		Id:           d.Id.ValueString(),
 		Name:         d.Name.ValueString(),
 		Description:  d.Description.ValueString(),
-		Certificates: []string{certificate},
+		Certificates: desiredCerts,
 		Config:       configMap,
 	}, nil
 }
@@ -519,11 +549,37 @@ func (ServiceResource) objToResource(ctx context.Context, obj interface{}, data 
 		tflog.Debug(ctx, "[objToResource] ✓ configModel populated")
 	}
 
+	// Populate cert fields in state mirroring what the user's HCL uses, so we
+	// don't introduce spurious plan diffs.
+	//   - Prior state has `certificate` set → legacy path; leave `certificates` null.
+	//   - Otherwise (new path or import)    → populate `certificates` set; leave `certificate` null.
+	useLegacyCertField := !d.Certificate.IsNull() && !d.Certificate.IsUnknown()
+
+	// This avoids provider drift from null -> empty set in plan/apply.
+	var stateCertificate types.String = types.StringNull()
+	var stateCertificates types.Set = types.SetNull(types.StringType)
+
+	if useLegacyCertField {
+		if len(service.Certificates) > 0 {
+			stateCertificate = types.StringValue(service.Certificates[0])
+		}
+	} else {
+		if (!d.Certificates.IsNull() && !d.Certificates.IsUnknown()) || len(service.Certificates) > 0 {
+			// `certificates` is a set — Terraform compares by value, no ordering logic needed.
+			setVal, diags := types.SetValueFrom(ctx, types.StringType, service.Certificates)
+			if diags.HasError() {
+				return nil, fmt.Errorf("objToResource: building certificates set: %s", diags)
+			}
+			stateCertificates = setVal
+		}
+	}
+
 	return ServiceResourceModel{
 		Id:           types.StringValue(service.Id),
 		Name:         types.StringValue(service.Name),
 		Description:  types.StringValue(service.Description),
-		Certificate:  types.StringValue(service.Certificates[0]),
+		Certificate:  stateCertificate,
+		Certificates: stateCertificates,
 		Cname:        types.StringValue(service.Cname),
 		ConfigObject: configObject,
 		Config:       configModel,
@@ -587,7 +643,6 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// --- Domain mappings must reference a known origin name ---
-	// Collect origin names defined in config.origins.
 	originNames := map[string]struct{}{}
 	if !data.Config.Origins.IsNull() && !data.Config.Origins.IsUnknown() {
 		origins, oDiags := ListElementsAsDiags[OriginModel](ctx, data.Config.Origins)
@@ -678,7 +733,6 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// --- stream_logs.log_destination must reference a known log destination name ---
-	// Collect log destination names from config.log_destinations.
 	logDestNames := map[string]struct{}{}
 	if !data.Config.LogDestinations.IsNull() && !data.Config.LogDestinations.IsUnknown() {
 		logDestinations, ldDiags := ListElementsAsDiags[LogDestinationModel](ctx, data.Config.LogDestinations)
@@ -737,4 +791,43 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 			}
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// resolveDesiredCertificates returns the slice of certificate IDs the user
+// wants on the service, normalising the two mutually-exclusive HCL fields:
+//   - `certificate` (legacy, single string) → single-element slice
+//   - `certificates` (set of strings)       → all elements from the set
+func resolveDesiredCertificates(ctx context.Context, d ServiceResourceModel) ([]string, error) {
+	if !d.Certificate.IsNull() && !d.Certificate.IsUnknown() {
+		v := d.Certificate.ValueString()
+		if v == "" {
+			return nil, fmt.Errorf("certificate must not be empty")
+		}
+		return []string{v}, nil
+	}
+
+	if !d.Certificates.IsNull() && !d.Certificates.IsUnknown() {
+		var elems []types.String
+		if diags := d.Certificates.ElementsAs(ctx, &elems, false); diags.HasError() {
+			return nil, fmt.Errorf("resolveDesiredCertificates: %s", diags)
+		}
+		ids := make([]string, 0, len(elems))
+		for _, e := range elems {
+			if e.IsUnknown() {
+				// Some cert IDs are not yet known (plan phase with references to
+				// other resources). Return nil so the caller can skip API calls.
+				return nil, nil
+			}
+			ids = append(ids, e.ValueString())
+		}
+		if len(ids) == 0 {
+			return nil, fmt.Errorf("certificates must contain at least one certificate ID")
+		}
+		return ids, nil
+	}
+	return nil, nil
 }

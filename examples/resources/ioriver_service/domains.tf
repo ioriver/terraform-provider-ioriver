@@ -4,8 +4,8 @@
 # 1. Single domain mapped to one origin (default path pattern /*)
 # ---------------------------------------------------------------------------
 resource "ioriver_service" "single_domain" {
-  name        = "single-domain-service"
-  certificate = ioriver_certificate.cert.id
+  name         = "single-domain-service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

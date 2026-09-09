@@ -2,9 +2,9 @@
 # One HTTPS origin, one domain, 60-minute edge cache, compression enabled.
 
 resource "ioriver_service" "example" {
-  name        = "my-service"
-  description = "My IO River CDN service"
-  certificate = ioriver_certificate.cert.id
+  name         = "my-service"
+  description  = "My IO River CDN service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

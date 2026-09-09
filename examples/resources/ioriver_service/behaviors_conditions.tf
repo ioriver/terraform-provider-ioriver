@@ -33,8 +33,8 @@
 #   contains_word, not_contains_word
 
 resource "ioriver_service" "condition_examples" {
-  name        = "condition-matching-service"
-  certificate = ioriver_certificate.cert.id
+  name         = "condition-matching-service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

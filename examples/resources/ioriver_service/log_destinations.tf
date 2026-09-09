@@ -9,8 +9,8 @@
 # stored in Terraform state or returned in plan output.
 
 resource "ioriver_service" "log_destinations_example" {
-  name        = "log-destinations-service"
-  certificate = ioriver_certificate.cert.id
+  name         = "log-destinations-service"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

@@ -14,7 +14,7 @@ func testAccServiceConfigOriginSetsSteps(idx int, resourceName string, certId st
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [
@@ -54,7 +54,7 @@ resource "ioriver_service" "%s" {
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [
@@ -95,7 +95,7 @@ resource "ioriver_service" "%s" {
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [
@@ -140,7 +140,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origins = [
@@ -192,7 +192,7 @@ locals {
 
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origins = [
@@ -222,7 +222,7 @@ resource "ioriver_service" "%s" {
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [
@@ -280,7 +280,7 @@ resource "ioriver_service" "%s" {
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [
@@ -338,7 +338,7 @@ resource "ioriver_service" "%s" {
 		`
 resource "ioriver_service" "%s" {
 	name        = "%s"
-	certificate = "%s"
+	certificates = ["%s"]
 	description = "origin-set acceptance test"
 	config = {
 		origin_sets = [

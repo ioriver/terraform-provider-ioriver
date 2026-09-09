@@ -52,6 +52,7 @@ resource "%s" "%s" {
 }
 
 func TestComputeModel_MapRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	routesOne, diags := types.SetValueFrom(ctx, types.StringType, []string{"example.com/some/api", "static.example.com/*"})
@@ -144,6 +145,7 @@ func TestComputeModel_MapRoundTrip(t *testing.T) {
 }
 
 func TestComputeModel_NilAndUnknownHandling(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	var nilModel *ComputeModel

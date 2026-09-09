@@ -24,6 +24,7 @@ import (
 //  8. Apply:     bump credentials_version and provide new creds (rotation)
 //  9. Import:    round-trip state (WriteOnly creds must round-trip cleanly)
 func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
+	t.Parallel()
 	var service ServiceWithConfig
 	var testedObj TestedService
 
@@ -105,6 +106,9 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
+					"certificate",
+					"certificates.#",
+					"certificates.0",
 					"config.origins.0.name",
 					"config.origins.0.s3_origin.credentials_version",
 					"config.origins.0.s3_origin.s3_aws_key",

@@ -93,8 +93,8 @@
 # └─────────────────────────────────────────────────────────────────────────────┘
 
 resource "ioriver_service" "waf_full" {
-  name        = "waf-full"
-  certificate = ioriver_certificate.cert.id
+  name         = "waf-full"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [
@@ -793,8 +793,8 @@ resource "ioriver_service" "waf_full" {
 #   block  log  challenge  interactive_challenge
 
 resource "ioriver_service" "waf_full" {
-  name        = "waf-full"
-  certificate = ioriver_certificate.cert.id
+  name         = "waf-full"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     origins = [

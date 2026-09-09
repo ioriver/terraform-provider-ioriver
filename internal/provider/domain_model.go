@@ -28,7 +28,12 @@ type DomainModel struct {
 	Mappings types.List   `tfsdk:"mappings"`
 }
 
+var useIORiverDomainPlaceholder string = "use-ioriver-domain"
+
 func (d DomainModel) GetName() string {
+	if !d.UUId.IsNull() && !d.UUId.IsUnknown() && d.UUId.ValueString() != "" {
+		return d.UUId.ValueString()
+	}
 	return d.Domain.ValueString()
 }
 
@@ -57,12 +62,12 @@ func DomainAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
 			Computed: true,
-			// We Do NOT use UseStateForUnknown() here.
-			// The DomainListPlanModifier resolves uuid from state by domain name
+			// UUID is rebound by DomainListPlanModifier using domain identity.
 		},
 		"domain": schema.StringAttribute{
 			MarkdownDescription: "Domain name",
-			Required:            true,
+			Optional:            true,
+			Computed:            true,
 			Validators: []validator.String{
 				stringvalidator.LengthBetween(1, 253),
 			},
@@ -121,13 +126,15 @@ func DomainsToMap(ctx context.Context, domains *[]DomainModel, updateTransformCt
 	if updateTransformCtx.DesiredMappingOrder == nil {
 		updateTransformCtx.DesiredMappingOrder = map[string][]string{}
 	}
-	for _, domain := range *domains {
+	for i := range *domains {
+		domain := &(*domains)[i]
 		domainApiMap, err := domain.ModelToMap(ctx, updateTransformCtx.OriginNamesToUUIDs, originSetNamesToUUIDs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert domain: %w", err)
 		}
 		domainsArray = append(domainsArray, domainApiMap)
-		newDesiredOrder = append(newDesiredOrder, domain.Domain.ValueString())
+		domainKey := domain.UUId.ValueString()
+		newDesiredOrder = append(newDesiredOrder, domainKey)
 		// Record the desired mapping order for this domain (by path_pattern — unique per mapping).
 		mappingModels := []DomainMappingModelV1{}
 		if !domain.Mappings.IsNull() && !domain.Mappings.IsUnknown() {
@@ -140,7 +147,7 @@ func DomainsToMap(ctx context.Context, domains *[]DomainModel, updateTransformCt
 		for _, m := range mappingModels {
 			mappingOrder = append(mappingOrder, m.PathPattern.ValueString())
 		}
-		updateTransformCtx.DesiredMappingOrder[domain.Domain.ValueString()] = mappingOrder
+		updateTransformCtx.DesiredMappingOrder[domainKey] = mappingOrder
 	}
 	updateTransformCtx.DesiredDomainOrder = newDesiredOrder
 
@@ -154,13 +161,22 @@ func (d *DomainModel) ModelToMap(ctx context.Context, originNamesToUUIDs map[str
 
 	domainMap := make(map[string]interface{})
 
-	// Send the UUID so the backend can update the existing domain (not create a new one).
+	// Generate UUID if not present (for new origins)
+	if d.UUId.IsNull() || d.UUId.IsUnknown() {
+		d.UUId = types.StringValue(GenerateUUID())
+	}
+
+	// Send UUID only when known from state.
 	if !d.UUId.IsNull() && !d.UUId.IsUnknown() && d.UUId.ValueString() != "" {
 		domainMap["uuid"] = d.UUId.ValueString()
 	}
 
-	// convert domain - domain is required so should always have a value
-	domainMap["domain"] = d.Domain.ValueString()
+	if !d.Domain.IsNull() && !d.Domain.IsUnknown() && d.Domain.ValueString() != "" {
+		domainMap["domain"] = d.Domain.ValueString()
+	} else {
+		// backend provides a domain
+		domainMap["domain"] = useIORiverDomainPlaceholder
+	}
 
 	// convert aliases from types.List to []string
 	aliasesArray := []string{}
@@ -250,7 +266,7 @@ func DomainsFromMap(ctx context.Context, domainsArray []interface{}, updateTrans
 	reordered := alignItems(domains, *desiredDomainOrder)
 	newDesiredOrder := make([]string, 0, len(reordered))
 	for _, d := range reordered {
-		newDesiredOrder = append(newDesiredOrder, d.Domain.ValueString())
+		newDesiredOrder = append(newDesiredOrder, d.UUId.ValueString())
 	}
 	*desiredDomainOrder = newDesiredOrder
 
@@ -305,7 +321,7 @@ func domainFromMap(ctx context.Context, domainMap map[string]interface{}, uuidTo
 
 	// Reorder mappings to match the HCL-declared order (by path_pattern — unique within a domain).
 	if updateTransformCtx != nil && updateTransformCtx.DesiredMappingOrder != nil {
-		if desiredOrder, ok := updateTransformCtx.DesiredMappingOrder[domainModel.Domain.ValueString()]; ok {
+		if desiredOrder, ok := updateTransformCtx.DesiredMappingOrder[domainModel.UUId.ValueString()]; ok {
 			mappingModels = alignItems(mappingModels, desiredOrder)
 		}
 	}

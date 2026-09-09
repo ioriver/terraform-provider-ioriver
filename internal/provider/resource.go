@@ -2,19 +2,22 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
-// protect parallel resource modification using this lock
-var mutex sync.Mutex
+const maxConcurrentIORiverOperations = 1
+
+var operationSem = make(chan struct{}, maxConcurrentIORiverOperations)
 
 type Resource interface {
 	create(ctx context.Context, client *ioriver.IORiverClient, newObj interface{}) (interface{}, error)
@@ -48,8 +51,7 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 	} else {
 		operation = func() (interface{}, error) { return r.update(ctx, client, newObj) }
 	}
-	obj, err := performOperation(func() (interface{}, error) { return operation() })
-
+	obj, err := performOperation(ctx, func() (interface{}, error) { return operation() })
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating resource", "Could not create resource, unexpected error: "+err.Error())
 		return nil
@@ -107,7 +109,7 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object: %#v", obj))
 
 	updateOp := func() (interface{}, error) { return r.update(ctx, client, obj) }
-	updatedObj, err := performOperation(func() (interface{}, error) { return updateOp() })
+	updatedObj, err := performOperation(ctx, func() (interface{}, error) { return updateOp() })
 
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating resource", "Could not update resource, unexpected error: "+err.Error())
@@ -133,11 +135,36 @@ func resourceDelete(client *ioriver.IORiverClient, ctx context.Context, req reso
 
 	// perform the delete operation
 	deleteOp := func() (interface{}, error) { return nil, r.delete(ctx, client, id) }
-	_, err := performOperation(func() (interface{}, error) { return deleteOp() })
+	_, err := performOperation(ctx, func() (interface{}, error) { return deleteOp() })
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete resource, got error: %s", err))
 	}
+}
+
+func formatError(err error) (string, string) {
+	var apiErr *ioriver.APIError
+	if errors.As(err, &apiErr) {
+		detail := fmt.Sprintf("Unable to create resource. HTTP status: %s", apiErr.Status)
+
+		if apiErr.StatusCode != 0 {
+			detail += fmt.Sprintf(" (%d)", apiErr.StatusCode)
+		}
+
+		if strings.TrimSpace(apiErr.RequestID) != "" {
+			detail += fmt.Sprintf(". Request ID: %s", strings.TrimSpace(apiErr.RequestID))
+		} else {
+			detail += ". Request ID: unknown"
+		}
+
+		if strings.TrimSpace(apiErr.Details) != "" {
+			detail += fmt.Sprintf(". Details: %s", strings.TrimSpace(apiErr.Details))
+		}
+
+		return "Request failed", detail
+	}
+
+	return "Client Error", fmt.Sprintf("Unable to create resource, got error: %s", err)
 }
 
 func serviceResourceImport(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -175,8 +202,35 @@ func ConfigureBase(ctx context.Context, req resource.ConfigureRequest, resp *res
 }
 
 // ensures that IO River operations are done sequentially
-func performOperation(operation func() (interface{}, error)) (interface{}, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	return operation()
+func performOperation(ctx context.Context, operation func() (interface{}, error)) (interface{}, error) {
+	select {
+	case operationSem <- struct{}{}:
+		defer func() { <-operationSem }()
+	case <-ctx.Done():
+		// User canceled the run.
+		return nil, ctx.Err()
+	}
+
+	const retryTimeout = 60 * time.Minute
+	var result interface{}
+
+	err := retry.RetryContext(ctx, retryTimeout, func() *retry.RetryError {
+		obj, opErr := operation()
+		if opErr == nil {
+			result = obj
+			return nil
+		}
+
+		var apiErr *ioriver.APIError
+		if errors.As(opErr, &apiErr) && apiErr.StatusCode == 409 {
+			return retry.RetryableError(opErr)
+		}
+
+		return retry.NonRetryableError(opErr)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

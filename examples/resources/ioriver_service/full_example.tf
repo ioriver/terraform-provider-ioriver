@@ -15,9 +15,9 @@ locals {
 }
 
 resource "ioriver_service" "full_example" {
-  name        = "full-example-service"
-  description = "Complete IO River CDN service configuration"
-  certificate = ioriver_certificate.cert.id
+  name         = "full-example-service"
+  description  = "Complete IO River CDN service configuration"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
 

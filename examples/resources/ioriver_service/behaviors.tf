@@ -7,8 +7,8 @@
 # advanced matching (see behaviors_conditions.tf).
 
 resource "ioriver_service" "all_actions" {
-  name        = "all-actions-reference"
-  certificate = ioriver_certificate.cert.id
+  name         = "all-actions-reference"
+  certificates = [ioriver_certificate.cert.id]
 
   config = {
     behaviors = {

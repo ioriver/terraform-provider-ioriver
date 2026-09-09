@@ -30,7 +30,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -55,7 +55,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -89,7 +89,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -114,7 +114,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -164,7 +164,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -232,7 +232,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -300,7 +300,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -365,7 +365,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
@@ -430,7 +430,7 @@ locals {
 
 resource "ioriver_service" "%[1]s" {
 	name        = "%[1]s"
-	certificate = "%[2]s"
+	certificates = ["%[2]s"]
 	description = "log dest flow test"
 
 	config = {
