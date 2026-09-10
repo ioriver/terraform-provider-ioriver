@@ -422,6 +422,10 @@ Required:
 - `response_url` (String) URL of the custom response page
 - `status_code` (String) HTTP status code or range (e.g. `404`, `4xx`, `5xx`)
 
+Optional:
+
+- `replace_response_code` (String) Optional HTTP status code to return to the client instead of the original status code.
+
 
 <a id="nestedatt--config--behaviors--custom--actions--host_header"></a>
 ### Nested Schema for `config.behaviors.custom.actions.host_header`
@@ -881,6 +885,10 @@ Required:
 
 - `response_url` (String) URL of the custom response page
 - `status_code` (String) HTTP status code or range (e.g. `404`, `4xx`, `5xx`)
+
+Optional:
+
+- `replace_response_code` (String) Optional HTTP status code to return to the client instead of the original status code.
 
 
 <a id="nestedatt--config--behaviors--default--actions--host_header"></a>

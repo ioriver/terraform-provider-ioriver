@@ -89,7 +89,7 @@ var WafConditionSpec = &ConditionSpec{
 		"client.ip.address":        {Kind: kindIP, Operators: *set.From[string]([]string{"ip_match", "not_ip_match"})},
 		"client.ip.asn":            {Kind: kindInt, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "lt", "le", "gt", "ge"})},
 		"client.geo.country":       {Kind: kindCountry, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in"})},
-		"action_token.score":       {Kind: kindFloat, RequiresFieldKey: true, NumericRange: &range01, Operators: *set.From[string]([]string{"lt", "le", "gt", "ge", "eq", "ne"})},
+		"action_token.score":       {Kind: kindFloat, RequiresFieldKey: true, NumericRange: &range01, Operators: *set.From[string]([]string{"lt", "le", "gt", "ge"})},
 		"bot_validation.result":    {Kind: kindPassFail, Operators: *set.From[string]([]string{"eq", "ne"})},
 		"client.ja3":               {Kind: kindString, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in"})},
 		"client.ja4":               {Kind: kindString, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in"})},
