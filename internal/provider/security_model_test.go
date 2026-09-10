@@ -1361,12 +1361,12 @@ resource "ioriver_service" "%s" {
             or = [{ and = [{ field = "client.geo.country", operator = "not_in", values = ["US", "GB", "DE"] }] }]
           }
         },
-        # 12. action_token.score + eq → block
+        # 12. action_token.score + ge → block
         {
-          name   = "cond-bot-score-eq"
+          name   = "cond-bot-score-ge"
           action = "block"
           condition = {
-            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "eq", values = [0.5] }] }]
+            or = [{ and = [{ field = "action_token.score", field_key = "web", operator = "ge", values = [0.5] }] }]
           }
         },
         # 13. action_token.score + gt → challenge  (numeric comparison operators: lt, le, gt, ge)
