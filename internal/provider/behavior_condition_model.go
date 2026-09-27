@@ -54,8 +54,8 @@ var BehaviorConditionSpec = &ConditionSpec{
 		"does_not_exist":        {Arity: arityNone},
 	},
 	Fields: map[string]FieldSpec{
-		"http.request.domain":       {Kind: kindString, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "match", "not_match", "matches_one_of", "does_not_match_any_of", "regex", "not_regex", "exists", "does_not_exist"})},
-		"http.request.path":         {Kind: kindPath, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "match", "not_match", "matches_one_of", "does_not_match_any_of", "regex", "not_regex", "exists", "does_not_exist"})},
+		"http.request.domain":       {Kind: kindString, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "match", "not_match", "matches_one_of", "does_not_match_any_of", "regex", "not_regex"})},
+		"http.request.path":         {Kind: kindPath, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "match", "not_match", "matches_one_of", "does_not_match_any_of", "regex", "not_regex"})},
 		"http.request.method":       {Kind: kindString, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in"})},
 		"http.request.header":       {Kind: kindString, RequiresFieldKey: true, Operators: *set.From[string]([]string{"eq", "ne", "in", "not_in", "match", "not_match", "matches_one_of", "does_not_match_any_of", "regex", "not_regex", "exists", "does_not_exist"})},
 		"http.response.status_code": {Kind: kindInt, Operators: *set.From[string]([]string{"eq", "ne", "lt", "le", "gt", "ge", "in", "not_in"})},

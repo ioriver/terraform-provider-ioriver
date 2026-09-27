@@ -65,12 +65,6 @@ func TestValidateCondition_ExistsRejectsValue(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:        "behavior",
-			spec:        BehaviorConditionSpec,
-			cond:        mkCond(t, "http.request.path", "exists", ptr("/x"), nil, nil),
-			errContains: "must not be given a value",
-		},
-		{
 			name:        "waf",
 			spec:        WafConditionSpec,
 			cond:        mkCond(t, "http.request.header", "exists", ptr("x"), nil, ptr("X-Test")),
@@ -478,7 +472,7 @@ func TestValidateCondition_PrecedenceAndArityBranches(t *testing.T) {
 		{
 			name:          "arity none with no value passes",
 			spec:          BehaviorConditionSpec,
-			cond:          mkCond(t, "http.request.path", "exists", nil, []string{}, nil),
+			cond:          mkCond(t, "http.request.header", "exists", nil, []string{}, ptr("X-Test")),
 			expectNoError: true,
 		},
 		{
@@ -698,8 +692,8 @@ func testAccBehaviorConditionAllOperators(name, certId string) string {
 		`{ name = "b-not-match", condition = { or = [{ and = [{ field = "http.request.path", operator = "not_match", value = "/private/*" }] }] }, actions = { cache_behavior = "BYPASS" } }`,
 		`{ name = "b-matches-one-of", condition = { or = [{ and = [{ field = "http.request.domain", operator = "matches_one_of", values = ["example.com", "api.example.com"] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
 		`{ name = "b-does-not-match-any", condition = { or = [{ and = [{ field = "http.request.domain", operator = "does_not_match_any_of", values = ["blocked.example.com", "deny.example.com"] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
-		`{ name = "b-exists", condition = { or = [{ and = [{ field = "http.request.domain", operator = "exists", values = [] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
-		`{ name = "b-does-not-exist", condition = { or = [{ and = [{ field = "http.request.domain", operator = "does_not_exist", values = [] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
+		`{ name = "b-exists", condition = { or = [{ and = [{ field = "http.request.header", field_key = "X-Test", operator = "exists", values = [] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
+		`{ name = "b-does-not-exist", condition = { or = [{ and = [{ field = "http.request.header", field_key = "X-Test", operator = "does_not_exist", values = [] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
 		`{ name = "b-client-ip-comma", condition = { or = [{ and = [{ field = "client.ip", operator = "in", values = ["10.0.0.1", "10.0.0.2"] }] }] }, actions = { cache_behavior = "BYPASS" } }`,
 		`{ name = "b-bool", condition = { or = [{ and = [{ field = "client.device.is_mobile", operator = "eq", value = "true" }] }] }, actions = { cache_behavior = "BYPASS" } }`,
 		`{ name = "b-int-list", condition = { or = [{ and = [{ field = "http.response.status_code", operator = "in", values = ["404", "503"] }] }] }, actions = { cache_behavior = "BYPASS" } }`,

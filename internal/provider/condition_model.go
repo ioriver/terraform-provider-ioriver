@@ -60,7 +60,7 @@ func conditionValuesAttr() schema.SetAttribute {
 	return schema.SetAttribute{
 		MarkdownDescription: "List of values to match against.\n" +
 			"  - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `[\"10.0.0.0/8\", \"1.2.3.4\"]`).\n" +
-			"  - For `exists`/`does_not_exist` set an empty list (`[]`).\n" +
+			"  - `exists`/`does_not_exist` are supported only for collection fields (`http.request.header`, `http.response.header`, and `http.request.query_param`) and require `field_key`; set an empty list (`[]`).\n" +
 			"  - For all other operators provide one or more string values. \n  -" +
 			"  - Mutually exclusive with `value`.",
 		Optional:    true,

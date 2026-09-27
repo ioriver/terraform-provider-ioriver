@@ -2422,7 +2422,7 @@ resource "ioriver_service" "%s" {
 							{ and = [{ field = "http.response.status_code", operator = "eq", %s }] },
 							{ and = [{ field = "http.request.path", operator = "match", %s }] },
 							{ and = [{ field = "http.request.method", operator = "in", values = ["GET", "POST"] }] },
-							{ and = [{ field = "http.request.domain", operator = "exists", values = [] }] }
+							{ and = [{ field = "http.request.header", field_key = "X-Test", operator = "exists", values = [] }] }
 						]
 					}
 					actions = {
