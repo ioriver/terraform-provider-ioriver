@@ -137,7 +137,7 @@ func wafConditionAttributes() map[string]schema.Attribute {
 				"  - **IP/CIDR:**\n" +
 				"    - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).\n" +
 				"  - **Existence** (set `value = []`):\n" +
-				"    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).\n" +
+				"    - `exists` / `does_not_exist` (collection field/header/cookie/param is present or absent; requires `field_key`).\n" +
 				"  - **Numeric** (use with `action_token.score`):\n" +
 				"    - `lt`, `le`, `gt`, `ge`. \n  -",
 			Required: true,

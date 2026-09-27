@@ -571,7 +571,7 @@ Optional:
 - `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
 - `values` (Set of String) List of values to match against.
   - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
-  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - `exists`/`does_not_exist` are supported only for collection fields (`http.request.header`, `http.response.header`, and `http.request.query_param`) and require `field_key`; set an empty list (`[]`).
   - For all other operators provide one or more string values. 
   -  - Mutually exclusive with `value`.
 
@@ -1484,7 +1484,7 @@ Required:
   - **IP/CIDR:**
     - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
   - **Existence** (set `value = []`):
-    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
+    - `exists` / `does_not_exist` (collection field/header/cookie/param is present or absent; requires `field_key`).
   - **Numeric** (use with `action_token.score`):
     - `lt`, `le`, `gt`, `ge`. 
   -
@@ -1498,7 +1498,7 @@ Optional:
 - `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
 - `values` (Set of String) List of values to match against.
   - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
-  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - `exists`/`does_not_exist` are supported only for collection fields (`http.request.header`, `http.response.header`, and `http.request.query_param`) and require `field_key`; set an empty list (`[]`).
   - For all other operators provide one or more string values. 
   -  - Mutually exclusive with `value`.
 
@@ -1586,7 +1586,7 @@ Required:
   - **IP/CIDR:**
     - `ip_match` / `not_ip_match` (use with `client.ip.address`; supply one or more CIDRs/IPs in `value`).
   - **Existence** (set `value = []`):
-    - `exists` / `does_not_exist` (field/header/cookie/param is present or absent).
+    - `exists` / `does_not_exist` (collection field/header/cookie/param is present or absent; requires `field_key`).
   - **Numeric** (use with `action_token.score`):
     - `lt`, `le`, `gt`, `ge`. 
   -
@@ -1600,7 +1600,7 @@ Optional:
 - `value` (String) Single-value shorthand for `values = ["..."]`. Mutually exclusive with `values`.
 - `values` (Set of String) List of values to match against.
   - For `ip_match`/`not_ip_match` provide CIDR blocks or individual IPs (e.g. `["10.0.0.0/8", "1.2.3.4"]`).
-  - For `exists`/`does_not_exist` set an empty list (`[]`).
+  - `exists`/`does_not_exist` are supported only for collection fields (`http.request.header`, `http.response.header`, and `http.request.query_param`) and require `field_key`; set an empty list (`[]`).
   - For all other operators provide one or more string values. 
   -  - Mutually exclusive with `value`.
 
