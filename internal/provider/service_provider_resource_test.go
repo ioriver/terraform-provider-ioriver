@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	ioriver "github.com/ioriver/ioriver-go"
@@ -13,6 +15,37 @@ import (
 )
 
 var spResourceType string = "ioriver_service_provider"
+
+func TestAkamaiStreamTypeMapsToServiceType(t *testing.T) {
+	if _, ok := akamaiSchemaAttrs["stream_type"]; !ok {
+		t.Fatal("expected Akamai custom data schema to expose stream_type")
+	}
+	if _, ok := akamaiSchemaAttrs["streamtype"]; ok {
+		t.Fatal("did not expect Akamai custom data schema to expose streamtype")
+	}
+
+	akamai, diags := types.ObjectValue(akamaiAttrTypes, map[string]attr.Value{
+		"property_group": types.StringValue("group-1"),
+		"contract_id":    types.StringValue("contract-1"),
+		"product":        types.StringValue("product-1"),
+		"cp_code":        types.StringValue("12345"),
+		"stream_type":    types.StringValue("HLS"),
+	})
+	if diags.HasError() {
+		t.Fatalf("failed to build Akamai custom data object: %v", diags)
+	}
+
+	wire, err := akamaiHCLToWire(akamai)
+	if err != nil {
+		t.Fatalf("akamaiHCLToWire error: %v", err)
+	}
+	if got := wire["service_type"]; got != "HLS" {
+		t.Errorf("expected backend service_type = HLS, got %q", got)
+	}
+	if _, ok := wire["stream_type"]; ok {
+		t.Error("did not expect Terraform attribute stream_type in backend payload")
+	}
+}
 
 func init() {
 	var testedObj TestedServiceProvider

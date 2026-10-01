@@ -267,7 +267,7 @@ var akamaiHCLToWireKey = map[string]string{
 	"contract_id":    "contract_id",
 	"product":        "product_id",
 	"cp_code":        "cp_code",
-	"stream_type":    "stream_type",
+	"stream_type":    "service_type",
 }
 
 var akamaiObjType = types.ObjectType{AttrTypes: akamaiAttrTypes}
