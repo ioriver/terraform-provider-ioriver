@@ -497,6 +497,38 @@ func TestLogDestination_CreateCredsEnforcement_CompatibleVersionWithoutCreds_Err
 	}
 }
 
+func TestLogDestination_CreateCredsEnforcement_AwsWithoutVersionOrCreds_Error(t *testing.T) {
+	data := makeLogDestPlanData("dest1", types.Int64Null(), false)
+
+	if err := validateCreateLogDestinationCredentials(data); err == nil {
+		t.Fatal("expected create-time error when aws_s3 has no credentials")
+	}
+}
+
+func TestLogDestination_CreateCredsEnforcement_CompatibleWithoutVersionOrCreds_Error(t *testing.T) {
+	data := makeCompatibleLogDestPlanData("dest1", types.Int64Null(), false)
+
+	if err := validateCreateLogDestinationCredentials(data); err == nil {
+		t.Fatal("expected create-time error when compatible_s3 has no credentials")
+	}
+}
+
+func TestLogDestination_CreateCredsEnforcement_AwsWithCreds_OK(t *testing.T) {
+	data := makeLogDestPlanData("dest1", types.Int64Value(1), true)
+
+	if err := validateCreateLogDestinationCredentials(data); err != nil {
+		t.Fatalf("expected create-time success with aws_s3 credentials, got: %v", err)
+	}
+}
+
+func TestLogDestination_CreateCredsEnforcement_CompatibleWithCreds_OK(t *testing.T) {
+	data := makeCompatibleLogDestPlanData("dest1", types.Int64Value(1), true)
+
+	if err := validateCreateLogDestinationCredentials(data); err != nil {
+		t.Fatalf("expected create-time success with compatible_s3 credentials, got: %v", err)
+	}
+}
+
 func TestLogDestination_UpdateCredsEnforcement_AwsVersionBumpedWithoutCreds_Error(t *testing.T) {
 	plan := makeLogDestPlanData("dest1", types.Int64Value(2), false)
 	state := makeLogDestStateData("dest1", types.Int64Value(1))

@@ -13,8 +13,8 @@ const testAccLogDestCredsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 // acceptance test. Parameters: resourceName, certId, logDestName1, logDestName2,
 // behaviorName.
 //
-//	Step 0:  one log dest, NO credentials (import-friendly baseline)
-//	Step 1:  same log dest, WITH credentials
+//	Step 0:  one log dest WITH credentials (create requires them)
+//	Step 1:  same log dest, credentials unchanged
 //	Step 1b: omit credentials — verifies API keeps existing ones when not sent
 //	Step 2:  add a behavior that streams to it
 //	Step 3:  add a second log dest, behavior still streams to first
@@ -22,7 +22,7 @@ const testAccLogDestCredsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 func testAccServiceConfigLogDestSteps(idx int, params ...any) string {
 
 	steps := []string{
-		// ── Step 0: one log destination, NO credentials ───────────────────────
+		// ── Step 0: one log destination, WITH credentials ─────────────────────
 		`
 locals {
 	log_dest_name_1 = "%[4]s"
@@ -41,6 +41,13 @@ resource "ioriver_service" "%[1]s" {
 					name   = "test-log-bucket"
 					path   = "/"
 					region = "us-east-1"
+					credentials_version = 1
+					credentials = {
+						access_key = {
+							access_key = "AKIAIOSFODNN7EXAMPLE"
+							secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+						}
+					}
 				}
 			}
 		]

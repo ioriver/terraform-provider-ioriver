@@ -238,6 +238,19 @@ func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// WriteOnly credentials are not present in the plan; merge them from the
+	// raw configuration before building the create request.
+	var configData ServiceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := configData.hydrateConfigModel(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to decode config", err.Error())
+		return
+	}
+	mergeWriteOnlyCredentialsFromConfig(&data, &configData, nil)
+
 	// This is used during this flow for storing adapting fields
 	data.updateTransformCtx = &ServiceTransformContext{
 		OriginNamesToUUIDs:  make(map[string]string),
@@ -354,13 +367,14 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 	// but only inject when credentials_version changed vs state.
 	var configData ServiceResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if err := configData.hydrateConfigModel(ctx); err != nil {
 		resp.Diagnostics.AddError("Failed to decode config", err.Error())
 		return
 	}
-	if !resp.Diagnostics.HasError() {
-		mergeWriteOnlyCredentialsFromConfig(&data, &configData, &stateData)
-	}
+	mergeWriteOnlyCredentialsFromConfig(&data, &configData, &stateData)
 
 	// Get/set transform context in state
 	existTransformCtxByteArray, diags := req.Private.GetKey(ctx, CurrentTransformCtxPrivateKeyName)

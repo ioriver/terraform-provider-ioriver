@@ -800,8 +800,8 @@ func TestAccIORiverService_DefaultBehaviorLifecycle(t *testing.T) {
 
 // TestAccIORiverService_WithLogDestinations is a full flow test:
 //
-//	Step 0:   Create service with one log destination (aws_s3), NO credentials.
-//	Step 1:   Same log destination, WITH credentials.
+//	Step 0:   Create service with one log destination (aws_s3) WITH credentials.
+//	Step 1:   Same log destination, credentials unchanged.
 //	Step 1b:  Omit credentials — tests optional-on-update semantics: does the API
 //	          accept an update without credentials after they've been set?
 //	          Pass → API keeps existing; Fail → must always include credentials in HCL.
@@ -836,14 +836,14 @@ func TestAccIORiverService_WithLogDestinations(t *testing.T) {
 			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
 		},
 		Steps: []resource.TestStep{
-			{ // Step 0: one log destination, no credentials
+			{ // Step 0: one log destination, with credentials
 				Config: testAccServiceConfigLogDestSteps(0, rndName, certId, logDestName1, logDestName2, behaviorName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "config.log_destinations.0.name", logDestName1),
 				),
 			},
-			{ // Step 1: same log destination, with credentials
+			{ // Step 1: same log destination, credentials unchanged
 				Config: testAccServiceConfigLogDestSteps(1, rndName, certId, logDestName1, logDestName2, behaviorName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
@@ -2459,7 +2459,7 @@ func TestAccIORiverService_LogDestinationCredsLifecycle_AwsS3(t *testing.T) {
 			{
 				Config:      testAccLogDestCredsConfigAWSNoCreds(rndName, certID, 1),
 				PlanOnly:    true,
-				ExpectError: regexp.MustCompile(`(?is)setting\s+aws_s3\.credentials_version\s+requires\s+credentials`),
+				ExpectError: regexp.MustCompile(`(?is)creating\s+aws_s3\s+requires\s+credentials\s+in\s+config`),
 			},
 			// Baseline apply: create with credentials.
 			{
@@ -2509,7 +2509,7 @@ func TestAccIORiverService_LogDestinationCredsLifecycle_CompatibleS3(t *testing.
 			{
 				Config:      testAccLogDestCredsConfigCompatibleNoCreds(rndName, certID, 1),
 				PlanOnly:    true,
-				ExpectError: regexp.MustCompile(`(?is)setting\s+compatible_s3\.credentials_version\s+requires\s+credentials`),
+				ExpectError: regexp.MustCompile(`(?is)creating\s+compatible_s3\s+requires\s+credentials\s+in\s+config`),
 			},
 			{
 				Config: testAccLogDestCredsConfigCompatibleWithCreds(rndName, certID, 1),
