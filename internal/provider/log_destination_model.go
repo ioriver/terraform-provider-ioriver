@@ -459,18 +459,14 @@ func validateCreateLogDestinationCredentials(data *ServiceResourceModel) error {
 		name := logDestinationNameOrUnnamed(ld.Name)
 
 		if ld.AwsS3 != nil {
-			if !ld.AwsS3.CredentialsVersion.IsNull() && !ld.AwsS3.CredentialsVersion.IsUnknown() {
-				if err := requireLogDestinationCredentials(name, "setting aws_s3.credentials_version", ld.AwsS3.Credentials); err != nil {
-					return err
-				}
+			if err := requireLogDestinationCredentials(name, "creating aws_s3", ld.AwsS3.Credentials); err != nil {
+				return err
 			}
 		}
 
 		if ld.CompatibleS3 != nil {
-			if !ld.CompatibleS3.CredentialsVersion.IsNull() && !ld.CompatibleS3.CredentialsVersion.IsUnknown() {
-				if err := requireLogDestinationCredentials(name, "setting compatible_s3.credentials_version", ld.CompatibleS3.Credentials); err != nil {
-					return err
-				}
+			if err := requireLogDestinationCredentials(name, "creating compatible_s3", ld.CompatibleS3.Credentials); err != nil {
+				return err
 			}
 		}
 	}
