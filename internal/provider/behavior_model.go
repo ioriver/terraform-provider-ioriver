@@ -455,7 +455,7 @@ type ServiceConfigAPIAction struct {
 	StreamLogs                *ServiceConfigAPIStreamLogs                `json:"logs_streaming,omitempty"`
 	Cors                      *ServiceConfigAPICors                      `json:"cors,omitempty"`
 	AllowedMethods            []string                                   `json:"allowed_methods,omitempty"`
-	AllowAccessOnlyFromIP     []ServiceConfigAPIIP                       `json:"allow_access_only_from_ip,omitempty"`
+	AllowAccessOnlyFromIP     []string                                   `json:"allow_access_only_from_ip,omitempty"`
 	DenyAccessByIP            []string                                   `json:"deny_access_by_ip,omitempty"`
 	DenyAccessByTime          []ServiceConfigAPITimeConstraint           `json:"deny_access_by_time,omitempty"`
 	UrlRewrites               []ServiceConfigAPIUrlRewrite               `json:"url_rewrites,omitempty"`
@@ -589,10 +589,6 @@ type ServiceConfigAPIStatusCodeCustomResponse struct {
 	Code                string `json:"code"`
 	ResponseURL         string `json:"response_url"`
 	ReplaceResponseCode *int   `json:"replace_response_code,omitempty"`
-}
-
-type ServiceConfigAPIIP struct {
-	IP string `json:"ip"`
 }
 
 type ServiceConfigAPIProviderSpecific struct {
@@ -2577,9 +2573,9 @@ func behaviorActionModelToAPIStruct(action BehaviorActionV2ResourceModel, apiAct
 
 	// Allow Access Only From IP
 	if action.AllowAccessOnlyFromIP != nil {
-		ipList := []ServiceConfigAPIIP{}
+		ipList := []string{}
 		for _, ipModel := range *action.AllowAccessOnlyFromIP {
-			ipList = append(ipList, ServiceConfigAPIIP{IP: ipModel.IP.ValueString()})
+			ipList = append(ipList, ipModel.IP.ValueString())
 		}
 		apiAction.AllowAccessOnlyFromIP = ipList
 	}
@@ -2991,7 +2987,7 @@ func apiActionStructToModel(apiAction ServiceConfigAPIAction) (*BehaviorActionV2
 	if len(apiAction.AllowAccessOnlyFromIP) > 0 {
 		ipList := []IPModelV2{}
 		for _, ip := range apiAction.AllowAccessOnlyFromIP {
-			ipList = append(ipList, IPModelV2{IP: types.StringValue(ip.IP)})
+			ipList = append(ipList, IPModelV2{IP: types.StringValue(ip)})
 		}
 		model.AllowAccessOnlyFromIP = &ipList
 	}
