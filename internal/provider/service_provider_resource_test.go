@@ -152,6 +152,7 @@ func testAccCheckServiceProviderConfigBasic(rndName string, serviceId string, ac
 //
 // Requires the same env vars as testAccPreCheckV3 + IORIVER_TEST_ACCOUNT_PROVIDER_ID.
 func TestAccIORiverServiceProvider_CertCoverage(t *testing.T) {
+	SkipUnlessLucky(t, 8)
 	t.Parallel()
 	certId2 := os.Getenv("IORIVER_TEST_CERT_ID_2")
 	certId3 := os.Getenv("IORIVER_TEST_CERT_ID_3")
