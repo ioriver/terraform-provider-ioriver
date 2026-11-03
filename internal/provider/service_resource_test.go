@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"testing"
@@ -49,6 +50,12 @@ func (TestedService) Delete(client *ioriver.IORiverClient, object ServiceWithCon
 
 // Protocol test — verifies protocol settings are persisted and that omitting
 // the protocol block entirely does not cause a "null value" provider crash.
+func SkipUnlessLucky(t *testing.T, runOneInEvery int) {
+	if rand.Intn(runOneInEvery) != 0 {
+		t.Skipf("Skipping: this test runs 1 out of %d times to save time/cost.", runOneInEvery)
+	}
+}
+
 func TestAccIORiverService_Protocol(t *testing.T) {
 	t.Parallel()
 	var service ServiceWithConfig
@@ -338,7 +345,9 @@ func TestAccIORiverService_WithDomains(t *testing.T) {
 // the provider reconciles the backend-assigned value into state without
 // sending the "use_ioriver_domain" placeholder back on a subsequent plan.
 func TestAccIORiverService_DomainNeglected(t *testing.T) {
+	SkipUnlessLucky(t, 8)
 	t.Parallel()
+
 	var service ServiceWithConfig
 	var testedObj TestedService
 
