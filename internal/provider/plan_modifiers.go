@@ -35,6 +35,44 @@ func NamedListPlanModifier(nameField string) planmodifier.List {
 	return namedListPlanModifier{nameField: nameField}
 }
 
+func LogDestinationListPlanModifier() planmodifier.List {
+	return namedListPlanModifier{nameField: "name", resolveNested: resolveLogDestinationSource}
+}
+
+func resolveLogDestinationSource(_ context.Context, planAttrs, stateAttrs map[string]attr.Value) (map[string]attr.Value, bool) {
+	out := shallowCopyAttrMap(planAttrs)
+	changed := false
+	planFields, planFieldsOK := planAttrs["selected_fields"].(types.List)
+	stateFields, stateFieldsOK := stateAttrs["selected_fields"].(types.List)
+	if planFieldsOK && stateFieldsOK && planFields.IsUnknown() &&
+		!stateFields.IsNull() && !stateFields.IsUnknown() && len(stateFields.Elements()) > 0 {
+		sameDefaults := true
+		for _, key := range []string{"source", "file_format"} {
+			planned, planOK := planAttrs[key].(types.String)
+			prior, stateOK := stateAttrs[key].(types.String)
+			if !planOK || !stateOK || planned.IsNull() || planned.IsUnknown() ||
+				prior.IsNull() || prior.IsUnknown() || !planned.Equal(prior) {
+				sameDefaults = false
+				break
+			}
+		}
+		if sameDefaults {
+			// Resolve by destination identity, not the nested list index.
+			out["selected_fields"] = stateFields
+			changed = true
+		}
+	}
+	planSource, planOK := planAttrs["source"].(types.String)
+	stateSource, stateOK := stateAttrs["source"].(types.String)
+	if !planOK || !stateOK || stateSource.IsUnknown() ||
+		(!planSource.IsUnknown() && logDestinationSource(planSource) == logDestinationSource(stateSource)) {
+		return out, changed
+	}
+	// UUID is computed: an unknown value creates a new destination at apply.
+	out["uuid"] = types.StringUnknown()
+	return out, true
+}
+
 // DomainListPlanModifier returns the identity-aware plan modifier for domains.
 // It uses "domain" as the identity key and additionally resolves nested mappings.
 func DomainListPlanModifier() planmodifier.List {

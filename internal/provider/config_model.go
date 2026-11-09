@@ -160,7 +160,7 @@ func ConfigAttributes() map[string]schema.Attribute {
 			MarkdownDescription: "Log destination configuration",
 			Optional:            true,
 			PlanModifiers: []planmodifier.List{
-				NamedListPlanModifier("name"),
+				LogDestinationListPlanModifier(),
 			},
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: LogDestinationAttributes(),
@@ -267,6 +267,7 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 	if updateTransformCtx != nil {
 		updateTransformCtx.OriginsExplicitlySet = !c.Origins.IsNull()
 		updateTransformCtx.OriginSetsExplicitlySet = !c.OriginSets.IsNull()
+		updateTransformCtx.LogDestinationsExplicitlySet = !c.LogDestinations.IsNull()
 	}
 
 	// Convert Origins and add UUID to each
@@ -355,8 +356,14 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 	// checkpoint, limit_body_size, rate_limit all live inside "waf").
 	if !c.Security.IsNull() && !c.Security.IsUnknown() {
 		var sec SecurityModel
-		if diags := c.Security.As(ctx, &sec, basetypes.ObjectAsOptions{}); !diags.HasError() {
-			if wafApiMap := sec.SecurityModelToMap(ctx); wafApiMap != nil {
+		if diags := c.Security.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, fmt.Errorf("failed to decode security: %v", diags)
+		} else {
+			wafApiMap, err := sec.SecurityModelToMap(ctx, updateTransformCtx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert security: %w", err)
+			}
+			if wafApiMap != nil {
 				configMap["waf"] = wafApiMap
 			}
 			// bot_management is a sibling of waf on the wire (matches the Python Config schema).
@@ -388,7 +395,7 @@ func ServiceConfigMapToModel(
 	}
 
 	if planConfig != nil {
-		tflog.Debug(ctx, fmt.Sprintf("[MapToModel] plan config: %+v\n", planConfig))
+		tflog.Debug(ctx, "[MapToModel] prior plan config present")
 	}
 
 	config := &ServiceConfigModel{
@@ -515,6 +522,7 @@ func ServiceConfigMapToModel(
 			}
 			priorAwsByName := make(map[string]types.Int64)
 			priorCompatByName := make(map[string]types.Int64)
+			priorSplunkByName := make(map[string]types.Int64)
 			for _, ld := range priorLogDests {
 				name := ld.Name.ValueString()
 				if ld.AwsS3 != nil {
@@ -522,6 +530,9 @@ func ServiceConfigMapToModel(
 				}
 				if ld.CompatibleS3 != nil {
 					priorCompatByName[name] = ld.CompatibleS3.CredentialsVersion
+				}
+				if ld.Splunk != nil {
+					priorSplunkByName[name] = ld.Splunk.CredentialsVersion
 				}
 			}
 			for i := range *logDestModels {
@@ -537,6 +548,11 @@ func ServiceConfigMapToModel(
 						ld.CompatibleS3.CredentialsVersion = ver
 					}
 				}
+				if ld.Splunk != nil {
+					if ver, ok := priorSplunkByName[name]; ok {
+						ld.Splunk.CredentialsVersion = ver
+					}
+				}
 			}
 		}
 
@@ -546,7 +562,11 @@ func ServiceConfigMapToModel(
 		}
 		config.LogDestinations = logDestinationsList
 	} else {
-		config.LogDestinations = types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})
+		if updateTransformCtx != nil && updateTransformCtx.LogDestinationsExplicitlySet {
+			config.LogDestinations = types.ListValueMust(types.ObjectType{AttrTypes: LogDestinationAttrTypes()}, []attr.Value{})
+		} else {
+			config.LogDestinations = types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})
+		}
 	}
 
 	// Convert Behaviors - API returns dict, we need array.

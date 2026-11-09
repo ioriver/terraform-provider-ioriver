@@ -34,6 +34,7 @@ var wafCheckpointModes = []string{"prevent", "disabled", "learn"}
 var wafCheckpointConfidenceLevels = []string{"medium", "high", "critical"}
 var wafCheckpointIPSPerformanceImpacts = []string{"low", "medium", "high"}
 var wafCheckpointIPSSeverities = []string{"low", "medium", "high", "critical"}
+var wafShippingIPSSeverities = []string{"info", "low", "medium", "high", "critical"}
 var wafCheckpointIPSActions = []string{"block", "log"}
 var wafIgnoreActionTypes = []string{"json_body_param", "indicators", "query_param", "header", "cookie", "urlencoded_form_field"}
 
@@ -122,6 +123,7 @@ var defaultSecurityValue = types.ObjectValueMust(
 		"custom_rules":   defaultEmptyCustomList,
 		"rate_limit":     defaultEmptyRateLimitList,
 		"bot_management": defaultBotManagementValue,
+		"logs_shipping":  types.ObjectNull(SecurityLogsShippingAttrTypes()),
 	},
 )
 
@@ -207,6 +209,22 @@ type WafModel struct {
 	Checkpoint    *WafCheckpointModel `tfsdk:"checkpoint"`
 }
 
+type SecurityLogsShippingModel struct {
+	Destination               types.String  `tfsdk:"destination"`
+	Enabled                   types.Bool    `tfsdk:"enabled"`
+	SeverityMinThreshold      types.String  `tfsdk:"severity_min_threshold"`
+	AllowedSamplingPercentage types.Float64 `tfsdk:"allowed_requests_sampling_rate"`
+}
+
+func SecurityLogsShippingAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"destination":                    types.StringType,
+		"enabled":                        types.BoolType,
+		"severity_min_threshold":         types.StringType,
+		"allowed_requests_sampling_rate": types.Float64Type,
+	}
+}
+
 // BotManagementModel maps to the Python BotManagement config object.
 type BotManagementModel struct {
 	WebKey               types.String  `tfsdk:"web_key"`
@@ -216,16 +234,46 @@ type BotManagementModel struct {
 
 // SecurityModel is the top-level security config block embedded in ServiceConfigModel.
 type SecurityModel struct {
-	Enabled       types.Bool              `tfsdk:"enabled"`
-	Waf           *WafModel               `tfsdk:"waf"`
-	CustomRules   []WafCustomRuleModel    `tfsdk:"custom_rules"`
-	RateLimit     []WafRateLimitRuleModel `tfsdk:"rate_limit"`
-	BotManagement *BotManagementModel     `tfsdk:"bot_management"`
+	Enabled       types.Bool                 `tfsdk:"enabled"`
+	Waf           *WafModel                  `tfsdk:"waf"`
+	CustomRules   []WafCustomRuleModel       `tfsdk:"custom_rules"`
+	RateLimit     []WafRateLimitRuleModel    `tfsdk:"rate_limit"`
+	BotManagement *BotManagementModel        `tfsdk:"bot_management"`
+	LogsShipping  *SecurityLogsShippingModel `tfsdk:"logs_shipping"`
 }
 
 // ---------------------------------------------------------------------------
 // Schema attribute builders
 // ---------------------------------------------------------------------------
+
+func SecurityLogsShippingAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"destination": schema.StringAttribute{
+			MarkdownDescription: "Name of a security-source destination in config.log_destinations.",
+			Required:            true,
+			Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
+		},
+		"enabled": schema.BoolAttribute{
+			MarkdownDescription: "Enable security log shipping. Security must also be enabled.",
+			Optional:            true,
+			Computed:            true,
+			Default:             booldefault.StaticBool(false),
+		},
+		"severity_min_threshold": schema.StringAttribute{
+			MarkdownDescription: "Minimum event severity for log/block: low, medium, high or critical. Defaults to medium.",
+			Optional:            true,
+			Computed:            true,
+			Default:             stringdefault.StaticString("medium"),
+			Validators:          []validator.String{stringvalidator.OneOf(wafShippingIPSSeverities...)},
+		},
+		"allowed_requests_sampling_rate": schema.Float64Attribute{
+			MarkdownDescription: "Percentage of allowed requests included in security logs (0-100).",
+			Optional:            true, Computed: true,
+			Default:    float64default.StaticFloat64(0),
+			Validators: []validator.Float64{float64validator.Between(0, 100)},
+		},
+	}
+}
 
 func WafAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
@@ -535,18 +583,18 @@ func toFloat64(v interface{}) (float64, bool) {
 // WafMapToModel  (API map → TF model)
 // ---------------------------------------------------------------------------
 
-func WafMapToModel(ctx context.Context, wafRaw interface{}) *WafModel {
+func WafMapToModel(ctx context.Context, wafRaw interface{}) (*WafModel, error) {
 	return wafMapToModelWithCtx(ctx, wafRaw, nil)
 }
 
-func wafMapToModelWithCtx(ctx context.Context, wafRaw interface{}, transformCtx *ServiceTransformContext) *WafModel {
+func wafMapToModelWithCtx(ctx context.Context, wafRaw interface{}, transformCtx *ServiceTransformContext) (*WafModel, error) {
 	if wafRaw == nil {
-		return nil
+		return nil, nil
 	}
 	wafMap, ok := wafRaw.(map[string]interface{})
 	if !ok {
 		tflog.Warn(ctx, fmt.Sprintf("[WafMapToModel] unexpected waf type: %T", wafRaw))
-		return nil
+		return nil, fmt.Errorf("unexpected waf type: %T", wafRaw)
 	}
 
 	model := &WafModel{
@@ -631,7 +679,60 @@ func wafMapToModelWithCtx(ctx context.Context, wafRaw interface{}, transformCtx 
 		model.Checkpoint = cp
 	} // end checkpointRaw
 
-	return model
+	return model, nil
+}
+
+func securityLogsShippingFromMap(raw interface{}, transformCtx *ServiceTransformContext) (*SecurityLogsShippingModel, error) {
+	data, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid WAF logs_shipping: %T", raw)
+	}
+	destination, ok := data["destination"].(string)
+	if !ok || destination == "" {
+		return nil, fmt.Errorf("WAF logs_shipping requires a destination")
+	}
+	severityRaw, exists := data["severity"]
+	if !exists {
+		severityRaw = data["severity_min_threshsold"]
+	}
+	severity, ok := severityRaw.(string)
+	if !ok || severity == "" {
+		return nil, fmt.Errorf("WAF logs_shipping requires severity")
+	}
+	if transformCtx != nil {
+		name := ""
+		for candidate, uuid := range transformCtx.LogDestNamesToUUIDs {
+			if uuid == destination {
+				name = candidate
+				break
+			}
+		}
+		if name == "" {
+			return nil, fmt.Errorf("WAF logs_shipping references unknown destination UUID %q", destination)
+		}
+		destination = name
+	}
+	model := &SecurityLogsShippingModel{
+		Destination:               types.StringValue(destination),
+		SeverityMinThreshold:      types.StringValue(severity),
+		Enabled:                   types.BoolValue(true),
+		AllowedSamplingPercentage: types.Float64Value(0),
+	}
+	if raw, exists := data["enabled"]; exists {
+		enabled, ok := raw.(bool)
+		if !ok {
+			return nil, fmt.Errorf("invalid WAF logs_shipping enabled: %T", raw)
+		}
+		model.Enabled = types.BoolValue(enabled)
+	}
+	if raw, exists := data["allowed_sampling_percentage"]; exists {
+		value, ok := toFloat64(raw)
+		if !ok || value < 0 || value > 100 {
+			return nil, fmt.Errorf("invalid WAF logs_shipping allowed_sampling_percentage: %v", raw)
+		}
+		model.AllowedSamplingPercentage = types.Float64Value(value)
+	}
+	return model, nil
 }
 
 // strOrEmpty is a small helper to safely read a string from a map.
@@ -826,6 +927,7 @@ func SecurityAttrTypes() map[string]attr.Type {
 		"custom_rules":   types.ListType{ElemType: types.ObjectType{AttrTypes: WafCustomRuleAttrTypes()}},
 		"rate_limit":     types.ListType{ElemType: types.ObjectType{AttrTypes: WafRateLimitRuleAttrTypes()}},
 		"bot_management": types.ObjectType{AttrTypes: BotManagementAttrTypes()},
+		"logs_shipping":  types.ObjectType{AttrTypes: SecurityLogsShippingAttrTypes()},
 	}
 }
 
@@ -923,6 +1025,11 @@ func SecurityAttributes() map[string]schema.Attribute {
 				Attributes: customRuleAttributes(),
 			},
 		},
+		"logs_shipping": schema.SingleNestedAttribute{
+			MarkdownDescription: "Security log shipping. References a security-source destination by name; omit to disable shipping.",
+			Optional:            true,
+			Attributes:          SecurityLogsShippingAttributes(),
+		},
 	}
 }
 
@@ -931,9 +1038,9 @@ func SecurityAttributes() map[string]schema.Attribute {
 // enabled, checkpoint, limit_body_size and rate_limit are all siblings inside
 // that single object.  So we start from the flat WafModel map and add
 // rate_limit directly into it — no extra nesting layer.
-func (s *SecurityModel) SecurityModelToMap(ctx context.Context) map[string]interface{} {
+func (s *SecurityModel) SecurityModelToMap(ctx context.Context, transformCtx *ServiceTransformContext) (map[string]interface{}, error) {
 	if s == nil {
-		return nil
+		return nil, nil
 	}
 	// Start from the waf fields (enabled, limit_body_size, checkpoint, custom …)
 	wafMap := make(map[string]interface{})
@@ -991,8 +1098,25 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context) map[string]inter
 		customArr = append(customArr, ruleMap)
 	}
 	wafMap["custom"] = customArr
+	if s.LogsShipping != nil {
+		shipping := s.LogsShipping
+		name := shipping.Destination.ValueString()
+		if transformCtx == nil {
+			return nil, fmt.Errorf("security log shipping requires destination lookup context")
+		}
+		uuid, exists := transformCtx.LogDestNamesToUUIDs[name]
+		if !exists {
+			return nil, fmt.Errorf("WAF log shipping references unknown destination %q", name)
+		}
+		wafMap["logs_shipping"] = map[string]interface{}{
+			"destination":                 uuid,
+			"enabled":                     shipping.Enabled.ValueBool(),
+			"severity":                    shipping.SeverityMinThreshold.ValueString(),
+			"allowed_sampling_percentage": shipping.AllowedSamplingPercentage.ValueFloat64(),
+		}
+	}
 	tflog.Debug(ctx, fmt.Sprintf("[SecurityModelToMap] waf map: %+v", wafMap))
-	return wafMap
+	return wafMap, nil
 }
 
 // SecurityMapToModel deserialises an API waf map → SecurityModel.
@@ -1020,7 +1144,17 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 		model.Enabled = types.BoolNull()
 	}
 	// Parse the waf block directly from the flat map.
-	model.Waf = wafMapToModelWithCtx(ctx, wafMap, transformCtx)
+	var err error
+	model.Waf, err = wafMapToModelWithCtx(ctx, wafMap, transformCtx)
+	if err != nil {
+		return nil, err
+	}
+	if raw := wafMap["logs_shipping"]; raw != nil {
+		model.LogsShipping, err = securityLogsShippingFromMap(raw, transformCtx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// Always initialize to empty slice so state never flips null↔[] on empty backend response.
 	model.RateLimit = []WafRateLimitRuleModel{}
 	model.CustomRules = []WafCustomRuleModel{}

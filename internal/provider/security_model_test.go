@@ -14,6 +14,15 @@ import (
 // Unit tests — ModelToMap / WafMapToModel round-trip
 // ---------------------------------------------------------------------------
 
+func testSecurityModelToMap(t *testing.T, ctx context.Context, sec *SecurityModel) map[string]interface{} {
+	t.Helper()
+	result, err := sec.SecurityModelToMap(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
 func TestWafModelToMap_Basic(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -26,7 +35,7 @@ func TestWafModelToMap_Basic(t *testing.T) {
 		},
 	}
 
-	m := sec.SecurityModelToMap(ctx)
+	m := testSecurityModelToMap(t, ctx, sec)
 	if m == nil {
 		t.Fatal("expected non-nil map")
 	}
@@ -71,7 +80,7 @@ func TestWafModelToMap_WithCustomRule(t *testing.T) {
 		},
 	}
 
-	m := sec.SecurityModelToMap(ctx)
+	m := testSecurityModelToMap(t, ctx, sec)
 	customArr, ok := m["custom"].([]interface{})
 	if !ok || len(customArr) != 1 {
 		t.Fatalf("expected 1 custom rule, got %v", m["custom"])
@@ -164,7 +173,7 @@ func TestWafRoundTrip(t *testing.T) {
 		},
 	}
 
-	secMap := secOriginal.SecurityModelToMap(ctx)
+	secMap := testSecurityModelToMap(t, ctx, secOriginal)
 	recoveredSec, err := SecurityMapToModel(ctx, secMap)
 	if err != nil {
 		t.Fatalf("SecurityMapToModel returned error: %v", err)
@@ -281,7 +290,7 @@ func TestWafModelToMap_CustomActionNull_NotSent(t *testing.T) {
 			},
 		},
 	}
-	m := sec.SecurityModelToMap(context.Background())
+	m := testSecurityModelToMap(t, context.Background(), sec)
 	customArr := m["custom"].([]interface{})
 	rule := customArr[0].(map[string]interface{})
 	if _, present := rule["action"]; present {
@@ -313,7 +322,7 @@ func TestSecurityModelToMap_RateLimitActionNull_NotSent(t *testing.T) {
 			},
 		},
 	}
-	m := sec.SecurityModelToMap(context.Background())
+	m := testSecurityModelToMap(t, context.Background(), sec)
 	rlArr := m["rate_limit"].([]interface{})
 	rule := rlArr[0].(map[string]interface{})
 	if _, present := rule["action"]; present {
@@ -351,7 +360,10 @@ func TestWafMapToModel_BackendDefaults(t *testing.T) {
 		"rate_limit": []interface{}{},
 	}
 
-	model := WafMapToModel(ctx, apiMap)
+	model, err := WafMapToModel(ctx, apiMap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if model == nil {
 		t.Fatal("WafMapToModel returned nil for backend defaults map")
 	}
@@ -421,7 +433,10 @@ func TestWafMapToModelWithCtx_CheckpointAlwaysParsed(t *testing.T) {
 	// Regardless of SecurityConfigured, wafMapToModelWithCtx always parses checkpoint.
 	transformCtx := &ServiceTransformContext{}
 
-	model := wafMapToModelWithCtx(ctx, apiMap, transformCtx)
+	model, err := wafMapToModelWithCtx(ctx, apiMap, transformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if model == nil {
 		t.Fatal("wafMapToModelWithCtx returned nil")
 	}
@@ -464,7 +479,10 @@ func TestWafMapToModelWithCtx_CheckpointPopulatedWhenConfigured(t *testing.T) {
 	// wafMapToModelWithCtx always parses checkpoint; SecurityConfigured gate is upstream.
 	transformCtx := &ServiceTransformContext{}
 
-	model := wafMapToModelWithCtx(ctx, apiMap, transformCtx)
+	model, err := wafMapToModelWithCtx(ctx, apiMap, transformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if model == nil {
 		t.Fatal("wafMapToModelWithCtx returned nil")
 	}
@@ -511,7 +529,7 @@ func TestWafRoundTrip_WithFieldKey(t *testing.T) {
 		},
 	}
 
-	apiMap := sec.SecurityModelToMap(ctx)
+	apiMap := testSecurityModelToMap(t, ctx, sec)
 	recovered, err := SecurityMapToModel(ctx, apiMap)
 	if err != nil {
 		t.Fatalf("SecurityMapToModel returned error: %v", err)
@@ -558,7 +576,7 @@ func TestWafRoundTrip_WithIgnoreParams(t *testing.T) {
 		},
 	}
 
-	apiMap := sec.SecurityModelToMap(ctx)
+	apiMap := testSecurityModelToMap(t, ctx, sec)
 	recovered, err := SecurityMapToModel(ctx, apiMap)
 	if err != nil {
 		t.Fatalf("SecurityMapToModel returned error: %v", err)
@@ -699,7 +717,7 @@ func TestWafRoundTrip_OrderPreserved(t *testing.T) {
 		},
 	}
 
-	secMap := sec.SecurityModelToMap(ctx)
+	secMap := testSecurityModelToMap(t, ctx, sec)
 	recoveredSec, err := SecurityMapToModel(ctx, secMap)
 	if err != nil {
 		t.Fatalf("SecurityMapToModel returned error: %v", err)
@@ -2555,7 +2573,7 @@ func TestSecurityModel_BotManagementOnly_NoWaf(t *testing.T) {
 		},
 	}
 	// SecurityModelToMap must not panic
-	wafMap := sec.SecurityModelToMap(ctx)
+	wafMap := testSecurityModelToMap(t, ctx, sec)
 	if wafMap == nil {
 		t.Fatal("SecurityModelToMap returned nil")
 	}

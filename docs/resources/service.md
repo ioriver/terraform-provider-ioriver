@@ -1096,10 +1096,22 @@ Optional:
 - `aws_s3` (Attributes) AWS S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3))
 - `compatible_s3` (Attributes) Compatible S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3))
 - `file_format` (String) Log file format. Possible values: `json-list`, `json-object`, `json-line-delimited`, `csv`
+- `max_gap_seconds` (Number) Maximum gap between log samples in seconds (60-600; default 60).
+- `max_samples_per_object` (Number) Maximum samples per log object (10000-250000; default 100000).
+- `object_name` (String) Optional log filename template. Must include {random} and end in .gz; omit for backend naming.
+- `request_headers` (List of String) Request header names to collect when request_headers is selected (traffic logs only).
+- `response_headers` (List of String) Response header names to collect when response_headers is selected (traffic logs only).
+- `selected_fields` (List of String) Ordered log fields to deliver. Omit for backend defaults based on source and file_format. If configured, the list must be nonempty and include timestamp, service_id and service_uid.
+Choose fields for the destination's single source:
+  - Traffic: `timestamp`, `service_id`, `service_uid`, `client_ip`, `client_asn`, `client_asn_name`, `geo_location`, `geo_location_city`, `domain`, `path`, `protocol`, `range`, `http_version`, `method`, `query_params`, `cookie`, `referer`, `x_forwarded_for`, `user_agent`, `unified_logs_behavior_id`, `geo_location_subdivision`, `status_code`, `status_phrase`, `content_type`, `content_encoding`, `response_bytes`, `provider`, `detailed_result_type`, `server_ip`, `is_cached`, `midgress_bytes`, `origin_bytes`, `time_taken`, `turnaround_time`, `request_headers`, `response_headers`.
+  - Security: `timestamp`, `service_id`, `service_uid`, `client_ip`, `client_asn`, `client_asn_name`, `geo_location`, `geo_location_city`, `domain`, `path`, `protocol`, `range`, `http_version`, `method`, `query_params`, `cookie`, `referer`, `x_forwarded_for`, `user_agent`, `action`, `mitigation_source`, `custom_rule`, `rate_limit_rule`, `found_indicators`, `severity_level`, `incident_details`, `match_reason`, `matched_location`, `matched_parameter`, `matched_sample`, `tls_version`, `ja3`, `ja4`, `user_reputation`.
+- `source` (String) Log source: `traffic` (default) or `security`. Changing it replaces only the destination (new UUID), not the service; credentials must be supplied again.
+- `splunk` (Attributes) Splunk log destination (see [below for nested schema](#nestedatt--config--log_destinations--splunk))
+- `timestamp_format` (String) Timestamp format: iso8601 (default) or unix.
 
 Read-Only:
 
-- `uuid` (String) Origin UUID (managed by system)
+- `uuid` (String) Log destination UUID (managed by system)
 
 <a id="nestedatt--config--log_destinations--aws_s3"></a>
 ### Nested Schema for `config.log_destinations.aws_s3`
@@ -1183,6 +1195,29 @@ Required:
 - `external_id` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS external ID
 - `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
 
+
+
+
+<a id="nestedatt--config--log_destinations--splunk"></a>
+### Nested Schema for `config.log_destinations.splunk`
+
+Required:
+
+- `channel_id` (String) A unique channel uuid.
+- `url` (String) Format: https://<host>:<port>/services/collector/raw
+
+Optional:
+
+- `credentials` (Attributes, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Splunk HEC credentials. Required on create/replacement or when credentials_version changes. Never stored in state. (see [below for nested schema](#nestedatt--config--log_destinations--splunk--credentials))
+- `credentials_version` (Number) Increment to push a new Splunk token. Omit on update to preserve existing credentials; after import, set a version alongside credentials to rotate.
+- `use_insecure` (Boolean) May skip verification of the Splunk HEC endpoint's SSL certificate.
+
+<a id="nestedatt--config--log_destinations--splunk--credentials"></a>
+### Nested Schema for `config.log_destinations.splunk.credentials`
+
+Required:
+
+- `token` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Splunk HEC token
 
 
 
@@ -1386,6 +1421,7 @@ Optional:
     - Each rule condition uses an OR-of-ANDs expression: the rule fires when at least one OR group matches, and all AND conditions in that group match. 
   - (see [below for nested schema](#nestedatt--config--security--custom_rules))
 - `enabled` (Boolean) Enable WAF/security for this service
+- `logs_shipping` (Attributes) Security log shipping. References a security-source destination by name; omit to disable shipping. (see [below for nested schema](#nestedatt--config--security--logs_shipping))
 - `rate_limit` (Attributes List) Ordered list of rate limiting rules. 
   - A rule fires when the client IP exceeds `num_of_requests` requests within the `time_window_seconds` sliding window.
   - The client is then subject to the rule's action for `block_duration_seconds`.
@@ -1513,6 +1549,20 @@ Required:
 - `ignore_type` (String) Type of ignore. Valid values: `json_body_param`, `indicators`, `query_param`, `header`, `cookie`, `urlencoded_form_field`
 - `value` (String) Value associated with the ignore type
 
+
+
+<a id="nestedatt--config--security--logs_shipping"></a>
+### Nested Schema for `config.security.logs_shipping`
+
+Required:
+
+- `destination` (String) Name of a security-source destination in config.log_destinations.
+
+Optional:
+
+- `allowed_requests_sampling_rate` (Number) Percentage of allowed requests included in security logs (0-100).
+- `enabled` (Boolean) Enable security log shipping. Security must also be enabled.
+- `severity_min_threshold` (String) Minimum event severity for log/block: low, medium, high or critical. Defaults to medium.
 
 
 <a id="nestedatt--config--security--rate_limit"></a>

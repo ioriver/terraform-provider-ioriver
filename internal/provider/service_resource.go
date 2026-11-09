@@ -51,11 +51,10 @@ type ServiceTransformContext struct {
 	SecurityConfigured bool `json:"security_configured"`
 	// BehaviorRepresentation records how each named behavior was written by the user.
 	BehaviorRepresentation map[string]string `json:"behavior_representation,omitempty"`
-	// OriginsExplicitlySet / OriginSetsExplicitlySet: true when the user wrote the
-	// block (even as an empty list). Used by ServiceConfigMapToModel to return []
-	// instead of null when the API sends back nothing, preserving plan consistency.
-	OriginsExplicitlySet    bool `json:"origins_explicitly_set"`
-	OriginSetsExplicitlySet bool `json:"origin_sets_explicitly_set"`
+	// ExplicitlySet flags preserve empty lists when the API sends back nothing.
+	OriginsExplicitlySet         bool `json:"origins_explicitly_set"`
+	OriginSetsExplicitlySet      bool `json:"origin_sets_explicitly_set"`
+	LogDestinationsExplicitlySet bool `json:"log_destinations_explicitly_set"`
 }
 
 type ServiceResourceModel struct {
@@ -198,10 +197,10 @@ func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 
 	// Create plan: current state is null.
 	if req.State.Raw.IsNull() {
-		if err := validateCreatePrivateS3Credentials(&configData); err != nil {
+		if err := validateCreatePrivateS3Credentials(&configData, true); err != nil {
 			resp.Diagnostics.AddError("Invalid private S3 origin credentials for create", err.Error())
 		}
-		if err := validateCreateLogDestinationCredentials(&configData); err != nil {
+		if err := validateCreateLogDestinationCredentials(&configData, true); err != nil {
 			resp.Diagnostics.AddError("Invalid log destination credentials for create", err.Error())
 		}
 		return
@@ -218,10 +217,10 @@ func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		return
 	}
 
-	if err := validateUpdatePrivateS3Credentials(&configData, &stateData); err != nil {
+	if err := validateUpdatePrivateS3Credentials(&configData, &stateData, true); err != nil {
 		resp.Diagnostics.AddError("Invalid private S3 origin credentials for update", err.Error())
 	}
-	if err := validateUpdateLogDestinationCredentials(&configData, &stateData); err != nil {
+	if err := validateUpdateLogDestinationCredentials(&configData, &stateData, true); err != nil {
 		resp.Diagnostics.AddError("Invalid log destination credentials for update", err.Error())
 	}
 }
@@ -249,7 +248,18 @@ func (r *ServiceResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Failed to decode config", err.Error())
 		return
 	}
-	mergeWriteOnlyCredentialsFromConfig(&data, &configData, nil)
+	if err := validateCreateLogDestinationCredentials(&configData, false); err != nil {
+		resp.Diagnostics.AddError("Invalid log destination credentials for create", err.Error())
+		return
+	}
+	if err := validateCreatePrivateS3Credentials(&configData, false); err != nil {
+		resp.Diagnostics.AddError("Invalid private S3 origin credentials for create", err.Error())
+		return
+	}
+	if err := mergeWriteOnlyCredentialsFromConfig(&data, &configData, nil); err != nil {
+		resp.Diagnostics.AddError("Failed to prepare log destination credentials", err.Error())
+		return
+	}
 
 	// This is used during this flow for storing adapting fields
 	data.updateTransformCtx = &ServiceTransformContext{
@@ -364,7 +374,7 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// WriteOnly credentials are not stored in state so the plan cannot carry them
 	// from prior state. Re-read them from the raw config and merge by name,
-	// but only inject when credentials_version changed vs state.
+	// Credentials use credentials_version or creation/replacement.
 	var configData ServiceResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
 	if resp.Diagnostics.HasError() {
@@ -374,7 +384,18 @@ func (r *ServiceResource) Update(ctx context.Context, req resource.UpdateRequest
 		resp.Diagnostics.AddError("Failed to decode config", err.Error())
 		return
 	}
-	mergeWriteOnlyCredentialsFromConfig(&data, &configData, &stateData)
+	if err := validateUpdateLogDestinationCredentials(&configData, &stateData, false); err != nil {
+		resp.Diagnostics.AddError("Invalid log destination credentials for update", err.Error())
+		return
+	}
+	if err := validateUpdatePrivateS3Credentials(&configData, &stateData, false); err != nil {
+		resp.Diagnostics.AddError("Invalid private S3 origin credentials for update", err.Error())
+		return
+	}
+	if err := mergeWriteOnlyCredentialsFromConfig(&data, &configData, &stateData); err != nil {
+		resp.Diagnostics.AddError("Failed to prepare log destination credentials", err.Error())
+		return
+	}
 
 	// Get/set transform context in state
 	existTransformCtxByteArray, diags := req.Private.GetKey(ctx, CurrentTransformCtxPrivateKeyName)
@@ -444,10 +465,13 @@ func (r *ServiceResource) ImportState(ctx context.Context, req resource.ImportSt
 // s3_aws_secret, log-destination credentials) are null in the plan on Update
 // because Terraform does not carry them from prior state. req.Config is the only
 // source that still holds the values the user typed in HCL.
-// Credentials are only forwarded when credentials_version changed vs state.
-func mergeWriteOnlyCredentialsFromConfig(planData, configData, stateData *ServiceResourceModel) {
-	mergeLogDestCredentialsFromConfig(planData, configData, stateData)
+// Credentials use credentials_version or creation/replacement.
+func mergeWriteOnlyCredentialsFromConfig(planData, configData, stateData *ServiceResourceModel) error {
+	if err := mergeLogDestCredentialsFromConfig(planData, configData, stateData); err != nil {
+		return err
+	}
 	mergeS3OriginCredentialsFromConfig(planData, configData, stateData)
+	return nil
 }
 
 // ------- Implement base Resource API ---------
@@ -632,6 +656,30 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 			msg,
 		)
 	}
+	logDestinationsByName := map[string]LogDestinationModel{}
+	unknownLogDestinationNames := data.Config.LogDestinations.IsUnknown()
+	if !data.Config.LogDestinations.IsNull() && !data.Config.LogDestinations.IsUnknown() {
+		destinations, diags := ListElementsAsDiags[LogDestinationModel](ctx, data.Config.LogDestinations)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		for i, destination := range destinations {
+			if destination.Name.IsUnknown() {
+				unknownLogDestinationNames = true
+			} else if !destination.Name.IsNull() {
+				logDestinationsByName[destination.Name.ValueString()] = destination
+			}
+			for _, msg := range ValidateLogDestination(ctx, destination) {
+				resp.Diagnostics.AddAttributeError(path.Root("config").AtName("log_destinations").AtListIndex(i), "Invalid log destination", msg)
+			}
+		}
+	}
+	if secPtr != nil && secPtr.LogsShipping != nil {
+		if msg := validateLogDestinationReference(secPtr.LogsShipping.Destination, "security", logDestinationsByName, unknownLogDestinationNames); msg != "" {
+			resp.Diagnostics.AddAttributeError(path.Root("config").AtName("security").AtName("logs_shipping").AtName("destination"), "Invalid security log destination", msg)
+		}
+	}
 
 	// --- Specific behaviors (condition field_key constraints) ---
 	if !data.Config.Behaviors.IsNull() && !data.Config.Behaviors.IsUnknown() {
@@ -747,21 +795,7 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// --- stream_logs.log_destination must reference a known log destination name ---
-	logDestNames := map[string]struct{}{}
-	if !data.Config.LogDestinations.IsNull() && !data.Config.LogDestinations.IsUnknown() {
-		logDestinations, ldDiags := ListElementsAsDiags[LogDestinationModel](ctx, data.Config.LogDestinations)
-		resp.Diagnostics.Append(ldDiags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		for _, ld := range logDestinations {
-			if !ld.Name.IsNull() && !ld.Name.IsUnknown() {
-				logDestNames[ld.Name.ValueString()] = struct{}{}
-			}
-		}
-	}
-	if len(logDestNames) > 0 && !data.Config.Behaviors.IsNull() && !data.Config.Behaviors.IsUnknown() {
+	if !data.Config.Behaviors.IsNull() && !data.Config.Behaviors.IsUnknown() {
 		var bBlock BehaviorsBlockModel
 		if diags := data.Config.Behaviors.As(ctx, &bBlock, basetypes.ObjectAsOptions{}); !diags.HasError() {
 			// Check default behavior.
@@ -769,15 +803,12 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 				var defB DefaultBehaviorModel
 				if diags := bBlock.Default.As(ctx, &defB, basetypes.ObjectAsOptions{}); !diags.HasError() {
 					if defB.Actions != nil && defB.Actions.StreamLogs != nil {
-						name := defB.Actions.StreamLogs.UnifiedLogDestination.ValueString()
-						if name != "" {
-							if _, ok := logDestNames[name]; !ok {
-								resp.Diagnostics.AddAttributeError(
-									path.Root("config").AtName("behaviors").AtName("default").AtName("actions").AtName("stream_logs").AtName("log_destination"),
-									"Unknown log destination reference",
-									fmt.Sprintf("behaviors.default.actions.stream_logs.log_destination %q does not match any name defined in config.log_destinations.", name),
-								)
-							}
+						if msg := validateLogDestinationReference(defB.Actions.StreamLogs.UnifiedLogDestination, "traffic", logDestinationsByName, unknownLogDestinationNames); msg != "" {
+							resp.Diagnostics.AddAttributeError(
+								path.Root("config").AtName("behaviors").AtName("default").AtName("actions").AtName("stream_logs").AtName("log_destination"),
+								"Invalid log destination reference",
+								msg,
+							)
 						}
 					}
 				}
@@ -789,15 +820,11 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 						if b.Actions == nil || b.Actions.StreamLogs == nil {
 							continue
 						}
-						name := b.Actions.StreamLogs.UnifiedLogDestination.ValueString()
-						if name == "" {
-							continue
-						}
-						if _, ok := logDestNames[name]; !ok {
+						if msg := validateLogDestinationReference(b.Actions.StreamLogs.UnifiedLogDestination, "traffic", logDestinationsByName, unknownLogDestinationNames); msg != "" {
 							resp.Diagnostics.AddAttributeError(
 								path.Root("config").AtName("behaviors").AtName("custom").AtListIndex(i).AtName("actions").AtName("stream_logs").AtName("log_destination"),
-								"Unknown log destination reference",
-								fmt.Sprintf("behaviors.custom[%d].actions.stream_logs.log_destination %q does not match any name defined in config.log_destinations.", i, name),
+								"Invalid log destination reference",
+								msg,
 							)
 						}
 					}

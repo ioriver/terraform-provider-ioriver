@@ -39,7 +39,7 @@ func resourceCreate(client *ioriver.IORiverClient, ctx context.Context, req reso
 		return nil
 	}
 
-	tflog.Info(ctx, fmt.Sprintf("Creating IORiver object: %#v", newObj))
+	tflog.Info(ctx, fmt.Sprintf("Creating IORiver object of type %T", newObj))
 
 	var operation func() (interface{}, error)
 	if !doUpdate {
@@ -70,7 +70,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 	readOp := func() (interface{}, error) { return r.read(ctx, client, r.getId(data)) }
 	obj, err := performOperation(ctx, func() (interface{}, error) { return readOp() })
 
-	tflog.Debug(ctx, fmt.Sprintf("Object: %#v", obj))
+	tflog.Debug(ctx, fmt.Sprintf("Read IORiver object of type %T", obj))
 
 	if err != nil {
 		if strings.Contains(err.Error(), "404 Not Found") {
@@ -85,7 +85,7 @@ func resourceRead(client *ioriver.IORiverClient, ctx context.Context, req resour
 
 	resourceModel, err := r.objToResource(ctx, obj, data)
 	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to convert IORiver object to resource, object: %#v", obj))
+		tflog.Error(ctx, fmt.Sprintf("Failed to convert IORiver object of type %T to resource", obj))
 	}
 
 	return resourceModel
@@ -103,7 +103,7 @@ func resourceUpdate(client *ioriver.IORiverClient, ctx context.Context, req reso
 		resp.Diagnostics.AddError("Error creating object from ResourceData", "Unexpected error: "+err.Error())
 		return nil
 	}
-	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object: %#v", obj))
+	tflog.Info(ctx, fmt.Sprintf("Updating IORiver object of type %T", obj))
 
 	updateOp := func() (interface{}, error) { return r.update(ctx, client, obj) }
 	updatedObj, err := performOperation(ctx, func() (interface{}, error) { return updateOp() })
