@@ -168,7 +168,7 @@ func LogDestinationAttributes() map[string]schema.Attribute {
 			Validators: []validator.String{stringvalidator.OneOf("iso8601", "unix")},
 		},
 		"object_name": schema.StringAttribute{
-			MarkdownDescription: "Optional log filename template. Must include {random} and end in .gz; omit for backend naming.",
+			MarkdownDescription: "Optional log filename template, for S3 destinations. Must include {random} and end in .gz; omit for backend naming.",
 			Optional:            true,
 			Validators:          []validator.String{stringvalidator.LengthBetween(1, 1024)},
 		},

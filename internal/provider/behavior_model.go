@@ -1517,13 +1517,13 @@ func BehaviorActionAttributes() map[string]schema.Attribute {
 			},
 		},
 		"stream_logs": schema.SingleNestedAttribute{
-			MarkdownDescription: "Stream CDN access logs to a configured logging destination (e.g., an S3 bucket).\n" +
+			MarkdownDescription: "Stream CDN traffic logs to a configured logging destination (e.g., an S3 bucket).\n" +
 				"  - All logs are delivered in a unified format, regardless of which CDN provider generated them.\n" +
 				"  - See IO River Documentation for details on how to configure a destination.",
 			Optional: true,
 			Attributes: map[string]schema.Attribute{
 				"log_destination": schema.StringAttribute{
-					MarkdownDescription: "Name of the log destination to stream logs to.\n" +
+					MarkdownDescription: "Name of the log destination to stream traffic logs to.\n" +
 						"  - The destination must be configured in the service's `log_destinations` block.",
 					Required: true,
 				},

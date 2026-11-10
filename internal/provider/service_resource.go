@@ -51,7 +51,9 @@ type ServiceTransformContext struct {
 	SecurityConfigured bool `json:"security_configured"`
 	// BehaviorRepresentation records how each named behavior was written by the user.
 	BehaviorRepresentation map[string]string `json:"behavior_representation,omitempty"`
-	// ExplicitlySet flags preserve empty lists when the API sends back nothing.
+	// OriginsExplicitlySet / OriginSetsExplicitlySet: true when the user wrote the
+	// block (even as an empty list). Used by ServiceConfigMapToModel to return []
+	// instead of null when the API sends back nothing, preserving plan consistency.
 	OriginsExplicitlySet         bool `json:"origins_explicitly_set"`
 	OriginSetsExplicitlySet      bool `json:"origin_sets_explicitly_set"`
 	LogDestinationsExplicitlySet bool `json:"log_destinations_explicitly_set"`

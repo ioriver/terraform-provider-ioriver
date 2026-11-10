@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -44,7 +45,7 @@ func testAccLoggingDestination(kind, name, source string, version int, credentia
 	} else {
 		settings += `
 			name = "test-log-bucket"
-			path = "/logs"
+			path = "/delivery"
 			region = "us-east-1"`
 		if kind == "compatible_s3" {
 			settings += "\n domain = \"https://s3.example.com\""
@@ -76,7 +77,7 @@ func testAccLoggingDestination(kind, name, source string, version int, credentia
 		file_format = "json-line-delimited"
 		selected_fields = %s
 		%s
-		object_name = "/logs/%%Y-%%m-%%d/{random}.gz"
+		object_name = "/delivery/{random}.gz"
 		timestamp_format = "unix"
 		max_samples_per_object = 250000
 		max_gap_seconds = 600
@@ -93,6 +94,7 @@ locals {
 
 resource "ioriver_service" %[1]q {
 	name = %[1]q
+	description = "Logging configuration lifecycle test"
 	certificates = [%[2]q]
 	config = {
 		log_destinations = [%[3]s]
@@ -108,7 +110,7 @@ resource "ioriver_service" %[1]q {
 			}
 			custom = [{
 				name = "logging"
-				path_pattern = "/logs/*"
+				path_pattern = "/delivery/*"
 				actions = {
 					stream_logs = {
 						log_destination = local.traffic_destination
@@ -162,7 +164,7 @@ func testAccCheckLoggingState(address, kind string, names []string, replaced, tr
 			resource.TestCheckResourceAttrSet(address, prefix+"uuid"),
 			resource.TestCheckResourceAttr(address, prefix+"source", source),
 			resource.TestCheckResourceAttr(address, prefix+"timestamp_format", "unix"),
-			resource.TestCheckResourceAttr(address, prefix+"object_name", "/logs/%Y-%m-%d/{random}.gz"),
+			resource.TestCheckResourceAttr(address, prefix+"object_name", "/delivery/{random}.gz"),
 			resource.TestCheckResourceAttr(address, prefix+"max_samples_per_object", "250000"),
 			resource.TestCheckResourceAttr(address, prefix+"max_gap_seconds", "600"),
 			resource.TestCheckResourceAttr(address, prefix+"selected_fields.#", fmt.Sprint(len(fields))),
@@ -190,7 +192,7 @@ func testAccCheckLoggingState(address, kind string, names []string, replaced, tr
 		} else {
 			checks = append(checks,
 				resource.TestCheckResourceAttr(address, prefix+block+".name", "test-log-bucket"),
-				resource.TestCheckResourceAttr(address, prefix+block+".path", "/logs"),
+				resource.TestCheckResourceAttr(address, prefix+block+".path", "/delivery"),
 				resource.TestCheckResourceAttr(address, prefix+block+".region", "us-east-1"),
 			)
 			if block == "compatible_s3" {
@@ -1246,12 +1248,12 @@ func TestLogDestinationConfig_OmittedObjectName(t *testing.T) {
 			if _, exists := decoded["object_name"]; exists {
 				t.Fatal("omitted object_name must not be serialized, including as null")
 			}
-			destination.ObjectName = types.StringValue("/logs/{random}.gz")
+			destination.ObjectName = types.StringValue("/delivery/{random}.gz")
 			wire, err = destination.ModelToMap()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if wire["object_name"] != "/logs/{random}.gz" {
+			if wire["object_name"] != "/delivery/{random}.gz" {
 				t.Fatal("configured object_name must still be sent")
 			}
 		})
@@ -1360,6 +1362,58 @@ func TestLogDestinationConfig_DynamicSource(t *testing.T) {
 				t.Fatal("changed resolved source must replace UUID")
 			}
 		})
+	}
+}
+
+func TestLogDestinationConfig_EmptyReadback(t *testing.T) {
+	for _, prior := range []struct {
+		name     string
+		config   *ServiceConfigModel
+		expected types.List
+	}{
+		{"explicit empty", &ServiceConfigModel{LogDestinations: logDestListValue([]LogDestinationModel{}), Behaviors: defaultBehaviorsBlockObjectValue}, logDestListValue([]LogDestinationModel{})},
+		{"omitted", &ServiceConfigModel{LogDestinations: types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()}), Behaviors: defaultBehaviorsBlockObjectValue}, types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})},
+		{"import", nil, types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})},
+	} {
+		for _, response := range []struct {
+			name string
+			data map[string]interface{}
+		}{
+			{"empty", map[string]interface{}{"log_destinations": []interface{}{}}},
+			{"null", map[string]interface{}{"log_destinations": nil}},
+			{"omitted", map[string]interface{}{}},
+		} {
+			t.Run(prior.name+"/"+response.name, func(t *testing.T) {
+				transform := &ServiceTransformContext{LogDestNamesToUUIDs: map[string]string{}}
+				if prior.config != nil {
+					if _, err := prior.config.ModelToMap(context.Background(), transform); err != nil {
+						t.Fatal(err)
+					}
+				}
+				model, err := ServiceConfigMapToModel(context.Background(), response.data, transform, prior.config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !model.LogDestinations.Equal(prior.expected) {
+					t.Fatalf("expected %v, got %v", prior.expected, model.LogDestinations)
+				}
+				encoded, err := json.Marshal(transform)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var restored ServiceTransformContext
+				if err := json.Unmarshal(encoded, &restored); err != nil {
+					t.Fatal(err)
+				}
+				refreshed, err := ServiceConfigMapToModel(context.Background(), response.data, &restored, model)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !refreshed.LogDestinations.Equal(prior.expected) {
+					t.Fatalf("refresh expected %v, got %v", prior.expected, refreshed.LogDestinations)
+				}
+			})
+		}
 	}
 }
 
@@ -1882,12 +1936,28 @@ func TestSecurityLogsShipping_RoundTripAndClear(t *testing.T) {
 	if sent["destination"] != "destination-uuid" || sent["severity"] != "high" || sent["allowed_sampling_percentage"] != float64(25) {
 		t.Fatalf("unexpected shipping payload: %v", sent)
 	}
+	if _, exists := sent["severity_min_threshsold"]; exists {
+		t.Fatal("shipping payload must use severity, not the legacy spelling")
+	}
 	read, err := securityMapToModelWithCtx(context.Background(), waf, transform, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(read.LogsShipping, shipping) {
 		t.Fatalf("shipping round trip mismatch: %+v", read.LogsShipping)
+	}
+	legacy := make(map[string]interface{}, len(sent))
+	for key, value := range sent {
+		legacy[key] = value
+	}
+	delete(legacy, "severity")
+	legacy["severity_min_threshsold"] = "high"
+	legacyShipping, err := securityLogsShippingFromMap(legacy, transform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(legacyShipping, shipping) {
+		t.Fatalf("legacy shipping read mismatch: %+v", legacyShipping)
 	}
 	if _, diags := types.ObjectValueFrom(context.Background(), SecurityAttrTypes(), read); diags.HasError() {
 		t.Fatalf("readback schema mismatch: %v", diags)
@@ -1933,58 +2003,6 @@ func TestSecurityLogsShipping_References(t *testing.T) {
 	}
 }
 
-func TestLogDestinationConfig_EmptyReadback(t *testing.T) {
-	for _, prior := range []struct {
-		name     string
-		config   *ServiceConfigModel
-		expected types.List
-	}{
-		{"explicit empty", &ServiceConfigModel{LogDestinations: logDestListValue([]LogDestinationModel{}), Behaviors: defaultBehaviorsBlockObjectValue}, logDestListValue([]LogDestinationModel{})},
-		{"omitted", &ServiceConfigModel{LogDestinations: types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()}), Behaviors: defaultBehaviorsBlockObjectValue}, types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})},
-		{"import", nil, types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})},
-	} {
-		for _, response := range []struct {
-			name string
-			data map[string]interface{}
-		}{
-			{"empty", map[string]interface{}{"log_destinations": []interface{}{}}},
-			{"null", map[string]interface{}{"log_destinations": nil}},
-			{"omitted", map[string]interface{}{}},
-		} {
-			t.Run(prior.name+"/"+response.name, func(t *testing.T) {
-				transform := &ServiceTransformContext{LogDestNamesToUUIDs: map[string]string{}}
-				if prior.config != nil {
-					if _, err := prior.config.ModelToMap(context.Background(), transform); err != nil {
-						t.Fatal(err)
-					}
-				}
-				model, err := ServiceConfigMapToModel(context.Background(), response.data, transform, prior.config)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !model.LogDestinations.Equal(prior.expected) {
-					t.Fatalf("expected %v, got %v", prior.expected, model.LogDestinations)
-				}
-				encoded, err := json.Marshal(transform)
-				if err != nil {
-					t.Fatal(err)
-				}
-				var restored ServiceTransformContext
-				if err := json.Unmarshal(encoded, &restored); err != nil {
-					t.Fatal(err)
-				}
-				refreshed, err := ServiceConfigMapToModel(context.Background(), response.data, &restored, model)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !refreshed.LogDestinations.Equal(prior.expected) {
-					t.Fatalf("refresh expected %v, got %v", prior.expected, refreshed.LogDestinations)
-				}
-			})
-		}
-	}
-}
-
 func TestLogDestinationConfig_Limits(t *testing.T) {
 	for _, tc := range []struct {
 		field string
@@ -2010,6 +2028,25 @@ func TestLogDestinationConfig_Limits(t *testing.T) {
 		}
 	}
 	shipping := SecurityAttributes()["logs_shipping"].(schema.SingleNestedAttribute)
+	severity := shipping.Attributes["severity_min_threshold"].(schema.StringAttribute)
+	if !severity.Optional || !severity.Computed || severity.Required || severity.Default == nil {
+		t.Fatal("shipping severity must be optional and computed with a default")
+	}
+	defaultResponse := &defaults.StringResponse{}
+	severity.Default.DefaultString(context.Background(), defaults.StringRequest{}, defaultResponse)
+	if defaultResponse.Diagnostics.HasError() || !defaultResponse.PlanValue.Equal(types.StringValue("medium")) {
+		t.Fatalf("shipping severity must default to medium: %+v", defaultResponse)
+	}
+	for _, value := range []string{"info", "low", "medium", "high", "critical", "", "invalid"} {
+		response := &validator.StringResponse{}
+		for _, check := range severity.Validators {
+			check.ValidateString(context.Background(), validator.StringRequest{ConfigValue: types.StringValue(value)}, response)
+		}
+		invalid := value == "" || value == "invalid"
+		if response.Diagnostics.HasError() != invalid {
+			t.Fatalf("incorrect shipping severity validation for %q: %v", value, response.Diagnostics)
+		}
+	}
 	sampling := shipping.Attributes["allowed_requests_sampling_rate"].(schema.Float64Attribute)
 	for _, value := range []float64{-0.1, 0, 100, 100.1} {
 		response := &validator.Float64Response{}

@@ -267,7 +267,7 @@ func SecurityLogsShippingAttributes() map[string]schema.Attribute {
 			Validators:          []validator.String{stringvalidator.OneOf(wafShippingIPSSeverities...)},
 		},
 		"allowed_requests_sampling_rate": schema.Float64Attribute{
-			MarkdownDescription: "Percentage of allowed requests included in security logs (0-100).",
+			MarkdownDescription: "Percentage of allowed requests included in security logs (0-100). Enter zero to disable allowed requests.",
 			Optional:            true, Computed: true,
 			Default:    float64default.StaticFloat64(0),
 			Validators: []validator.Float64{float64validator.Between(0, 100)},
