@@ -4,25 +4,16 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-// TestAccIORiverService_PrivateS3Origin_Lifecycle interleaves plan-time
-// ExpectError steps with real apply steps to validate the private-S3-origin
-// credential rules end-to-end:
-//
-//  1. Plan-only: create with is_private=true and no creds → error
-//  2. Plan-only: create with is_private=true and only s3_aws_key → error
-//  3. Plan-only: create with is_private=false but s3_aws_key set → error
-//  4. Apply:     create with a public custom origin (baseline state)
-//  5. Plan-only: flip public custom → private S3 without creds → error
-//  6. Apply:     flip to private S3 with creds
-//  7. Plan-only: bump credentials_version but drop creds → error
-//  8. Apply:     bump credentials_version and provide new creds (rotation)
-//  9. Import:    round-trip state (WriteOnly creds must round-trip cleanly)
+// TestAccIORiverService_PrivateS3Origin_Lifecycle covers creation, conversion,
+// rotation, omitted credentials, additions, removal, and import. Invalid configs
+// must fail without changing the existing service.
 func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 	t.Parallel()
 	var service ServiceWithConfig
@@ -31,9 +22,51 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 	certId := os.Getenv("IORIVER_TEST_CERT_ID")
 	rndName := generateRandomResourceName()
 	resourceName := serviceResourceType + "." + rndName
+	var serviceID string
+	checkPrivateOrigins := func(count int) resource.TestCheckFunc {
+		return func(state *terraform.State) error {
+			rs, ok := state.RootModule().Resources[resourceName]
+			if !ok || rs.Primary.ID == "" {
+				return fmt.Errorf("private S3 service is missing from state")
+			}
+			if serviceID != "" && serviceID != rs.Primary.ID {
+				return fmt.Errorf("private S3 update replaced the service")
+			}
+			serviceID = rs.Primary.ID
+			current, err := GetServiceWithConfig(testAccClient, serviceID)
+			if err != nil {
+				return err
+			}
+			origins, ok := current.Config["origins"].([]interface{})
+			if !ok || len(origins) != count {
+				return fmt.Errorf("backend origin count does not match %d", count)
+			}
+			for i, raw := range origins {
+				origin, ok := raw.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("invalid backend origin shape")
+				}
+				s3, ok := origin["s3_origin"].(map[string]interface{})
+				if !ok || s3["is_private"] != true || s3["s3_aws_region"] != "us-west-2" {
+					return fmt.Errorf("backend private S3 settings did not persist")
+				}
+				if s3["s3_aws_key"] != nil || s3["s3_aws_secret"] != nil {
+					return fmt.Errorf("backend returned private S3 credentials")
+				}
+				prefix := fmt.Sprintf("config.origins.%d.s3_origin.", i)
+				if rs.Primary.Attributes[prefix+"s3_aws_key"] != "" || rs.Primary.Attributes[prefix+"s3_aws_secret"] != "" {
+					return fmt.Errorf("private S3 credentials leaked into state")
+				}
+			}
+			return nil
+		}
+	}
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckV2(t) },
+		PreCheck: func() {
+			testAccPreEnvVariable(t, "IORIVER_API_TOKEN")
+			testAccPreEnvVariable(t, "IORIVER_TEST_CERT_ID")
+		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy: func(s *terraform.State) error {
 			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
@@ -57,7 +90,18 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 				PlanOnly:    true,
 				ExpectError: regexp.MustCompile(`(?is)is_private=false\s+but\s+(s3_aws_key|s3_aws_secret|credentials_version|s3_bucket_name|s3_aws_region)\s+is\s+set`),
 			},
-			// Step 4 — apply: create a valid public custom origin as the baseline.
+			// Create a private origin with credentials before exercising updates.
+			{
+				Config: testAccPrivateS3ConfigFlipToPrivateWithCreds(rndName, certId, 1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.is_private", "true"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.0.s3_origin.s3_aws_key"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.0.s3_origin.s3_aws_secret"),
+					checkPrivateOrigins(1),
+				),
+			},
+			// Step 4 — apply: switch to a public custom origin.
 			{
 				Config: testAccPrivateS3ConfigCustomOrigin(rndName, certId),
 				Check: resource.ComposeTestCheckFunc(
@@ -82,6 +126,7 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.host", "priv.example.com"),
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.is_private", "true"),
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.credentials_version", "1"),
+					checkPrivateOrigins(1),
 				),
 			},
 			// Step 7 — plan-only: bump credentials_version but strip creds → error.
@@ -96,12 +141,47 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.credentials_version", "2"),
+					checkPrivateOrigins(1),
 				),
 			},
-			// Step 9 — import: state should round-trip cleanly. WriteOnly creds are
-			// not present in state, so the importer must not attempt to reconcile
-			// them and the diff after import must be empty.
+			// Omission must preserve private credentials on an unchanged origin.
 			{
+				Config: testAccPrivateS3ConfigBumpVersionNoCreds(rndName, certId, 2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.0.s3_origin.credentials_version", "2"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.0.s3_origin.s3_aws_key"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.0.s3_origin.s3_aws_secret"),
+					checkPrivateOrigins(1),
+				),
+			},
+			{
+				Config:      testAccPrivateS3ConfigAdditionalOrigin(rndName, certId, false),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?is)adding\s+a\s+new\s+private\s+S3\s+origin\s+requires`),
+			},
+			{
+				Config: testAccPrivateS3ConfigAdditionalOrigin(rndName, certId, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.#", "2"),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.1.name", "new-private"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.1.s3_origin.s3_aws_key"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.1.s3_origin.s3_aws_secret"),
+					checkPrivateOrigins(2),
+				),
+			},
+			{
+				Config: testAccPrivateS3ConfigBumpVersionNoCreds(rndName, certId, 2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "config.origins.0.name", "swap-origin"),
+					checkPrivateOrigins(1),
+				),
+			},
+			{
+				// Import must not restore write-only credentials.
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -125,6 +205,29 @@ func TestAccIORiverService_PrivateS3Origin_Lifecycle(t *testing.T) {
 
 const testAccPrivateS3TestKey = "AKIAIOSFODNN7EXAMPLE"
 const testAccPrivateS3TestSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+func testAccPrivateS3ConfigAdditionalOrigin(name, certID string, credentials bool) string {
+	config := testAccPrivateS3ConfigBumpVersionNoCreds(name, certID, 2)
+	var credentialFields string
+	if credentials {
+		credentialFields = fmt.Sprintf("s3_aws_key = %q\n s3_aws_secret = %q", testAccPrivateS3TestKey, testAccPrivateS3TestSecret)
+	}
+	addition := fmt.Sprintf(`,
+			{
+				name = "new-private"
+				s3_origin = {
+					host = "new-private.example.com"
+					is_private = true
+					s3_aws_region = "us-west-2"
+					s3_bucket_name = "new-private-bucket"
+					credentials_version = 1
+					%s
+				}
+			}
+		]
+		domains`, credentialFields)
+	return strings.Replace(config, "\n\t\t]\n\t\tdomains", addition, 1)
+}
 
 func testAccPrivateS3ConfigPrivateMissingBothCreds(rndName, certId string) string {
 	return fmt.Sprintf(`

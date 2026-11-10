@@ -1,13 +1,19 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
+	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-log/tfsdklog"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	ioriver "github.com/ioriver/ioriver-go"
@@ -15,6 +21,167 @@ import (
 )
 
 var serviceResourceType string = "ioriver_service"
+
+func TestServiceConditionScalarValueShapeOutboundNulls(t *testing.T) {
+	captured := make(chan map[string]interface{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/services/create_from_service_config/" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+		captured <- payload
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"detail":"payload capture complete"}`))
+	}))
+	defer server.Close()
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf("provider \"ioriver\" { endpoint = %q }\n", server.URL+"/") +
+				testAccConditionScalarValueShape("capture", "00000000-0000-4000-8000-000000000001", 0),
+			ExpectError: regexp.MustCompile("payload capture complete"),
+		}},
+	})
+	select {
+	case payload := <-captured:
+		var visit func(string, interface{})
+		visit = func(path string, value interface{}) {
+			switch value := value.(type) {
+			case nil:
+				t.Logf("outgoing null: %s", path)
+			case map[string]interface{}:
+				for key, child := range value {
+					visit(path+"."+key, child)
+				}
+			case []interface{}:
+				for i, child := range value {
+					visit(fmt.Sprintf("%s[%d]", path, i), child)
+				}
+			}
+		}
+		visit("request", payload)
+		config, ok := payload["service_config"].(map[string]interface{})
+		if !ok {
+			t.Fatal("request is missing service_config")
+		}
+		waf, ok := config["waf"].(map[string]interface{})
+		if !ok {
+			t.Fatal("request is missing waf")
+		}
+		if _, exists := waf["logs_shipping"]; exists {
+			t.Fatal("request must omit unconfigured logs_shipping")
+		}
+		destinations, ok := config["log_destinations"].([]interface{})
+		if !ok || len(destinations) != 0 {
+			t.Fatal("condition test must send an empty destination array, not Splunk configuration")
+		}
+	default:
+		t.Fatal("Terraform did not send the create request")
+	}
+}
+
+type loggingTestResource struct {
+	Resource
+	object        ServiceWithConfig
+	received      interface{}
+	conversionErr error
+}
+
+func (r *loggingTestResource) resourceToObj(context.Context, interface{}) (interface{}, error) {
+	return r.object, nil
+}
+
+func (r *loggingTestResource) create(_ context.Context, _ *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+	r.received = obj
+	return obj, nil
+}
+
+func (r *loggingTestResource) update(ctx context.Context, client *ioriver.IORiverClient, obj interface{}) (interface{}, error) {
+	return r.create(ctx, client, obj)
+}
+
+func (r *loggingTestResource) read(context.Context, *ioriver.IORiverClient, interface{}) (interface{}, error) {
+	return r.object, nil
+}
+
+func (r *loggingTestResource) getId(interface{}) interface{} {
+	return r.object.Id
+}
+
+func (r *loggingTestResource) objToResource(_ context.Context, obj, _ interface{}) (interface{}, error) {
+	return obj, r.conversionErr
+}
+
+func TestSharedResourceLoggingExcludesCredentials(t *testing.T) {
+	for _, flow := range []string{"create", "create via update", "update", "read", "read conversion error"} {
+		t.Run(flow, func(t *testing.T) {
+			logPath := t.TempDir() + "/provider.log"
+			t.Setenv("TF_LOG", "TRACE")
+			t.Setenv("TF_LOG_PATH", logPath)
+			t.Setenv("TF_ACC_LOG_PATH", "")
+			t.Setenv("TF_LOG_PATH_MASK", "")
+			ctx := tfsdklog.NewRootProviderLogger(tfsdklog.RegisterTestSink(context.Background(), t))
+			r := &loggingTestResource{object: ServiceWithConfig{
+				Id: "service-id",
+				Config: map[string]interface{}{
+					"log_destinations": []interface{}{
+						map[string]interface{}{"credentials": `{"token":"splunk-secret-token"}`},
+						map[string]interface{}{"credentials": `{"access_key":"s3-secret-key","secret_key":"s3-secret-value"}`},
+					},
+					"origins": []interface{}{map[string]interface{}{
+						"s3_origin": map[string]interface{}{"s3_aws_key": "private-secret-key", "s3_aws_secret": "private-secret-value"},
+					}},
+				},
+			}}
+			switch flow {
+			case "create", "create via update":
+				response := &frameworkresource.CreateResponse{}
+				resourceCreate(nil, ctx, frameworkresource.CreateRequest{}, response, r, nil, flow == "create via update")
+				if response.Diagnostics.HasError() {
+					t.Fatal(response.Diagnostics)
+				}
+			case "update":
+				response := &frameworkresource.UpdateResponse{}
+				resourceUpdate(nil, ctx, frameworkresource.UpdateRequest{}, response, r, nil)
+				if response.Diagnostics.HasError() {
+					t.Fatal(response.Diagnostics)
+				}
+			default:
+				if flow == "read conversion error" {
+					r.conversionErr = fmt.Errorf("test conversion failure")
+				}
+				resourceRead(nil, ctx, frameworkresource.ReadRequest{}, &frameworkresource.ReadResponse{}, r, nil)
+			}
+			if !strings.HasPrefix(flow, "read") {
+				received, err := json.Marshal(r.received)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(received), "splunk-secret-token") {
+					t.Fatal("logging change removed credentials from the API operation")
+				}
+			}
+			logs, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(logs), "provider.ServiceWithConfig") {
+				t.Fatal("shared object log was not captured")
+			}
+			for _, secret := range []string{"splunk-secret-token", "s3-secret-key", "s3-secret-value", "private-secret-key", "private-secret-value"} {
+				if strings.Contains(string(logs), secret) {
+					t.Fatalf("shared %s logging exposed credentials", flow)
+				}
+			}
+		})
+	}
+}
 
 func init() {
 	var testedObj TestedService
@@ -694,7 +861,8 @@ resource "ioriver_service" "%s" {
     }
   }
 }`, rndName, rndName, certId, behaviorName),
-				ExpectError: regexp.MustCompile(`Unknown log destination reference`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`log destination "nonexistent-dest" is not defined in config\.log_destinations`),
 			},
 		},
 	})

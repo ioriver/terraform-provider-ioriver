@@ -781,8 +781,8 @@ func shieldProviderNameFromBackend(name string) string {
 }
 
 // validateCreatePrivateS3Credentials enforces create-time credentials only for
-// private S3 origins. Update flows may choose to source credentials differently.
-func validateCreatePrivateS3Credentials(data *ServiceResourceModel) error {
+// private S3 origins. Unknown values are allowed during planning, not apply.
+func validateCreatePrivateS3Credentials(data *ServiceResourceModel, allowUnknown bool) error {
 	if data == nil || data.Config == nil {
 		return nil
 	}
@@ -812,7 +812,7 @@ func validateCreatePrivateS3Credentials(data *ServiceResourceModel) error {
 			continue
 		}
 
-		if err := requireBothCredsPresent(&origin, originName, "creating a private S3 origin"); err != nil {
+		if err := requireBothCredsPresent(&origin, originName, "creating a private S3 origin", allowUnknown); err != nil {
 			return err
 		}
 	}
@@ -855,7 +855,7 @@ func boolValueOrFalse(v types.Bool) bool {
 // both s3_aws_key and s3_aws_secret from config.
 //
 // New origins added by an update plan are validated by the same create-time rules.
-func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceModel) error {
+func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceModel, allowUnknown bool) error {
 	if planData == nil || planData.Config == nil {
 		return nil
 	}
@@ -905,7 +905,7 @@ func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceMode
 			if !planIsPrivate {
 				continue
 			}
-			if err := requireBothCredsPresent(&origin, originName, "adding a new private S3 origin"); err != nil {
+			if err := requireBothCredsPresent(&origin, originName, "adding a new private S3 origin", allowUnknown); err != nil {
 				return err
 			}
 			continue
@@ -918,14 +918,14 @@ func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceMode
 		}
 
 		if change.becamePrivate {
-			if err := requireBothCredsPresent(&origin, originName, "changing an existing origin to is_private=true"); err != nil {
+			if err := requireBothCredsPresent(&origin, originName, "changing an existing origin to is_private=true", allowUnknown); err != nil {
 				return err
 			}
 			continue
 		}
 
 		if change.versionChanged {
-			if err := requireBothCredsPresent(&origin, originName, "bumping credentials_version"); err != nil {
+			if err := requireBothCredsPresent(&origin, originName, "bumping credentials_version", allowUnknown); err != nil {
 				return err
 			}
 			continue
@@ -936,19 +936,10 @@ func validateUpdatePrivateS3Credentials(planData, stateData *ServiceResourceMode
 }
 
 // requireBothCredsPresent returns an error unless both s3_aws_key and s3_aws_secret
-// are set to concrete values in the plan. Both-unknown is deferred to apply.
-func requireBothCredsPresent(origin *OriginModel, originName, reason string) error {
-	keyUnknown := origin.S3Origin.S3AwsKey.IsUnknown()
-	secretUnknown := origin.S3Origin.S3AwsSecret.IsUnknown()
-
-	if keyUnknown && secretUnknown {
-		return nil
-	}
-
-	missingKey := origin.S3Origin.S3AwsKey.IsNull() ||
-		(!keyUnknown && origin.S3Origin.S3AwsKey.ValueString() == "")
-	missingSecret := origin.S3Origin.S3AwsSecret.IsNull() ||
-		(!secretUnknown && origin.S3Origin.S3AwsSecret.ValueString() == "")
+// are present. Unknown values are deferred only during planning.
+func requireBothCredsPresent(origin *OriginModel, originName, reason string, allowUnknown bool) error {
+	missingKey := !credentialValueIsSet(origin.S3Origin.S3AwsKey, allowUnknown)
+	missingSecret := !credentialValueIsSet(origin.S3Origin.S3AwsSecret, allowUnknown)
 
 	if !missingKey && !missingSecret {
 		return nil

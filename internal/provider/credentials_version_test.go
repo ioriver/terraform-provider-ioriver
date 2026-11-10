@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -16,9 +17,14 @@ import (
 func logDestListValue(items []LogDestinationModel) types.List {
 	vals := make([]attr.Value, len(items))
 	for i := range items {
+		for _, list := range []*types.List{&items[i].SelectedFields, &items[i].RequestHeaders, &items[i].ResponseHeaders} {
+			if list.IsNull() {
+				*list = types.ListNull(types.StringType)
+			}
+		}
 		obj, diags := types.ObjectValueFrom(context.Background(), LogDestinationAttrTypes(), items[i])
 		if diags.HasError() {
-			return types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})
+			panic(fmt.Sprintf("invalid log destination fixture: %v", diags))
 		}
 		vals[i] = obj
 	}
@@ -35,6 +41,149 @@ func firstLogDest(t *testing.T, data *ServiceResourceModel) LogDestinationModel 
 		t.Fatal("expected at least one log destination")
 	}
 	return lds[0]
+}
+
+func TestLogDestinationCredentials_PhaseValidation(t *testing.T) {
+	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk"} {
+		for _, valueCase := range []struct {
+			name  string
+			value types.String
+			valid bool
+		}{
+			{"unknown", types.StringUnknown(), false},
+			{"unknown partner", types.StringUnknown(), false},
+			{"both unknown", types.StringUnknown(), false},
+			{"null", types.StringNull(), false},
+			{"empty", types.StringValue(""), false},
+			{"known", types.StringValue("test-credential"), true},
+		} {
+			t.Run(kind+"/"+valueCase.name, func(t *testing.T) {
+				model := func(version types.Int64, source string, value types.String) *ServiceResourceModel {
+					destination := testSplunkDestination()
+					destination.Source = types.StringValue(source)
+					if kind == "splunk" {
+						destination.Splunk.CredentialsVersion = version
+						destination.Splunk.Credentials = &SplunkCredsModel{Token: value}
+					} else {
+						destination.Splunk = nil
+						first, second := value, types.StringValue("test-secret")
+						if valueCase.name == "unknown partner" {
+							first, second = second, value
+						} else if valueCase.name == "both unknown" {
+							second = value
+						}
+						creds := &AwsCredsModel{AccessKey: &AwsAccessKeyModel{
+							AccessKey: first, SecretKey: second,
+						}}
+						if kind == "aws_s3_assume_role" || kind == "compatible_s3_assume_role" {
+							creds = &AwsCredsModel{AssumeRole: &AwsAssumeRoleModel{
+								RoleArn: first, ExternalId: second,
+							}}
+						}
+						if kind == "aws_s3" || kind == "aws_s3_assume_role" {
+							destination.AwsS3 = &EmbeddedAwsS3LogDestinationModel{
+								Credentials: creds, CredentialsVersion: version,
+							}
+						} else {
+							destination.CompatibleS3 = &EmbeddedCompatibleS3LogDestinationModel{
+								Credentials: creds, CredentialsVersion: version,
+							}
+						}
+					}
+					return &ServiceResourceModel{Config: &ServiceConfigModel{
+						LogDestinations: logDestListValue([]LogDestinationModel{destination}),
+					}}
+				}
+				config := model(types.Int64Value(2), "security", valueCase.value)
+				emptyState := &ServiceResourceModel{Config: &ServiceConfigModel{LogDestinations: logDestListValue(nil)}}
+				for _, flow := range []struct {
+					name     string
+					state    *ServiceResourceModel
+					required bool
+				}{
+					{"create", nil, true},
+					{"addition", emptyState, true},
+					{"rotation", model(types.Int64Value(1), "security", types.StringNull()), true},
+					{"source replacement", model(types.Int64Value(2), "traffic", types.StringNull()), true},
+					{"unchanged", model(types.Int64Value(2), "security", types.StringNull()), false},
+				} {
+					t.Run(flow.name, func(t *testing.T) {
+						for _, allowUnknown := range []bool{true, false} {
+							var err error
+							if flow.state == nil {
+								err = validateCreateLogDestinationCredentials(config, allowUnknown)
+							} else {
+								err = validateUpdateLogDestinationCredentials(config, flow.state, allowUnknown)
+							}
+							wantValid := !flow.required || valueCase.valid || (allowUnknown && valueCase.value.IsUnknown())
+							if (err == nil) != wantValid {
+								t.Fatalf("allowUnknown=%v: expected valid=%v, got %v", allowUnknown, wantValid, err)
+							}
+						}
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestPrivateS3Credentials_PhaseValidation(t *testing.T) {
+	for _, pair := range []struct {
+		name        string
+		key, secret types.String
+		valid       bool
+	}{
+		{"both unknown", types.StringUnknown(), types.StringUnknown(), false},
+		{"unknown key", types.StringUnknown(), types.StringValue("secret"), false},
+		{"unknown secret", types.StringValue("key"), types.StringUnknown(), false},
+		{"missing key", types.StringNull(), types.StringValue("secret"), false},
+		{"missing secret", types.StringValue("key"), types.StringNull(), false},
+		{"empty key", types.StringValue(""), types.StringValue("secret"), false},
+		{"empty secret", types.StringValue("key"), types.StringValue(""), false},
+		{"known", types.StringValue("key"), types.StringValue("secret"), true},
+	} {
+		t.Run(pair.name, func(t *testing.T) {
+			config := makeOriginServiceModelWithPrivacyVersion("origin", true, types.Int64Value(2), "", "")
+			origins, err := ListElementsAs[OriginModel](context.Background(), config.Config.Origins)
+			if err != nil {
+				t.Fatal(err)
+			}
+			origins[0].S3Origin.S3AwsKey = pair.key
+			origins[0].S3Origin.S3AwsSecret = pair.secret
+			list, diags := types.ListValueFrom(context.Background(), types.ObjectType{AttrTypes: GetOriginAttrTypes()}, origins)
+			if diags.HasError() {
+				t.Fatal(diags)
+			}
+			config.Config.Origins = list
+			for _, flow := range []struct {
+				name     string
+				state    *ServiceResourceModel
+				required bool
+			}{
+				{"create", nil, true},
+				{"addition", &ServiceResourceModel{Config: &ServiceConfigModel{}}, true},
+				{"rotation", makeOriginServiceModelWithPrivacyVersion("origin", true, types.Int64Value(1), "", ""), true},
+				{"public to private", makeOriginServiceModelWithPrivacyVersion("origin", false, types.Int64Value(2), "", ""), true},
+				{"unchanged", makeOriginServiceModelWithPrivacyVersion("origin", true, types.Int64Value(2), "", ""), false},
+			} {
+				t.Run(flow.name, func(t *testing.T) {
+					for _, allowUnknown := range []bool{true, false} {
+						var err error
+						if flow.state == nil {
+							err = validateCreatePrivateS3Credentials(config, allowUnknown)
+						} else {
+							err = validateUpdatePrivateS3Credentials(config, flow.state, allowUnknown)
+						}
+						wantValid := !flow.required || pair.valid ||
+							(allowUnknown && credentialValueIsSet(pair.key, true) && credentialValueIsSet(pair.secret, true))
+						if (err == nil) != wantValid {
+							t.Fatalf("allowUnknown=%v: expected valid=%v, got %v", allowUnknown, wantValid, err)
+						}
+					}
+				})
+			}
+		})
+	}
 }
 
 func makeLogDestPlanData(name string, credVer types.Int64, withCreds bool) *ServiceResourceModel {
@@ -450,7 +599,10 @@ func TestCredentialsVersion_LogDest_ModelToMap_CredsPresent(t *testing.T) {
 	mergeLogDestCredentialsFromConfig(plan, config, nil) // create → inject
 
 	ld := firstLogDest(t, plan)
-	m := ld.ModelToMap()
+	m, err := ld.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := m["credentials"]; !ok {
 		t.Fatal("expected 'credentials' key in ModelToMap output after inject")
 	}
@@ -463,7 +615,10 @@ func TestCredentialsVersion_LogDest_ModelToMap_CredsAbsent(t *testing.T) {
 	mergeLogDestCredentialsFromConfig(plan, config, state)
 
 	ld := firstLogDest(t, plan)
-	m := ld.ModelToMap()
+	m, err := ld.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := m["credentials"]; ok {
 		t.Fatal("expected 'credentials' key to be absent in ModelToMap output when skipped")
 	}
@@ -475,7 +630,10 @@ func TestCredentialsVersion_LogDest_Compatible_ModelToMap_CredsPresent(t *testin
 	mergeLogDestCredentialsFromConfig(plan, config, nil)
 
 	ld := firstLogDest(t, plan)
-	m := ld.ModelToMap()
+	m, err := ld.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := m["credentials"]; !ok {
 		t.Fatal("expected 'credentials' key in compatible_s3 ModelToMap output after inject")
 	}
@@ -484,7 +642,7 @@ func TestCredentialsVersion_LogDest_Compatible_ModelToMap_CredsPresent(t *testin
 func TestLogDestination_CreateCredsEnforcement_AwsVersionWithoutCreds_Error(t *testing.T) {
 	data := makeLogDestPlanData("dest1", types.Int64Value(1), false)
 
-	if err := validateCreateLogDestinationCredentials(data); err == nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err == nil {
 		t.Fatal("expected create-time error when aws_s3.credentials_version is set without credentials")
 	}
 }
@@ -492,7 +650,7 @@ func TestLogDestination_CreateCredsEnforcement_AwsVersionWithoutCreds_Error(t *t
 func TestLogDestination_CreateCredsEnforcement_CompatibleVersionWithoutCreds_Error(t *testing.T) {
 	data := makeCompatibleLogDestPlanData("dest1", types.Int64Value(1), false)
 
-	if err := validateCreateLogDestinationCredentials(data); err == nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err == nil {
 		t.Fatal("expected create-time error when compatible_s3.credentials_version is set without credentials")
 	}
 }
@@ -500,7 +658,7 @@ func TestLogDestination_CreateCredsEnforcement_CompatibleVersionWithoutCreds_Err
 func TestLogDestination_CreateCredsEnforcement_AwsWithoutVersionOrCreds_Error(t *testing.T) {
 	data := makeLogDestPlanData("dest1", types.Int64Null(), false)
 
-	if err := validateCreateLogDestinationCredentials(data); err == nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err == nil {
 		t.Fatal("expected create-time error when aws_s3 has no credentials")
 	}
 }
@@ -508,7 +666,7 @@ func TestLogDestination_CreateCredsEnforcement_AwsWithoutVersionOrCreds_Error(t 
 func TestLogDestination_CreateCredsEnforcement_CompatibleWithoutVersionOrCreds_Error(t *testing.T) {
 	data := makeCompatibleLogDestPlanData("dest1", types.Int64Null(), false)
 
-	if err := validateCreateLogDestinationCredentials(data); err == nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err == nil {
 		t.Fatal("expected create-time error when compatible_s3 has no credentials")
 	}
 }
@@ -516,7 +674,7 @@ func TestLogDestination_CreateCredsEnforcement_CompatibleWithoutVersionOrCreds_E
 func TestLogDestination_CreateCredsEnforcement_AwsWithCreds_OK(t *testing.T) {
 	data := makeLogDestPlanData("dest1", types.Int64Value(1), true)
 
-	if err := validateCreateLogDestinationCredentials(data); err != nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err != nil {
 		t.Fatalf("expected create-time success with aws_s3 credentials, got: %v", err)
 	}
 }
@@ -524,7 +682,7 @@ func TestLogDestination_CreateCredsEnforcement_AwsWithCreds_OK(t *testing.T) {
 func TestLogDestination_CreateCredsEnforcement_CompatibleWithCreds_OK(t *testing.T) {
 	data := makeCompatibleLogDestPlanData("dest1", types.Int64Value(1), true)
 
-	if err := validateCreateLogDestinationCredentials(data); err != nil {
+	if err := validateCreateLogDestinationCredentials(data, true); err != nil {
 		t.Fatalf("expected create-time success with compatible_s3 credentials, got: %v", err)
 	}
 }
@@ -533,7 +691,7 @@ func TestLogDestination_UpdateCredsEnforcement_AwsVersionBumpedWithoutCreds_Erro
 	plan := makeLogDestPlanData("dest1", types.Int64Value(2), false)
 	state := makeLogDestStateData("dest1", types.Int64Value(1))
 
-	if err := validateUpdateLogDestinationCredentials(plan, state); err == nil {
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err == nil {
 		t.Fatal("expected update-time error when aws_s3.credentials_version is bumped without credentials")
 	}
 }
@@ -542,7 +700,7 @@ func TestLogDestination_UpdateCredsEnforcement_CompatibleVersionBumpedWithoutCre
 	plan := makeCompatibleLogDestPlanData("dest1", types.Int64Value(2), false)
 	state := makeCompatibleLogDestStateData("dest1", types.Int64Value(1))
 
-	if err := validateUpdateLogDestinationCredentials(plan, state); err == nil {
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err == nil {
 		t.Fatal("expected update-time error when compatible_s3.credentials_version is bumped without credentials")
 	}
 }
@@ -551,7 +709,7 @@ func TestLogDestination_UpdateCredsEnforcement_AwsVersionBumpedWithCreds_OK(t *t
 	plan := makeLogDestPlanData("dest1", types.Int64Value(2), true)
 	state := makeLogDestStateData("dest1", types.Int64Value(1))
 
-	if err := validateUpdateLogDestinationCredentials(plan, state); err != nil {
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err != nil {
 		t.Fatalf("expected update-time success when aws_s3.credentials_version is bumped with credentials, got: %v", err)
 	}
 }
@@ -560,7 +718,7 @@ func TestLogDestination_UpdateCredsEnforcement_AwsVersionOmitted_NoCreds_OK(t *t
 	plan := makeLogDestPlanData("dest1", types.Int64Null(), false)
 	state := makeLogDestStateData("dest1", types.Int64Value(1))
 
-	if err := validateUpdateLogDestinationCredentials(plan, state); err != nil {
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err != nil {
 		t.Fatalf("expected no error when aws_s3.credentials_version is omitted, got: %v", err)
 	}
 }
@@ -569,7 +727,7 @@ func TestLogDestination_UpdateCredsEnforcement_CompatibleVersionOmitted_NoCreds_
 	plan := makeCompatibleLogDestPlanData("dest1", types.Int64Null(), false)
 	state := makeCompatibleLogDestStateData("dest1", types.Int64Value(1))
 
-	if err := validateUpdateLogDestinationCredentials(plan, state); err != nil {
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err != nil {
 		t.Fatalf("expected no error when compatible_s3.credentials_version is omitted, got: %v", err)
 	}
 }
@@ -594,7 +752,10 @@ func TestLogDestination_ModelToMap_CredentialsPayloadEscapesJSON(t *testing.T) {
 		},
 	}
 
-	m := ld.ModelToMap()
+	m, err := ld.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
 	raw, ok := m["credentials"].(string)
 	if !ok || raw == "" {
 		t.Fatal("expected serialized credentials JSON payload")
@@ -612,7 +773,7 @@ func TestLogDestination_ModelToMap_CredentialsPayloadEscapesJSON(t *testing.T) {
 func TestCreatePrivateS3CredsEnforcement_PrivateWithCreds_OK(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", true, "AKID", "SECRET")
 
-	if err := validateCreatePrivateS3Credentials(data); err != nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err != nil {
 		t.Fatalf("expected no error when private origin has credentials on create, got: %v", err)
 	}
 }
@@ -620,7 +781,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateWithCreds_OK(t *testing.T) {
 func TestCreatePrivateS3CredsEnforcement_PrivateMissingCreds_Error(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", true, "", "")
 
-	if err := validateCreatePrivateS3Credentials(data); err == nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err == nil {
 		t.Fatal("expected error when private origin has missing credentials on create")
 	}
 }
@@ -628,7 +789,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateMissingCreds_Error(t *testing.T)
 func TestCreatePrivateS3CredsEnforcement_PrivateMissingKeyOnly_Error(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", true, "", "SECRET")
 
-	if err := validateCreatePrivateS3Credentials(data); err == nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err == nil {
 		t.Fatal("expected error when private origin is missing s3_aws_key on create")
 	}
 }
@@ -636,7 +797,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateMissingKeyOnly_Error(t *testing.
 func TestCreatePrivateS3CredsEnforcement_PrivateMissingSecretOnly_Error(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", true, "AKID", "")
 
-	if err := validateCreatePrivateS3Credentials(data); err == nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err == nil {
 		t.Fatal("expected error when private origin is missing s3_aws_secret on create")
 	}
 }
@@ -644,7 +805,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateMissingSecretOnly_Error(t *testi
 func TestCreatePrivateS3CredsEnforcement_PublicWithoutCreds_OK(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", false, "", "")
 
-	if err := validateCreatePrivateS3Credentials(data); err != nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err != nil {
 		t.Fatalf("expected no error when public origin omits credentials on create, got: %v", err)
 	}
 }
@@ -674,7 +835,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateUnknownCreds_OKAtPlan(t *testing
 	list, _ := types.ListValueFrom(context.TODO(), elemType, []OriginModel{origin})
 	data := &ServiceResourceModel{Config: &ServiceConfigModel{Origins: list}}
 
-	if err := validateCreatePrivateS3Credentials(data); err != nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err != nil {
 		t.Fatalf("expected no error when private creds are unknown during plan, got: %v", err)
 	}
 }
@@ -704,7 +865,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateUnknownKeyMissingSecret_Error(t 
 	list, _ := types.ListValueFrom(context.TODO(), elemType, []OriginModel{origin})
 	data := &ServiceResourceModel{Config: &ServiceConfigModel{Origins: list}}
 
-	if err := validateCreatePrivateS3Credentials(data); err == nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err == nil {
 		t.Fatal("expected error when private key is unknown but secret is missing")
 	}
 }
@@ -734,7 +895,7 @@ func TestCreatePrivateS3CredsEnforcement_PrivateMissingKeyUnknownSecret_Error(t 
 	list, _ := types.ListValueFrom(context.TODO(), elemType, []OriginModel{origin})
 	data := &ServiceResourceModel{Config: &ServiceConfigModel{Origins: list}}
 
-	if err := validateCreatePrivateS3Credentials(data); err == nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err == nil {
 		t.Fatal("expected error when private key is missing but secret is unknown")
 	}
 }
@@ -770,7 +931,7 @@ func TestCredentialsVersion_Origin_Update_PublicToPrivate_NoCredsInConfig_Skip(t
 func TestSensitiveCreds_FullFlow_Create_PrivateSerializesCreds(t *testing.T) {
 	data := makeOriginServiceModelWithPrivacy("origin1", true, "AKID", "SECRET")
 
-	if err := validateCreatePrivateS3Credentials(data); err != nil {
+	if err := validateCreatePrivateS3Credentials(data, true); err != nil {
 		t.Fatalf("expected create validation to pass, got: %v", err)
 	}
 
@@ -856,7 +1017,7 @@ func TestUpdatePrivateS3CredsEnforcement_VersionBumpedWithoutCreds_Error(t *test
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(2), "", "")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err == nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err == nil {
 		t.Fatal("expected error when credentials_version is bumped but creds are missing in config")
 	}
 }
@@ -866,7 +1027,7 @@ func TestUpdatePrivateS3CredsEnforcement_SameVersionNoCreds_OK(t *testing.T) {
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err != nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err != nil {
 		t.Fatalf("expected no error when nothing rotated, got: %v", err)
 	}
 }
@@ -876,7 +1037,7 @@ func TestUpdatePrivateS3CredsEnforcement_VersionBumpedWithBothCreds_OK(t *testin
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(2), "AKID_NEW", "SECRET_NEW")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err != nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err != nil {
 		t.Fatalf("expected rotation with both creds to be valid, got: %v", err)
 	}
 }
@@ -886,7 +1047,7 @@ func TestUpdatePrivateS3CredsEnforcement_VersionBumpedMissingSecret_Error(t *tes
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(2), "AKID_NEW", "")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err == nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err == nil {
 		t.Fatal("expected error when only s3_aws_key is set during rotation")
 	}
 }
@@ -896,7 +1057,7 @@ func TestUpdatePrivateS3CredsEnforcement_VersionBumpedMissingKey_Error(t *testin
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(2), "", "SECRET_NEW")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err == nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err == nil {
 		t.Fatal("expected error when only s3_aws_secret is set during rotation")
 	}
 }
@@ -906,7 +1067,7 @@ func TestUpdatePrivateS3CredsEnforcement_PublicToPrivateWithoutCreds_Error(t *te
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", false, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err == nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err == nil {
 		t.Fatal("expected error when origin flips public->private without creds in config")
 	}
 }
@@ -917,7 +1078,7 @@ func TestUpdatePrivateS3CredsEnforcement_PublicToPrivateWithCreds_OK(t *testing.
 	plan := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "AKID", "SECRET")
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", false, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err != nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err != nil {
 		t.Fatalf("expected public->private with creds to be valid, got: %v", err)
 	}
 }
@@ -929,7 +1090,7 @@ func TestUpdatePrivateS3CredsEnforcement_NewPrivateOriginMissingCreds_Error(t *t
 	// State has no origins at all (some other, non-S3 change is what triggered the update).
 	state := &ServiceResourceModel{Config: &ServiceConfigModel{}}
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err == nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err == nil {
 		t.Fatal("expected error when a new private S3 origin is added without creds during update")
 	}
 }
@@ -963,7 +1124,7 @@ func TestUpdatePrivateS3CredsEnforcement_VersionBumpedBothCredsUnknown_OK(t *tes
 
 	state := makeOriginServiceModelWithPrivacyVersion("origin1", true, types.Int64Value(1), "", "")
 
-	if err := validateUpdatePrivateS3Credentials(plan, state); err != nil {
+	if err := validateUpdatePrivateS3Credentials(plan, state, true); err != nil {
 		t.Fatalf("expected pair-unknown rotation to be deferred to apply, got: %v", err)
 	}
 }
