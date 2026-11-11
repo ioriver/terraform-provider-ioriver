@@ -1268,6 +1268,8 @@ Optional:
 
 - `custom_http_port` (Number) Custom HTTP port (defaults to 80)
 - `custom_https_port` (Number) Custom HTTPS port (defaults to 443)
+- `enable_mtls` (Boolean) Enable mutual TLS authentication when connecting to this origin
+- `mtls_certificate_id` (String) ID of a SELF_MANAGED certificate used for mutual TLS to this origin
 - `protocol` (String) Protocol to use when connecting to origin. Valid values: `http`, `https`, `http_and_https`
 
 
@@ -1345,6 +1347,8 @@ Optional:
 
 - `custom_http_port` (Number) Custom HTTP port (defaults to 80)
 - `custom_https_port` (Number) Custom HTTPS port (defaults to 443)
+- `enable_mtls` (Boolean) Enable mutual TLS authentication when connecting to this origin
+- `mtls_certificate_id` (String) ID of a SELF_MANAGED certificate used for mutual TLS to this origin
 - `protocol` (String) Protocol to use when connecting to origin. Valid values: `http`, `https`, `http_and_https`
 
 
@@ -1393,9 +1397,11 @@ Optional:
 
 Optional:
 
+- `enable_viewer_mtls` (Boolean) Enable client mTLS. When true, viewer_mtls_truststore_id must identify a trust store in the same account. Omitted values remain unset.
 - `http2_enabled` (Boolean) Enable HTTP/2
 - `http3_enabled` (Boolean) Enable HTTP/3
 - `ipv6_enabled` (Boolean) Enable IPv6
+- `viewer_mtls_truststore_id` (String) ID of the client mTLS trust store. Reference ioriver_client_mtls_trust_store.<name>.id to establish dependency ordering.
 
 
 <a id="nestedatt--config--security"></a>

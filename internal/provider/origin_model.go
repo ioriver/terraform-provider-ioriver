@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
@@ -60,10 +61,27 @@ func (o OriginModel) GetName() string {
 }
 
 type CustomOriginModel struct {
-	Host            types.String `tfsdk:"host"`
-	Protocol        types.String `tfsdk:"protocol"`
-	CustomHttpPort  types.Int64  `tfsdk:"custom_http_port"`  // Optional
-	CustomHttpsPort types.Int64  `tfsdk:"custom_https_port"` // Optional
+	Host              types.String `tfsdk:"host"`
+	Protocol          types.String `tfsdk:"protocol"`
+	CustomHttpPort    types.Int64  `tfsdk:"custom_http_port"`  // Optional
+	CustomHttpsPort   types.Int64  `tfsdk:"custom_https_port"` // Optional
+	EnableMTLS        types.Bool   `tfsdk:"enable_mtls"`
+	MTLSCertificateID types.String `tfsdk:"mtls_certificate_id"`
+}
+
+func validateCustomOriginMTLS(origin *CustomOriginModel) (string, string) {
+	if origin == nil || origin.EnableMTLS.IsNull() || origin.EnableMTLS.IsUnknown() || !origin.EnableMTLS.ValueBool() {
+		return "", ""
+	}
+
+	if !origin.Protocol.IsNull() && !origin.Protocol.IsUnknown() && origin.Protocol.ValueString() != "https" {
+		return "protocol", "Origin mTLS requires custom_origin.protocol to be exactly \"https\"."
+	}
+	if !origin.MTLSCertificateID.IsUnknown() &&
+		(origin.MTLSCertificateID.IsNull() || strings.TrimSpace(origin.MTLSCertificateID.ValueString()) == "") {
+		return "mtls_certificate_id", "Origin mTLS requires a non-empty custom_origin.mtls_certificate_id."
+	}
+	return "", ""
 }
 
 type S3OriginModel struct {
@@ -140,6 +158,14 @@ func originBaseAttributes() map[string]schema.Attribute {
 					Validators: []validator.Int64{
 						int64validator.Between(1, 65535),
 					},
+				},
+				"enable_mtls": schema.BoolAttribute{
+					MarkdownDescription: "Enable mutual TLS authentication when connecting to this origin",
+					Optional:            true,
+				},
+				"mtls_certificate_id": schema.StringAttribute{
+					MarkdownDescription: "ID of a SELF_MANAGED certificate used for mutual TLS to this origin",
+					Optional:            true,
 				},
 			},
 			Validators: []validator.Object{
@@ -283,10 +309,12 @@ func GetOriginAttrTypes() map[string]attr.Type {
 		},
 		"custom_origin": types.ObjectType{
 			AttrTypes: map[string]attr.Type{
-				"host":              types.StringType,
-				"protocol":          types.StringType,
-				"custom_http_port":  types.Int64Type,
-				"custom_https_port": types.Int64Type,
+				"host":                types.StringType,
+				"protocol":            types.StringType,
+				"custom_http_port":    types.Int64Type,
+				"custom_https_port":   types.Int64Type,
+				"enable_mtls":         types.BoolType,
+				"mtls_certificate_id": types.StringType,
 			},
 		},
 		"s3_origin": types.ObjectType{
@@ -315,10 +343,12 @@ func GetOriginSetOriginAttrTypes() map[string]attr.Type {
 		"sni_hostname": types.StringType,
 		"custom_origin": types.ObjectType{
 			AttrTypes: map[string]attr.Type{
-				"host":              types.StringType,
-				"protocol":          types.StringType,
-				"custom_http_port":  types.Int64Type,
-				"custom_https_port": types.Int64Type,
+				"host":                types.StringType,
+				"protocol":            types.StringType,
+				"custom_http_port":    types.Int64Type,
+				"custom_https_port":   types.Int64Type,
+				"enable_mtls":         types.BoolType,
+				"mtls_certificate_id": types.StringType,
 			},
 		},
 		"s3_origin": types.ObjectType{
@@ -455,6 +485,12 @@ func (o *OriginModel) ModelToMap() (map[string]interface{}, error) {
 		}
 		if !o.CustomOrigin.CustomHttpsPort.IsNull() && !o.CustomOrigin.CustomHttpsPort.IsUnknown() {
 			customOriginMap["custom_https_port"] = o.CustomOrigin.CustomHttpsPort.ValueInt64()
+		}
+		if !o.CustomOrigin.EnableMTLS.IsNull() && !o.CustomOrigin.EnableMTLS.IsUnknown() {
+			customOriginMap["enable_mtls"] = o.CustomOrigin.EnableMTLS.ValueBool()
+		}
+		if !o.CustomOrigin.MTLSCertificateID.IsNull() && !o.CustomOrigin.MTLSCertificateID.IsUnknown() {
+			customOriginMap["mtls_certificate_id"] = o.CustomOrigin.MTLSCertificateID.ValueString()
 		}
 
 		originMap["custom_origin"] = customOriginMap
@@ -623,7 +659,10 @@ func originFromMap(ctx context.Context, originMap map[string]interface{}) (*Orig
 
 	// Extract custom_origin
 	if customOriginMap, ok := originMap["custom_origin"].(map[string]interface{}); ok {
-		customOrigin := &CustomOriginModel{}
+		customOrigin := &CustomOriginModel{
+			EnableMTLS:        types.BoolNull(),
+			MTLSCertificateID: types.StringNull(),
+		}
 
 		if host, ok := customOriginMap["host"].(string); ok {
 			customOrigin.Host = types.StringValue(host)
@@ -639,6 +678,12 @@ func originFromMap(ctx context.Context, originMap map[string]interface{}) (*Orig
 
 		if httpsPort, ok := customOriginMap["custom_https_port"].(float64); ok {
 			customOrigin.CustomHttpsPort = types.Int64Value(int64(httpsPort))
+		}
+		if enableMTLS, ok := customOriginMap["enable_mtls"].(bool); ok {
+			customOrigin.EnableMTLS = types.BoolValue(enableMTLS)
+		}
+		if certificateID, ok := customOriginMap["mtls_certificate_id"].(string); ok {
+			customOrigin.MTLSCertificateID = types.StringValue(certificateID)
 		}
 
 		origin.CustomOrigin = customOrigin

@@ -88,6 +88,7 @@ func (p *IORiverProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *IORiverProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCertificateResource,
+		NewClientMTLSTrustStoreResource,
 		NewAccountProviderResource,
 		NewServiceResource,
 		NewDomainResource,

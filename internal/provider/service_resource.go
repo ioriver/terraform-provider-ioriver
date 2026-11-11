@@ -643,6 +643,22 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 		return
 	}
 
+	if !data.Config.Protocol.IsNull() && !data.Config.Protocol.IsUnknown() {
+		var protocol ProtocolConfigModel
+		resp.Diagnostics.Append(data.Config.Protocol.As(ctx, &protocol, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if protocol.EnableViewerMTLS.ValueBool() && !protocol.ViewerMTLSTrustStoreID.IsUnknown() &&
+			(protocol.ViewerMTLSTrustStoreID.IsNull() || protocol.ViewerMTLSTrustStoreID.ValueString() == "") {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("config").AtName("protocol").AtName("viewer_mtls_truststore_id"),
+				"Missing viewer mTLS trust store",
+				"enable_viewer_mtls=true requires viewer_mtls_truststore_id.",
+			)
+		}
+	}
+
 	// --- Security (WAF custom rules + rate limit) ---
 	var secPtr *SecurityModel
 	if !data.Config.Security.IsNull() && !data.Config.Security.IsUnknown() {
@@ -720,6 +736,13 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 
 			// Validate S3 private-only fields when is_private is false.
 			for i, o := range origins {
+				if field, message := validateCustomOriginMTLS(o.CustomOrigin); field != "" {
+					resp.Diagnostics.AddAttributeError(
+						path.Root("config").AtName("origins").AtListIndex(i).AtName("custom_origin").AtName(field),
+						"Invalid origin mTLS configuration",
+						message,
+					)
+				}
 				if o.S3Origin == nil {
 					continue
 				}
@@ -792,6 +815,15 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 					fmt.Sprintf("origin_sets[%d] (%q) must have at least 2 origins for failover, but has %d.",
 						i, os.Name.ValueString(), len(os.Origins)),
 				)
+			}
+			for j, origin := range os.Origins {
+				if field, message := validateCustomOriginMTLS(origin.CustomOrigin); field != "" {
+					resp.Diagnostics.AddAttributeError(
+						path.Root("config").AtName("origin_sets").AtListIndex(i).AtName("origins").AtListIndex(j).AtName("custom_origin").AtName(field),
+						"Invalid origin mTLS configuration",
+						message,
+					)
+				}
 			}
 		}
 	}
