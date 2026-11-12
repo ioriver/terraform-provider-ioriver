@@ -74,8 +74,16 @@ func TestServiceConditionScalarValueShapeOutboundNulls(t *testing.T) {
 		if !ok {
 			t.Fatal("request is missing waf")
 		}
-		if _, exists := waf["logs_shipping"]; exists {
-			t.Fatal("request must omit unconfigured logs_shipping")
+		shipping, ok := waf["logs_shipping"].(map[string]interface{})
+		if !ok {
+			t.Fatal("request must include default logs_shipping")
+		}
+		if destination, exists := shipping["destination"]; !exists || destination != nil {
+			t.Fatalf("default logs_shipping destination must be null, got %v", shipping["destination"])
+		}
+		if shipping["enabled"] != false || shipping["severity"] != "medium" ||
+			shipping["allowed_sampling_percentage"] != float64(0) {
+			t.Fatalf("request must include logs_shipping defaults, got %v", shipping)
 		}
 		destinations, ok := config["log_destinations"].([]interface{})
 		if !ok || len(destinations) != 0 {

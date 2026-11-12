@@ -1980,6 +1980,43 @@ func TestSecurityLogsShipping_RoundTripAndClear(t *testing.T) {
 	}
 }
 
+func TestSecurityLogsShipping_DefaultObjectRoundTrip(t *testing.T) {
+	defaults := map[string]interface{}{
+		"destination":                 nil,
+		"enabled":                     false,
+		"severity":                    "medium",
+		"allowed_sampling_percentage": float64(0),
+	}
+	read, err := securityLogsShippingFromMap(defaults, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !read.Destination.IsNull() || read.Enabled.ValueBool() ||
+		read.SeverityMinThreshold.ValueString() != "medium" ||
+		read.AllowedSamplingPercentage.ValueFloat64() != 0 {
+		t.Fatalf("unexpected default logs_shipping model: %+v", read)
+	}
+	if _, diags := types.ObjectValueFrom(context.Background(), SecurityLogsShippingAttrTypes(), read); diags.HasError() {
+		t.Fatalf("default logs_shipping does not match schema: %v", diags)
+	}
+	waf, err := (&SecurityModel{LogsShipping: read}).SecurityModelToMap(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(waf["logs_shipping"], defaults) {
+		t.Fatalf("default logs_shipping payload mismatch: got %v, want %v", waf["logs_shipping"], defaults)
+	}
+
+	shipping := SecurityAttributes()["logs_shipping"].(schema.SingleNestedAttribute)
+	if !shipping.Optional || !shipping.Computed || shipping.Default == nil {
+		t.Fatal("logs_shipping must be optional and computed with an object default")
+	}
+	destination := shipping.Attributes["destination"].(schema.StringAttribute)
+	if !destination.Optional || destination.Required {
+		t.Fatal("logs_shipping destination must allow the default null value")
+	}
+}
+
 func TestSecurityLogsShipping_References(t *testing.T) {
 	destinations := map[string]LogDestinationModel{"security-splunk": testSplunkDestination()}
 	for _, tc := range []struct {
