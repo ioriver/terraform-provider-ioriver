@@ -81,6 +81,7 @@ Optional:
 
 - `behaviors` (Attributes) Behavior configuration — contains the default behavior and the list of specific (custom) behaviors (see [below for nested schema](#nestedatt--config--behaviors))
 - `compute` (Attributes) Compute configuration (see [below for nested schema](#nestedatt--config--compute))
+- `custom_responses` (Attributes List) Up to 10 custom responses with unique names, using inline text or a separately managed attachment. (see [below for nested schema](#nestedatt--config--custom_responses))
 - `domains` (Attributes List) Domain configuration (see [below for nested schema](#nestedatt--config--domains))
 - `geo_fencing` (Attributes) Geo-fencing configuration — restrict access by viewer country (allow-list or deny-list). Block is fully optional; omit it to apply no restriction. When present, `mode` is required and `countries` defaults to `[]`. (see [below for nested schema](#nestedatt--config--geo_fencing))
 - `log_destinations` (Attributes List) Log destination configuration (see [below for nested schema](#nestedatt--config--log_destinations))
@@ -94,6 +95,29 @@ Read-Only:
 - `creation_name` (String) Name of the service when it was created, const once set by backend
 - `service_uid` (String) Unique identifier for the service
 - `uuid` (String) Unique identifier for the configuration
+
+<a id="nestedatt--config--custom_responses"></a>
+### Nested Schema for `config.custom_responses`
+
+Required:
+
+- `name` (String) Unique response name within the service, 1-255 characters; cannot be whitespace-only.
+- `status_code` (Number) HTTP response status code, 100-599.
+
+Optional:
+
+- `headers` (Map of String) Response headers. Redirect codes 301, 302, 303, 307,
+  and 308 require a non-empty `Location` header, matched case-insensitively.
+- `text` (String) Inline response body, at most 1024 UTF-8 bytes. Conflicts with `attached_file_id`.
+- `attached_file_id` (String) Attachment UUID, typically `ioriver_attached_file.blocked.id`. Conflicts with `text`.
+
+Read-Only:
+
+- `uuid` (String) Response UUID, preserved by response name.
+
+Omitting both body fields creates an empty-body response. The service resource does not
+upload files; use the separate [attachment resource](./attached_file.md).
+Defining a response does not itself configure WAF to use it.
 
 <a id="nestedatt--config--behaviors"></a>
 ### Nested Schema for `config.behaviors`
