@@ -1,5 +1,81 @@
 # All origin types and their configuration options.
 
+# Origin mTLS uses a separate self-managed client certificate, not the service's
+# front-end certificate. Both direct origins and origin-set members require HTTPS.
+resource "ioriver_certificate" "origin_client" {
+  name        = "origin-client-cert"
+  type        = "SELF_MANAGED"
+  certificate = file("client.crt")
+  private_key = file("client.key")
+}
+
+resource "ioriver_service" "custom_origin_mtls" {
+  name         = "custom-origin-mtls"
+  certificates = [ioriver_certificate.cert.id]
+
+  config = {
+    origins = [
+      {
+        name = "mtls-origin"
+        custom_origin = {
+          host                = "origin.example.com"
+          protocol            = "https"
+          enable_mtls         = true
+          mtls_certificate_id = ioriver_certificate.origin_client.id
+        }
+      }
+    ]
+    domains = [
+      {
+        domain   = "cdn.example.com"
+        mappings = [{ target_mapping = "mtls-origin" }]
+      }
+    ]
+  }
+}
+
+resource "ioriver_service" "origin_set_mtls" {
+  name         = "origin-set-mtls"
+  certificates = [ioriver_certificate.cert.id]
+
+  config = {
+    origin_sets = [
+      {
+        name = "mtls-failover"
+        origins = [
+          {
+            custom_origin = {
+              host                = "primary.example.com"
+              protocol            = "https"
+              enable_mtls         = true
+              mtls_certificate_id = ioriver_certificate.origin_client.id
+            }
+          },
+          {
+            custom_origin = {
+              host                = "failover.example.com"
+              protocol            = "https"
+              enable_mtls         = true
+              mtls_certificate_id = ioriver_certificate.origin_client.id
+            }
+          },
+        ]
+      }
+    ]
+    domains = [
+      {
+        domain = "cdn-failover.example.com"
+        mappings = [
+          {
+            target_type    = "origin_set"
+            target_mapping = "mtls-failover"
+          }
+        ]
+      }
+    ]
+  }
+}
+
 # ---------------------------------------------------------------------------
 # 1. Simple HTTPS custom origin
 # ---------------------------------------------------------------------------

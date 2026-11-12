@@ -350,11 +350,43 @@ func TestAccIORiverService_WithOrigins(t *testing.T) {
 	// originIDs := []string{"origin-1", "origin-2", "origin-3"}
 	resourceName := serviceResourceType + "." + rndName
 
+	checkOriginMTLS := func(enabled bool) resource.TestCheckFunc {
+		return resource.ComposeTestCheckFunc(
+			testAccCheckObjectExists[ServiceWithConfig](resourceName, &service, testedObj),
+			func(state *terraform.State) error {
+				origins, ok := service.Config["origins"].([]interface{})
+				if !ok || len(origins) != 1 {
+					return fmt.Errorf("expected one backend origin, got %v", service.Config["origins"])
+				}
+				origin, ok := origins[0].(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("unexpected backend origin type %T", origins[0])
+				}
+				custom, ok := origin["custom_origin"].(map[string]interface{})
+				if !ok || custom["enable_mtls"] != enabled {
+					return fmt.Errorf("backend origin mTLS does not match enabled=%t: %v", enabled, custom)
+				}
+				if enabled {
+					certificate := state.RootModule().Resources["ioriver_certificate.origin_client"]
+					if certificate == nil || custom["mtls_certificate_id"] != certificate.Primary.ID {
+						return fmt.Errorf("backend origin mTLS certificate does not match Terraform certificate")
+					}
+				} else if custom["mtls_certificate_id"] != nil {
+					return fmt.Errorf("backend origin mTLS certificate was not cleared: %v", custom["mtls_certificate_id"])
+				}
+				return nil
+			},
+		)
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckV2(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy: func(s *terraform.State) error {
-			return testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType)
+			if err := testAccCheckResourceDestroy[ServiceWithConfig](s, testedObj, serviceResourceType); err != nil {
+				return err
+			}
+			return testAccCheckResourceDestroy[ioriver.Certificate](s, TestedCertificate{}, certResourceType)
 		},
 		Steps: []resource.TestStep{
 			{ // Set service with origin #1
@@ -418,6 +450,32 @@ func TestAccIORiverService_WithOrigins(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.shield.location.country", "US"),
 					resource.TestCheckResourceAttr(resourceName, "config.origins.0.shield.location.subdivision", "VA"),
 				),
+			},
+			{
+				Config: testAccServiceConfigOriginMTLS(rndName, certId, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "config.origins.0.custom_origin.enable_mtls", "true"),
+					resource.TestCheckResourceAttrPair(resourceName, "config.origins.0.custom_origin.mtls_certificate_id", "ioriver_certificate.origin_client", "id"),
+					checkOriginMTLS(true),
+				),
+			},
+			{
+				Config:             testAccServiceConfigOriginMTLS(rndName, certId, true),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
+				Config: testAccServiceConfigOriginMTLS(rndName, certId, false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "config.origins.0.custom_origin.enable_mtls", "false"),
+					resource.TestCheckNoResourceAttr(resourceName, "config.origins.0.custom_origin.mtls_certificate_id"),
+					checkOriginMTLS(false),
+				),
+			},
+			{
+				Config:             testAccServiceConfigOriginMTLS(rndName, certId, false),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})
@@ -2611,4 +2669,71 @@ resource "ioriver_service" "%s" {
 	}
 }
 	`, name, name, certId, wafURIRawScalar, wafASNScalar, behaviorStatusScalar, behaviorPathScalar)
+}
+
+func TestServiceOriginMTLSValidation(t *testing.T) {
+	t.Parallel()
+	t.Run("acceptance configuration plans without backend calls", func(t *testing.T) {
+		for _, enabled := range []bool{true, false} {
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{{
+					Config: `provider "ioriver" { endpoint = "http://127.0.0.1:1/" }` +
+						testAccServiceConfigOriginMTLS("mtls_plan", "00000000-0000-4000-8000-000000000001", enabled),
+					PlanOnly: true, ExpectNonEmptyPlan: true,
+				}},
+			})
+		}
+	})
+
+	tests := []struct {
+		name        string
+		config      string
+		expectError string
+	}{
+		{
+			name:        "direct origin requires HTTPS",
+			config:      `origins = [{ name = "origin", custom_origin = { host = "origin.example.com", protocol = "http", enable_mtls = true, mtls_certificate_id = "cert" } }]`,
+			expectError: `custom_origin\.protocol`,
+		},
+		{
+			name:        "origin-set origin requires HTTPS",
+			config:      `origin_sets = [{ name = "set", origins = [{ custom_origin = { host = "primary.example.com", protocol = "http", enable_mtls = true, mtls_certificate_id = "cert" } }, { custom_origin = { host = "backup.example.com" } }] }]`,
+			expectError: `custom_origin\.protocol`,
+		},
+		{
+			name:   "omitted protocol and disabled mTLS are allowed",
+			config: `origins = [{ name = "origin", custom_origin = { host = "origin.example.com", enable_mtls = false, mtls_certificate_id = "cert" } }]`,
+		},
+		{
+			name:        "enabled mTLS requires a certificate ID",
+			config:      `origins = [{ name = "origin", custom_origin = { host = "origin.example.com", protocol = "https", enable_mtls = true } }]`,
+			expectError: `custom_origin\.mtls_certificate_id`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := fmt.Sprintf(`
+provider "ioriver" {
+	endpoint = "http://127.0.0.1:1/"
+}
+
+resource "ioriver_service" "test" {
+	name = "origin-mtls-test"
+	config = {
+		%s
+	}
+}
+`, test.config)
+			step := resource.TestStep{Config: config, PlanOnly: true, ExpectNonEmptyPlan: true}
+			if test.expectError != "" {
+				step.ExpectError = regexp.MustCompile(test.expectError)
+			}
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps:                    []resource.TestStep{step},
+			})
+		})
+	}
 }
