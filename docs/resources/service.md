@@ -179,7 +179,7 @@ Optional:
    - Set the cache TTL value in seconds.
 - `status_code_browser_cache` (Attributes List) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--status_code_browser_cache))
 - `status_codes_ttl` (Attributes List) Cache TTL configuration per status code (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--status_codes_ttl))
-- `stream_logs` (Attributes) Stream CDN access logs to a configured logging destination (e.g., an S3 bucket).
+- `stream_logs` (Attributes) Stream CDN traffic logs to a configured logging destination (e.g., an S3 bucket).
   - All logs are delivered in a unified format, regardless of which CDN provider generated them.
   - See IO River Documentation for details on how to configure a destination. (see [below for nested schema](#nestedatt--config--behaviors--custom--actions--stream_logs))
 - `true_client_ip` (Boolean) Controls whether the CDN should add a `True-Client-IP` header when forwarding the request to the origin.
@@ -527,7 +527,7 @@ Optional:
 
 Required:
 
-- `log_destination` (String) Name of the log destination to stream logs to.
+- `log_destination` (String) Name of the log destination to stream traffic logs to.
   - The destination must be configured in the service's `log_destinations` block.
 - `log_sampling_rate` (Number) Percentage of requests whose logs should be streamed (1–100).
   - Use `100` to stream all logs, or a lower value to sample.
@@ -643,7 +643,7 @@ Optional:
    - Set the cache TTL value in seconds.
 - `status_code_browser_cache` (Attributes List) Define browser cache configuration for status code(s) (see [below for nested schema](#nestedatt--config--behaviors--default--actions--status_code_browser_cache))
 - `status_codes_ttl` (Attributes List) Cache TTL configuration per status code (see [below for nested schema](#nestedatt--config--behaviors--default--actions--status_codes_ttl))
-- `stream_logs` (Attributes) Stream CDN access logs to a configured logging destination (e.g., an S3 bucket).
+- `stream_logs` (Attributes) Stream CDN traffic logs to a configured logging destination (e.g., an S3 bucket).
   - All logs are delivered in a unified format, regardless of which CDN provider generated them.
   - See IO River Documentation for details on how to configure a destination. (see [below for nested schema](#nestedatt--config--behaviors--default--actions--stream_logs))
 - `true_client_ip` (Boolean) Controls whether the CDN should add a `True-Client-IP` header when forwarding the request to the origin.
@@ -991,7 +991,7 @@ Optional:
 
 Required:
 
-- `log_destination` (String) Name of the log destination to stream logs to.
+- `log_destination` (String) Name of the log destination to stream traffic logs to.
   - The destination must be configured in the service's `log_destinations` block.
 - `log_sampling_rate` (Number) Percentage of requests whose logs should be streamed (1–100).
   - Use `100` to stream all logs, or a lower value to sample.
@@ -1098,7 +1098,7 @@ Optional:
 - `file_format` (String) Log file format. Possible values: `json-list`, `json-object`, `json-line-delimited`, `csv`
 - `max_gap_seconds` (Number) Maximum gap between log samples in seconds (60-600; default 60).
 - `max_samples_per_object` (Number) Maximum samples per log object (10000-250000; default 100000).
-- `object_name` (String) Optional log filename template. Must include {random} and end in .gz; omit for backend naming.
+- `object_name` (String) Optional log filename template, for S3 destinations. Must include {random} and end in .gz; omit for backend naming.
 - `request_headers` (List of String) Request header names to collect when request_headers is selected (traffic logs only).
 - `response_headers` (List of String) Response header names to collect when response_headers is selected (traffic logs only).
 - `selected_fields` (List of String) Ordered log fields to deliver. Omit for backend defaults based on source and file_format. If configured, the list must be nonempty and include timestamp, service_id and service_uid.
@@ -1566,7 +1566,7 @@ Required:
 
 Optional:
 
-- `allowed_requests_sampling_rate` (Number) Percentage of allowed requests included in security logs (0-100).
+- `allowed_requests_sampling_rate` (Number) Percentage of allowed requests included in security logs (0-100). Enter zero to disable allowed requests.
 - `enabled` (Boolean) Enable security log shipping. Security must also be enabled.
 - `severity_min_threshold` (String) Minimum event severity for log/block: low, medium, high or critical. Defaults to medium.
 
