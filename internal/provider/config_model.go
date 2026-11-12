@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -26,6 +28,7 @@ type ServiceConfigModel struct {
 	OriginSets      types.List   `tfsdk:"origin_sets" json:"origin_sets,omitempty"`
 	Behaviors       types.Object `tfsdk:"behaviors"`
 	LogDestinations types.List   `tfsdk:"log_destinations" json:"log_destinations,omitempty"`
+	CustomResponses types.List   `tfsdk:"custom_responses" json:"custom_responses,omitempty"`
 	Compute         types.Object `tfsdk:"compute" json:"compute,omitempty"`
 	Security        types.Object `tfsdk:"security" json:"security,omitempty"`
 }
@@ -42,6 +45,7 @@ func ConfigAttrTypes() map[string]attr.Type {
 		"origin_sets":      types.ListType{ElemType: types.ObjectType{AttrTypes: OriginSetAttrTypes()}},
 		"behaviors":        types.ObjectType{AttrTypes: BehaviorsBlockAttrTypes()},
 		"log_destinations": types.ListType{ElemType: types.ObjectType{AttrTypes: LogDestinationAttrTypes()}},
+		"custom_responses": types.ListType{ElemType: types.ObjectType{AttrTypes: CustomResponseAttrTypes()}},
 		"security":         types.ObjectType{AttrTypes: SecurityAttrTypes()},
 		"compute":          types.ObjectType{AttrTypes: ComputeAttrTypes()},
 	}
@@ -166,6 +170,13 @@ func ConfigAttributes() map[string]schema.Attribute {
 				Attributes: LogDestinationAttributes(),
 			},
 		},
+		"custom_responses": schema.ListNestedAttribute{
+			MarkdownDescription: "Custom responses with inline text or a separately managed attachment. Names must be unique.",
+			Optional:            true,
+			Validators:          []validator.List{listvalidator.SizeAtMost(10)},
+			PlanModifiers:       []planmodifier.List{NamedListPlanModifier("name")},
+			NestedObject:        schema.NestedAttributeObject{Attributes: CustomResponseAttributes()},
+		},
 		"security": schema.SingleNestedAttribute{
 			MarkdownDescription: "Security configuration (WAF, custom rules, rate limiting)",
 			Optional:            true,
@@ -261,6 +272,12 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 	}
 	configMap["log_destinations"] = logDestArray
 	tflog.Debug(ctx, fmt.Sprintf("[ModelToMap] ✓ Log Destinations converted: %s", redactedLogDestinationsForLog(logDestArray)))
+
+	customResponses, err := customResponsesToMap(ctx, c.CustomResponses)
+	if err != nil {
+		return nil, err
+	}
+	configMap["custom_responses"] = customResponses
 
 	// Record whether the user explicitly set origins/origin_sets (even as [])
 	// so ServiceConfigMapToModel can return [] instead of null when API returns nothing.
@@ -568,6 +585,12 @@ func ServiceConfigMapToModel(
 			config.LogDestinations = types.ListNull(types.ObjectType{AttrTypes: LogDestinationAttrTypes()})
 		}
 	}
+
+	customResponses, err := customResponsesFromMap(ctx, configMap["custom_responses"], planConfig)
+	if err != nil {
+		return nil, fmt.Errorf("convert custom responses: %w", err)
+	}
+	config.CustomResponses = customResponses
 
 	// Convert Behaviors - API returns dict, we need array.
 	// ObjectNullClearsStateModifier handles the plan-time null when user omits the block.
