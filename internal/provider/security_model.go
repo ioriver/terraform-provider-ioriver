@@ -42,6 +42,16 @@ var defaultLimitBodySize = false
 
 var defaultSecurityEnabled = false
 
+var defaultSecurityLogsShippingValue = types.ObjectValueMust(
+	SecurityLogsShippingAttrTypes(),
+	map[string]attr.Value{
+		"destination":                    types.StringNull(),
+		"enabled":                        types.BoolValue(false),
+		"severity_min_threshold":         types.StringValue("medium"),
+		"allowed_requests_sampling_rate": types.Float64Value(0),
+	},
+)
+
 // defaultWafCheckpointValue is the backend default checkpoint config —
 // defined once here and reused in both WafAttributes() and SecurityAttributes()
 // (inside the waf static default), mirroring the cache_key pattern.
@@ -123,7 +133,7 @@ var defaultSecurityValue = types.ObjectValueMust(
 		"custom_rules":   defaultEmptyCustomList,
 		"rate_limit":     defaultEmptyRateLimitList,
 		"bot_management": defaultBotManagementValue,
-		"logs_shipping":  types.ObjectNull(SecurityLogsShippingAttrTypes()),
+		"logs_shipping":  defaultSecurityLogsShippingValue,
 	},
 )
 
@@ -250,7 +260,7 @@ func SecurityLogsShippingAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"destination": schema.StringAttribute{
 			MarkdownDescription: "Name of a security-source destination in config.log_destinations.",
-			Required:            true,
+			Optional:            true,
 			Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 		},
 		"enabled": schema.BoolAttribute{
@@ -687,35 +697,43 @@ func securityLogsShippingFromMap(raw interface{}, transformCtx *ServiceTransform
 	if !ok {
 		return nil, fmt.Errorf("invalid WAF logs_shipping: %T", raw)
 	}
-	destination, ok := data["destination"].(string)
-	if !ok || destination == "" {
-		return nil, fmt.Errorf("WAF logs_shipping requires a destination")
+	destination := types.StringNull()
+	if rawDestination, exists := data["destination"]; exists && rawDestination != nil {
+		destinationValue, ok := rawDestination.(string)
+		if !ok || destinationValue == "" {
+			return nil, fmt.Errorf("invalid WAF logs_shipping destination: %T", rawDestination)
+		}
+		if transformCtx != nil {
+			name := ""
+			for candidate, uuid := range transformCtx.LogDestNamesToUUIDs {
+				if uuid == destinationValue {
+					name = candidate
+					break
+				}
+			}
+			if name == "" {
+				return nil, fmt.Errorf("WAF logs_shipping references unknown destination UUID %q", destinationValue)
+			}
+			destinationValue = name
+		}
+		destination = types.StringValue(destinationValue)
 	}
 	severityRaw, exists := data["severity"]
 	if !exists {
-		severityRaw = data["severity_min_threshsold"]
+		severityRaw, exists = data["severity_min_threshsold"]
 	}
-	severity, ok := severityRaw.(string)
-	if !ok || severity == "" {
-		return nil, fmt.Errorf("WAF logs_shipping requires severity")
-	}
-	if transformCtx != nil {
-		name := ""
-		for candidate, uuid := range transformCtx.LogDestNamesToUUIDs {
-			if uuid == destination {
-				name = candidate
-				break
-			}
+	severity := "medium"
+	if exists {
+		var ok bool
+		severity, ok = severityRaw.(string)
+		if !ok || severity == "" {
+			return nil, fmt.Errorf("invalid WAF logs_shipping severity: %T", severityRaw)
 		}
-		if name == "" {
-			return nil, fmt.Errorf("WAF logs_shipping references unknown destination UUID %q", destination)
-		}
-		destination = name
 	}
 	model := &SecurityLogsShippingModel{
-		Destination:               types.StringValue(destination),
+		Destination:               destination,
 		SeverityMinThreshold:      types.StringValue(severity),
-		Enabled:                   types.BoolValue(true),
+		Enabled:                   types.BoolValue(false),
 		AllowedSamplingPercentage: types.Float64Value(0),
 	}
 	if raw, exists := data["enabled"]; exists {
@@ -1026,8 +1044,10 @@ func SecurityAttributes() map[string]schema.Attribute {
 			},
 		},
 		"logs_shipping": schema.SingleNestedAttribute{
-			MarkdownDescription: "Security log shipping. References a security-source destination by name; omit to disable shipping.",
+			MarkdownDescription: "Security log shipping. Defaults to disabled; configure a security-source destination by name to enable it.",
 			Optional:            true,
+			Computed:            true,
+			Default:             objectdefault.StaticValue(defaultSecurityLogsShippingValue),
 			Attributes:          SecurityLogsShippingAttributes(),
 		},
 	}
@@ -1100,16 +1120,23 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context, transformCtx *Se
 	wafMap["custom"] = customArr
 	if s.LogsShipping != nil {
 		shipping := s.LogsShipping
-		name := shipping.Destination.ValueString()
-		if transformCtx == nil {
-			return nil, fmt.Errorf("security log shipping requires destination lookup context")
+		var destination interface{}
+		if shipping.Destination.IsUnknown() {
+			return nil, fmt.Errorf("security log shipping destination is unknown")
 		}
-		uuid, exists := transformCtx.LogDestNamesToUUIDs[name]
-		if !exists {
-			return nil, fmt.Errorf("WAF log shipping references unknown destination %q", name)
+		if !shipping.Destination.IsNull() {
+			name := shipping.Destination.ValueString()
+			if transformCtx == nil {
+				return nil, fmt.Errorf("security log shipping requires destination lookup context")
+			}
+			uuid, exists := transformCtx.LogDestNamesToUUIDs[name]
+			if !exists {
+				return nil, fmt.Errorf("WAF log shipping references unknown destination %q", name)
+			}
+			destination = uuid
 		}
 		wafMap["logs_shipping"] = map[string]interface{}{
-			"destination":                 uuid,
+			"destination":                 destination,
 			"enabled":                     shipping.Enabled.ValueBool(),
 			"severity":                    shipping.SeverityMinThreshold.ValueString(),
 			"allowed_sampling_percentage": shipping.AllowedSamplingPercentage.ValueFloat64(),
