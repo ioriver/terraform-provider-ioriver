@@ -1118,7 +1118,7 @@ func (s *SecurityModel) SecurityModelToMap(ctx context.Context, transformCtx *Se
 		customArr = append(customArr, ruleMap)
 	}
 	wafMap["custom"] = customArr
-	if s.LogsShipping != nil {
+	if s.LogsShipping != nil && !s.LogsShipping.Destination.IsNull() {
 		shipping := s.LogsShipping
 		var destination interface{}
 		if shipping.Destination.IsUnknown() {

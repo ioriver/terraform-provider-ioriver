@@ -2003,8 +2003,8 @@ func TestSecurityLogsShipping_DefaultObjectRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(waf["logs_shipping"], defaults) {
-		t.Fatalf("default logs_shipping payload mismatch: got %v, want %v", waf["logs_shipping"], defaults)
+	if _, exists := waf["logs_shipping"]; exists {
+		t.Fatal("logs_shipping without a destination must be omitted from the backend payload")
 	}
 
 	shipping := SecurityAttributes()["logs_shipping"].(schema.SingleNestedAttribute)
