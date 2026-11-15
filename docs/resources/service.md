@@ -95,29 +95,6 @@ Read-Only:
 - `service_uid` (String) Unique identifier for the service
 - `uuid` (String) Unique identifier for the configuration
 
-<a id="nestedatt--config--security--custom_responses"></a>
-### Nested Schema for `config.security.custom_responses`
-
-Required:
-
-- `name` (String) Unique response name within the service, 1-255 characters; cannot be whitespace-only.
-- `status_code` (Number) HTTP response status code, 100-599.
-
-Optional:
-
-- `headers` (Map of String) Response headers. Redirect codes 301, 302, 303, 307,
-  and 308 require a non-empty `Location` header, matched case-insensitively.
-- `text` (String) Inline response body, at most 1024 UTF-8 bytes. Conflicts with `attached_file_id`.
-- `attached_file_id` (String) Attachment UUID, typically `ioriver_attached_file.blocked.id`. Conflicts with `text`.
-
-Read-Only:
-
-- `uuid` (String) Response UUID, preserved by response name.
-
-Omitting both body fields creates an empty-body response. The service resource does not
-upload files; use the separate [attachment resource](./attached_file.md).
-Defining a response does not itself configure WAF to use it.
-
 <a id="nestedatt--config--behaviors"></a>
 ### Nested Schema for `config.behaviors`
 
@@ -1432,11 +1409,11 @@ Optional:
 
 Optional:
 
-- `custom_responses` (Attributes List) Up to 10 named custom responses, using inline text or a separately managed attachment. (see [nested schema](#nestedatt--config--security--custom_responses))
 - `bot_management` (Attributes) Bot-management keys and challenge thresholds.
   - `web_key` is issued by IORiver.
   - Both thresholds are floats in `[0.0, 1.0]` and default to `0.5`.
   - (see [below for nested schema](#nestedatt--config--security--bot_management))
+- `custom_responses` (Attributes List) Named custom responses for WAF blocks, using inline text or a separately managed attachment. (see [below for nested schema](#nestedatt--config--security--custom_responses))
 - `custom_rules` (Attributes List) Ordered list of custom rules, evaluated **before** the WAF engine.
   - Rules are evaluated first-to-last.
   - **Actions:**
@@ -1451,7 +1428,7 @@ Optional:
     - Each rule condition uses an OR-of-ANDs expression: the rule fires when at least one OR group matches, and all AND conditions in that group match. 
   - (see [below for nested schema](#nestedatt--config--security--custom_rules))
 - `enabled` (Boolean) Enable WAF/security for this service
-- `logs_shipping` (Attributes) Security log shipping. References a security-source destination by name; omit to disable shipping. (see [below for nested schema](#nestedatt--config--security--logs_shipping))
+- `logs_shipping` (Attributes) Security log shipping. Defaults to disabled; configure a security-source destination by name to enable it. (see [below for nested schema](#nestedatt--config--security--logs_shipping))
 - `rate_limit` (Attributes List) Ordered list of rate limiting rules. 
   - A rule fires when the client IP exceeds `num_of_requests` requests within the `time_window_seconds` sliding window.
   - The client is then subject to the rule's action for `block_duration_seconds`.
@@ -1479,6 +1456,25 @@ Read-Only:
   - This key is issued by IORiver and is required for bot management to function.
   - If you do not have a key, contact IORiver support to obtain one.
   -
+
+
+<a id="nestedatt--config--security--custom_responses"></a>
+### Nested Schema for `config.security.custom_responses`
+
+Required:
+
+- `name` (String) Unique custom response name within this service.
+- `status_code` (Number) HTTP response status code (100-599). Redirects 301, 302, 303, 307, and 308 require a non-empty Location header.
+
+Optional:
+
+- `attached_file_id` (String) Attachment UUID, typically ioriver_attached_file.example.id. Conflicts with text.
+- `headers` (Map of String) Response header names and values. Omit or set {} for no headers.
+- `text` (String) Inline response body, at most 1024 UTF-8 bytes. Conflicts with attached_file_id. Omit both for an empty body.
+
+Read-Only:
+
+- `uuid` (String) Custom response UUID, preserved by response name.
 
 
 <a id="nestedatt--config--security--custom_rules"></a>
@@ -1584,13 +1580,10 @@ Required:
 <a id="nestedatt--config--security--logs_shipping"></a>
 ### Nested Schema for `config.security.logs_shipping`
 
-Required:
-
-- `destination` (String) Name of a security-source destination in config.log_destinations.
-
 Optional:
 
 - `allowed_requests_sampling_rate` (Number) Percentage of allowed requests included in security logs (0-100). Enter zero to disable allowed requests.
+- `destination` (String) Name of a security-source destination in config.log_destinations.
 - `enabled` (Boolean) Enable security log shipping. Security must also be enabled.
 - `severity_min_threshold` (String) Minimum event severity for log/block: low, medium, high or critical. Defaults to medium.
 
