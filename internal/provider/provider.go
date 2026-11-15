@@ -90,6 +90,7 @@ func (p *IORiverProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewCertificateResource,
 		NewClientMTLSTrustStoreResource,
 		NewAccountProviderResource,
+		NewAttachedFileResource,
 		NewServiceResource,
 		NewDomainResource,
 		NewOriginResource,

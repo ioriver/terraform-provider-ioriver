@@ -1919,7 +1919,10 @@ func TestSecurityLogsShipping_RoundTripAndClear(t *testing.T) {
 		SeverityMinThreshold:      types.StringValue("high"),
 		AllowedSamplingPercentage: types.Float64Value(25),
 	}
-	security := &SecurityModel{Enabled: types.BoolValue(true), LogsShipping: shipping}
+	security := &SecurityModel{
+		Enabled: types.BoolValue(true), LogsShipping: shipping,
+		CustomResponses: types.ListNull(types.ObjectType{AttrTypes: CustomResponseAttrTypes()}),
+	}
 	securityObject, diags := types.ObjectValueFrom(context.Background(), SecurityAttrTypes(), security)
 	if diags.HasError() {
 		t.Fatal(diags)
