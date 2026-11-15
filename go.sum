@@ -138,6 +138,8 @@ github.com/ioriver/ioriver-go v1.2.1 h1:QPJeTTxpzAaAbn8Bq09cHpIMfIA45htmLV9EmnLZ
 github.com/ioriver/ioriver-go v1.2.1/go.mod h1:Iihd6rwdCEzsK0RnLVKSBNB8gx2V0Q37IlFP/kUbozo=
 github.com/ioriver/ioriver-go v1.4.0 h1:HovCLSjIClfLChwpg587FnRB5Xunk6XLw/kI/rgHHyQ=
 github.com/ioriver/ioriver-go v1.4.0/go.mod h1:Iihd6rwdCEzsK0RnLVKSBNB8gx2V0Q37IlFP/kUbozo=
+github.com/ioriver/ioriver-go v1.5.0 h1:1Tx7UHHApRrPvEZKVsCa7smHt0t1vpQhShJ0ZBkD534=
+github.com/ioriver/ioriver-go v1.5.0/go.mod h1:Iihd6rwdCEzsK0RnLVKSBNB8gx2V0Q37IlFP/kUbozo=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99/go.mod h1:1lJo3i6rXxKeerYnT8Nvf0QmHCRC1n8sfWVwXF2Frvo=
 github.com/jhump/protoreflect v1.15.1 h1:HUMERORf3I3ZdX05WaQ6MIpd/NJ434hTp5YiKgfCL6c=

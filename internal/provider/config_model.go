@@ -364,6 +364,11 @@ func (c *ServiceConfigModel) ModelToMap(ctx context.Context, updateTransformCtx 
 				return nil, fmt.Errorf("failed to convert security: %w", err)
 			}
 			if wafApiMap != nil {
+				customResponses, err := customResponsesToMap(ctx, sec.CustomResponses)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert custom responses: %w", err)
+				}
+				configMap["custom_responses"] = customResponses
 				configMap["waf"] = wafApiMap
 			}
 			// bot_management is a sibling of waf on the wire (matches the Python Config schema).
@@ -664,16 +669,23 @@ func ServiceConfigMapToModel(
 				return nil, fmt.Errorf("failed to parse security map: %v", err)
 			}
 			if sec != nil {
+				var priorResponses types.List
+				if priorSec != nil {
+					priorResponses = priorSec.CustomResponses
+				}
+				sec.CustomResponses, err = customResponsesFromMap(ctx, configMap["custom_responses"], priorResponses)
+				if err != nil {
+					return nil, fmt.Errorf("convert custom responses: %w", err)
+				}
 				// bot_management is a top-level sibling of waf on the wire.
 				if bmRaw, ok := configMap["bot_management"]; ok && bmRaw != nil {
 					sec.BotManagement = BotManagementMapToModel(ctx, bmRaw)
 				}
 				objVal, diags := types.ObjectValueFrom(ctx, SecurityAttrTypes(), sec)
 				if diags.HasError() {
-					config.Security = types.ObjectNull(SecurityAttrTypes())
-				} else {
-					config.Security = objVal
+					return nil, fmt.Errorf("failed to encode security: %v", diags)
 				}
+				config.Security = objVal
 				tflog.Debug(ctx, fmt.Sprintf("[MapToModel] waf populated: enabled=%v custom=%d rate_limit=%d",
 					sec.Enabled.ValueBool(), len(sec.CustomRules), len(sec.RateLimit)))
 			} else {

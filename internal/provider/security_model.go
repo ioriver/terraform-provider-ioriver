@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -128,12 +129,13 @@ var defaultBotManagementValue = types.ObjectValueMust(
 var defaultSecurityValue = types.ObjectValueMust(
 	SecurityAttrTypes(),
 	map[string]attr.Value{
-		"enabled":        types.BoolValue(defaultSecurityEnabled),
-		"waf":            defaultWafValue,
-		"custom_rules":   defaultEmptyCustomList,
-		"rate_limit":     defaultEmptyRateLimitList,
-		"bot_management": defaultBotManagementValue,
-		"logs_shipping":  defaultSecurityLogsShippingValue,
+		"enabled":          types.BoolValue(defaultSecurityEnabled),
+		"waf":              defaultWafValue,
+		"custom_rules":     defaultEmptyCustomList,
+		"rate_limit":       defaultEmptyRateLimitList,
+		"bot_management":   defaultBotManagementValue,
+		"logs_shipping":    defaultSecurityLogsShippingValue,
+		"custom_responses": types.ListNull(types.ObjectType{AttrTypes: CustomResponseAttrTypes()}),
 	},
 )
 
@@ -244,12 +246,13 @@ type BotManagementModel struct {
 
 // SecurityModel is the top-level security config block embedded in ServiceConfigModel.
 type SecurityModel struct {
-	Enabled       types.Bool                 `tfsdk:"enabled"`
-	Waf           *WafModel                  `tfsdk:"waf"`
-	CustomRules   []WafCustomRuleModel       `tfsdk:"custom_rules"`
-	RateLimit     []WafRateLimitRuleModel    `tfsdk:"rate_limit"`
-	BotManagement *BotManagementModel        `tfsdk:"bot_management"`
-	LogsShipping  *SecurityLogsShippingModel `tfsdk:"logs_shipping"`
+	Enabled         types.Bool                 `tfsdk:"enabled"`
+	Waf             *WafModel                  `tfsdk:"waf"`
+	CustomRules     []WafCustomRuleModel       `tfsdk:"custom_rules"`
+	RateLimit       []WafRateLimitRuleModel    `tfsdk:"rate_limit"`
+	BotManagement   *BotManagementModel        `tfsdk:"bot_management"`
+	LogsShipping    *SecurityLogsShippingModel `tfsdk:"logs_shipping"`
+	CustomResponses types.List                 `tfsdk:"custom_responses"`
 }
 
 // ---------------------------------------------------------------------------
@@ -940,12 +943,13 @@ func BotManagementAttrTypes() map[string]attr.Type {
 
 func SecurityAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
-		"enabled":        types.BoolType,
-		"waf":            types.ObjectType{AttrTypes: WafAttrTypes()},
-		"custom_rules":   types.ListType{ElemType: types.ObjectType{AttrTypes: WafCustomRuleAttrTypes()}},
-		"rate_limit":     types.ListType{ElemType: types.ObjectType{AttrTypes: WafRateLimitRuleAttrTypes()}},
-		"bot_management": types.ObjectType{AttrTypes: BotManagementAttrTypes()},
-		"logs_shipping":  types.ObjectType{AttrTypes: SecurityLogsShippingAttrTypes()},
+		"enabled":          types.BoolType,
+		"waf":              types.ObjectType{AttrTypes: WafAttrTypes()},
+		"custom_rules":     types.ListType{ElemType: types.ObjectType{AttrTypes: WafCustomRuleAttrTypes()}},
+		"rate_limit":       types.ListType{ElemType: types.ObjectType{AttrTypes: WafRateLimitRuleAttrTypes()}},
+		"bot_management":   types.ObjectType{AttrTypes: BotManagementAttrTypes()},
+		"logs_shipping":    types.ObjectType{AttrTypes: SecurityLogsShippingAttrTypes()},
+		"custom_responses": types.ListType{ElemType: types.ObjectType{AttrTypes: CustomResponseAttrTypes()}},
 	}
 }
 
@@ -983,6 +987,13 @@ func BotManagementAttributes() map[string]schema.Attribute {
 // SecurityAttributes returns the schema attributes for the top-level security block.
 func SecurityAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"custom_responses": schema.ListNestedAttribute{
+			MarkdownDescription: "Named custom responses for WAF blocks, using inline text or a separately managed attachment.",
+			Optional:            true,
+			Validators:          []validator.List{listvalidator.SizeAtMost(10)},
+			PlanModifiers:       []planmodifier.List{NamedListPlanModifier("name")},
+			NestedObject:        schema.NestedAttributeObject{Attributes: CustomResponseAttributes()},
+		},
 		"enabled": schema.BoolAttribute{
 			MarkdownDescription: "Enable WAF/security for this service",
 			Optional:            true,
@@ -1163,7 +1174,9 @@ func securityMapToModelWithCtx(ctx context.Context, secRaw interface{}, transfor
 		tflog.Warn(ctx, fmt.Sprintf("[SecurityMapToModel] unexpected waf type: %T", secRaw))
 		return nil, fmt.Errorf("unexpected waf type: %T", secRaw)
 	}
-	model := &SecurityModel{}
+	model := &SecurityModel{
+		CustomResponses: types.ListNull(types.ObjectType{AttrTypes: CustomResponseAttrTypes()}),
+	}
 	// enabled comes from the waf object on the backend.
 	if v, ok := wafMap["enabled"].(bool); ok {
 		model.Enabled = types.BoolValue(v)

@@ -643,6 +643,44 @@ func (r *ServiceResource) ValidateConfig(ctx context.Context, req resource.Valid
 		return
 	}
 
+	if !data.Config.Security.IsNull() && !data.Config.Security.IsUnknown() {
+		var security SecurityModel
+		resp.Diagnostics.Append(data.Config.Security.As(ctx, &security, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		responsesValue := security.CustomResponses
+		responsePath := path.Root("config").AtName("security").AtName("custom_responses")
+		names := make(map[string]bool)
+		if !responsesValue.IsNull() && !responsesValue.IsUnknown() {
+			responses, diags := ListElementsAsDiags[CustomResponseModel](ctx, responsesValue)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			for i, response := range responses {
+				if err := validateCustomResponse(ctx, response); err != nil {
+					resp.Diagnostics.AddAttributeError(
+						responsePath.AtListIndex(i),
+						"Invalid custom response", err.Error(),
+					)
+				}
+				if response.Name.IsNull() || response.Name.IsUnknown() {
+					continue
+				}
+				name := response.Name.ValueString()
+				if names[name] {
+					resp.Diagnostics.AddAttributeError(
+						responsePath.AtListIndex(i).AtName("name"),
+						"Duplicate custom response name",
+						fmt.Sprintf("Custom response name %q must be unique within the service.", name),
+					)
+				}
+				names[name] = true
+			}
+		}
+	}
+
 	if !data.Config.Protocol.IsNull() && !data.Config.Protocol.IsUnknown() {
 		var protocol ProtocolConfigModel
 		resp.Diagnostics.Append(data.Config.Protocol.As(ctx, &protocol, basetypes.ObjectAsOptions{})...)
