@@ -3,18 +3,28 @@
 page_title: "ioriver_attached_file Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Manages an immutable, account-scoped response attachment. Changes to contents (excluding outer whitespace) or file_type require replacement. Use create_before_destroy when referenced by a service. Deletion is rejected while any service configuration version, including historical versions, references the attachment. The API deduplicates identical contents and file types within an account: do not manage the same attachment with multiple resource addresses.
+  Creates a file in your account for use as a custom response body, such as an access-denied page.
+
+  - Files cannot be edited in place. Changing `contents` or `file_type` makes Terraform replace the file. Changes only to whitespace at the start or end do not replace it.
+  - If a service uses the file, set `create_before_destroy = true` in the resource's `lifecycle` block so Terraform creates the new file before trying to delete the old one.
+  - A file cannot be deleted while any service configuration version still references it, including older versions. `create_before_destroy` does not remove this restriction.
+  - Creating a file with the same contents and type as an existing file in your account returns the existing file. Define it only once in Terraform and reuse its `id` wherever needed; do not manage it with multiple resource blocks or module instances.
 ---
 
 # ioriver_attached_file (Resource)
 
-Manages an immutable, account-scoped response attachment. Changes to contents (excluding outer whitespace) or file_type require replacement. Use create_before_destroy when referenced by a service. Deletion is rejected while any service configuration version, including historical versions, references the attachment. The API deduplicates identical contents and file types within an account: do not manage the same attachment with multiple resource addresses.
+Creates a file in your account for use as a custom response body, such as an access-denied page.
+
+- Files cannot be edited in place. Changing `contents` or `file_type` makes Terraform replace the file. Changes only to whitespace at the start or end do not replace it.
+- If a service uses the file, set `create_before_destroy = true` in the resource's `lifecycle` block so Terraform creates the new file before trying to delete the old one.
+- A file cannot be deleted while any service configuration version still references it, including older versions. `create_before_destroy` does not remove this restriction.
+- Creating a file with the same contents and type as an existing file in your account returns the existing file. Define it only once in Terraform and reuse its `id` wherever needed; do not manage it with multiple resource blocks or module instances.
 
 ## Example Usage
 
 ```terraform
 resource "ioriver_attached_file" "blocked" {
-  file_type = "HTML"
+  file_type = "custom_response_body"
   contents  = <<-HTML
     <!doctype html>
     <html><body>Access denied.</body></html>
@@ -35,7 +45,7 @@ resource "ioriver_attached_file" "blocked" {
 ### Required
 
 - `contents` (String) Text contents, supplied inline with a heredoc or using `file("${path.module}/blocked.html")` for an existing UTF-8 file. Stored in Terraform state. Maximum 2 MiB of UTF-8 data and 2,000,000 characters; whitespace-only contents are not accepted. The API trims outer whitespace. Content changes require replacement; outer-whitespace-only changes update state without an API call.
-- `file_type` (String) Attachment type. Currently only HTML is supported. Changes require replacement.
+- `file_type` (String) Attachment type. Currently only `custom_response_body` is supported. Existing configurations using `HTML` must be updated to `custom_response_body`. Changes require replacement.
 
 ### Read-Only
 
