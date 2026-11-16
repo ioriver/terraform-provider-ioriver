@@ -19,6 +19,11 @@ import (
 	ioriver "github.com/ioriver/ioriver-go"
 )
 
+const (
+	attachedFileTypeCustomResponseBody = "custom_response_body"
+	attachedFileBackendTypeHTML        = "HTML"
+)
+
 var (
 	_ Resource                         = &AttachedFileResource{}
 	_ resource.Resource                = &AttachedFileResource{}
@@ -57,8 +62,8 @@ func (r *AttachedFileResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"file_type": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Attachment type. Currently only HTML is supported. Changes require replacement.",
-				Validators:          []validator.String{stringvalidator.OneOf("HTML")},
+				MarkdownDescription: "Attachment type. Currently only `custom_response_body` is supported. Existing configurations using `HTML` must be updated to `custom_response_body`. Changes require replacement.",
+				Validators:          []validator.String{stringvalidator.OneOf(attachedFileTypeCustomResponseBody)},
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"contents": schema.StringAttribute{
@@ -182,7 +187,10 @@ func (AttachedFileResource) getId(data interface{}) interface{} {
 
 func (AttachedFileResource) resourceToObj(ctx context.Context, data interface{}) (interface{}, error) {
 	model := data.(AttachedFileResourceModel)
-	return ioriver.AttachedFile{FileType: model.FileType.ValueString(), Contents: model.Contents.ValueString()}, nil
+	if model.FileType.ValueString() != attachedFileTypeCustomResponseBody {
+		return nil, fmt.Errorf("unsupported attachment type %q", model.FileType.ValueString())
+	}
+	return ioriver.AttachedFile{FileType: attachedFileBackendTypeHTML, Contents: model.Contents.ValueString()}, nil
 }
 
 func (AttachedFileResource) objToResource(ctx context.Context, obj interface{}, data interface{}) (interface{}, error) {
@@ -190,9 +198,12 @@ func (AttachedFileResource) objToResource(ctx context.Context, obj interface{}, 
 	if file.ID == "" {
 		return nil, errors.New("attachment API returned an empty id")
 	}
+	if file.FileType != attachedFileBackendTypeHTML && file.FileType != attachedFileTypeCustomResponseBody {
+		return nil, fmt.Errorf("attachment %s has unsupported backend type %q", file.ID, file.FileType)
+	}
 	prior := data.(AttachedFileResourceModel)
 	model := AttachedFileResourceModel{
-		ID: types.StringValue(file.ID), FileType: types.StringValue(file.FileType), Contents: types.StringValue(file.Contents),
+		ID: types.StringValue(file.ID), FileType: types.StringValue(attachedFileTypeCustomResponseBody), Contents: types.StringValue(file.Contents),
 	}
 	// DRF trims outer whitespace; preserve equivalent configured file contents.
 	if !prior.Contents.IsNull() && !prior.Contents.IsUnknown() &&

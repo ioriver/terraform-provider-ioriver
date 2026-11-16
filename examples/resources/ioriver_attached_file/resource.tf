@@ -1,5 +1,5 @@
 resource "ioriver_attached_file" "blocked" {
-  file_type = "HTML"
+  file_type = "custom_response_body"
   contents  = <<-HTML
     <!doctype html>
     <html><body>Access denied.</body></html>
