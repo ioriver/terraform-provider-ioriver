@@ -14,7 +14,7 @@ Manages an immutable, account-scoped response attachment. Changes to contents (e
 
 ```terraform
 resource "ioriver_attached_file" "blocked" {
-  file_type = "HTML"
+  file_type = "custom_response_body"
   contents  = <<-HTML
     <!doctype html>
     <html><body>Access denied.</body></html>
@@ -35,7 +35,7 @@ resource "ioriver_attached_file" "blocked" {
 ### Required
 
 - `contents` (String) Text contents, supplied inline with a heredoc or using `file("${path.module}/blocked.html")` for an existing UTF-8 file. Stored in Terraform state. Maximum 2 MiB of UTF-8 data and 2,000,000 characters; whitespace-only contents are not accepted. The API trims outer whitespace. Content changes require replacement; outer-whitespace-only changes update state without an API call.
-- `file_type` (String) Attachment type. Currently only HTML is supported. Changes require replacement.
+- `file_type` (String) Attachment type. Currently only `custom_response_body` is supported. Existing configurations using `HTML` must be updated to `custom_response_body`. Changes require replacement.
 
 ### Read-Only
 
