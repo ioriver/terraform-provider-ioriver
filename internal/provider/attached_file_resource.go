@@ -51,9 +51,11 @@ func (r *AttachedFileResource) Metadata(ctx context.Context, req resource.Metada
 
 func (r *AttachedFileResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages an immutable, account-scoped response attachment. Changes to contents (excluding outer whitespace) or file_type require replacement. " +
-			"Use create_before_destroy when referenced by a service. Deletion is rejected while any service configuration version, including historical versions, references the attachment. " +
-			"The API deduplicates identical contents and file types within an account: do not manage the same attachment with multiple resource addresses.",
+		MarkdownDescription: "Creates a file in your account for use as a custom response body, such as an access-denied page.\n\n" +
+			"- Files cannot be edited in place. Changing `contents` or `file_type` makes Terraform replace the file. Changes only to whitespace at the start or end do not replace it.\n" +
+			"- If a service uses the file, set `create_before_destroy = true` in the resource's `lifecycle` block so Terraform creates the new file before trying to delete the old one.\n" +
+			"- A file cannot be deleted while any service configuration version still references it, including older versions. `create_before_destroy` does not remove this restriction.\n" +
+			"- Creating a file with the same contents and type as an existing file in your account returns the existing file. Define it only once in Terraform and reuse its `id` wherever needed; do not manage it with multiple resource blocks or module instances.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -62,7 +64,7 @@ func (r *AttachedFileResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"file_type": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Attachment type. Currently only `custom_response_body` is supported. Existing configurations using `HTML` must be updated to `custom_response_body`. Changes require replacement.",
+				MarkdownDescription: "Attachment type. Currently only `custom_response_body` is supported.",
 				Validators:          []validator.String{stringvalidator.OneOf(attachedFileTypeCustomResponseBody)},
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
