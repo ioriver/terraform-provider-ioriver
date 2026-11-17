@@ -4,11 +4,7 @@ page_title: "ioriver_attached_file Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
   Creates a file in your account for use as a custom response body, such as an access-denied page.
-
-  - Files cannot be edited in place. Changing `contents` or `file_type` makes Terraform replace the file. Changes only to whitespace at the start or end do not replace it.
-  - If a service uses the file, set `create_before_destroy = true` in the resource's `lifecycle` block so Terraform creates the new file before trying to delete the old one.
-  - A file cannot be deleted while any service configuration version still references it, including older versions. `create_before_destroy` does not remove this restriction.
-  - Creating a file with the same contents and type as an existing file in your account returns the existing file. Define it only once in Terraform and reuse its `id` wherever needed; do not manage it with multiple resource blocks or module instances.
+  Files cannot be edited in place. Changing contents or file_type makes Terraform replace the file. Changes only to whitespace at the start or end do not replace it.If a service uses the file, set create_before_destroy = true in the resource's lifecycle block so Terraform creates the new file before trying to delete the old one.A file cannot be deleted while any service configuration version still references it, including older versions. create_before_destroy does not remove this restriction.Creating a file with the same contents and type as an existing file in your account returns the existing file. Define it only once in Terraform and reuse its id wherever needed; do not manage it with multiple resource blocks or module instances.
 ---
 
 # ioriver_attached_file (Resource)
@@ -46,7 +42,7 @@ resource "ioriver_attached_file" "blocked" {
 
 - `contents` (String) Text contents, supplied inline with a heredoc or using `file("${path.module}/blocked.html")` for an existing UTF-8 file. Stored in Terraform state. Maximum 2 MiB of UTF-8 data and 2,000,000 characters; whitespace-only contents are not accepted. The API trims outer whitespace. Content changes require replacement; outer-whitespace-only changes update state without an API call.
 - `file_type` (String) Attachment type. Currently only `custom_response_body` is supported.
-q
+
 ### Read-Only
 
 - `id` (String) Attachment UUID returned by the backend.
