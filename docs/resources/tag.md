@@ -3,12 +3,12 @@
 page_title: "ioriver_tag Resource - terraform-provider-ioriver"
 subcategory: ""
 description: |-
-  Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are applied individually.
+  Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are not atomic. Do not rename the tag outside Terraform during an apply. Membership reads use the tag UUID filter, so tag names containing commas or whitespace are handled exactly.
 ---
 
 # ioriver_tag (Resource)
 
-Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are applied individually.
+Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are not atomic. Do not rename the tag outside Terraform during an apply. Membership reads use the tag UUID filter, so tag names containing commas or whitespace are handled exactly.
 
 ## Example Usage
 
@@ -25,12 +25,12 @@ resource "ioriver_tag" "production" {
 
 ### Required
 
-- `name` (String) Tag name, unique within the account.
+- `name` (String) Tag name, unique within the account. Can be renamed in place.
 
 ### Optional
 
 - `color` (String) Tag color: green, blue, purple, orange, red, turquoise, or gray. Defaults to gray.
-- `services` (Set of String) Authoritative set of service UUIDs for this tag within the API token's visibility. Omitting this attribute or setting an empty set detaches the tag from all visible services.
+- `services` (Set of String) Authoritative set of service UUIDs for this tag within the API token's visibility. Omitting this attribute or setting an empty set detaches the tag from all visible services. Other tags are unchanged.
 
 ### Read-Only
 
