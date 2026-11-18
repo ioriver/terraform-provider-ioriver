@@ -80,7 +80,7 @@ func (r *TagResource) Metadata(_ context.Context, req resource.MetadataRequest, 
 
 func (r *TagResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are applied individually.",
+		MarkdownDescription: "Manages an account tag and its complete set of service memberships visible to the API token. Membership changes are not atomic. Do not rename the tag outside Terraform during an apply. Membership reads use the tag UUID filter, so tag names containing commas or whitespace are handled exactly.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -89,7 +89,7 @@ func (r *TagResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Tag name, unique within the account.",
+				MarkdownDescription: "Tag name, unique within the account. Can be renamed in place.",
 				Validators:          []validator.String{stringvalidator.LengthBetween(1, 255)},
 			},
 			"color": schema.StringAttribute{
@@ -101,7 +101,7 @@ func (r *TagResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"services": schema.SetAttribute{
 				Optional: true, Computed: true, ElementType: types.StringType,
 				Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, []attr.Value{})),
-				MarkdownDescription: "Authoritative set of service UUIDs for this tag within the API token's visibility. Omitting this attribute or setting an empty set detaches the tag from all visible services.",
+				MarkdownDescription: "Authoritative set of service UUIDs for this tag within the API token's visibility. Omitting this attribute or setting an empty set detaches the tag from all visible services. Other tags are unchanged.",
 			},
 		},
 	}
