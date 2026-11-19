@@ -528,6 +528,7 @@ func ServiceConfigMapToModel(
 			priorAwsByName := make(map[string]types.Int64)
 			priorCompatByName := make(map[string]types.Int64)
 			priorSplunkByName := make(map[string]types.Int64)
+			priorHTTPSByName := make(map[string]types.Int64)
 			for _, ld := range priorLogDests {
 				name := ld.Name.ValueString()
 				if ld.AwsS3 != nil {
@@ -538,6 +539,9 @@ func ServiceConfigMapToModel(
 				}
 				if ld.Splunk != nil {
 					priorSplunkByName[name] = ld.Splunk.CredentialsVersion
+				}
+				if ld.HTTPS != nil {
+					priorHTTPSByName[name] = ld.HTTPS.CredentialsVersion
 				}
 			}
 			for i := range *logDestModels {
@@ -556,6 +560,11 @@ func ServiceConfigMapToModel(
 				if ld.Splunk != nil {
 					if ver, ok := priorSplunkByName[name]; ok {
 						ld.Splunk.CredentialsVersion = ver
+					}
+				}
+				if ld.HTTPS != nil {
+					if ver, ok := priorHTTPSByName[name]; ok {
+						ld.HTTPS.CredentialsVersion = ver
 					}
 				}
 			}

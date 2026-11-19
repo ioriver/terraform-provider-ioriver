@@ -1444,6 +1444,7 @@ Optional:
 - `aws_s3` (Attributes) AWS S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--aws_s3))
 - `compatible_s3` (Attributes) Compatible S3 log destination (see [below for nested schema](#nestedatt--config--log_destinations--compatible_s3))
 - `file_format` (String) Log file format. Possible values: `json-list`, `json-object`, `json-line-delimited`, `csv`
+- `https` (Attributes) HTTPS log destination (see [below for nested schema](#nestedatt--config--log_destinations--https))
 - `max_gap_seconds` (Number) Maximum gap between log samples in seconds (60-600; default 60).
 - `max_samples_per_object` (Number) Maximum samples per log object (10000-250000; default 100000).
 - `object_name` (String) Optional log filename template, for S3 destinations. Must include {random} and end in .gz; omit for backend naming.
@@ -1544,6 +1545,21 @@ Required:
 - `role_arn` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) AWS role ARN
 
 
+
+
+<a id="nestedatt--config--log_destinations--https"></a>
+### Nested Schema for `config.log_destinations.https`
+
+Required:
+
+- `endpoint` (String) Absolute HTTPS endpoint that receives the log data.
+
+Optional:
+
+- `credentials` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only credential string passed as supplied to the backend. Required when creating or replacing the destination or rotating credentials. Omit on other updates to keep the stored credential.
+- `credentials_version` (Number) Increment to send updated HTTPS credentials to the backend. Required with credentials; credentials are never stored in Terraform state.
+- `request_headers` (List of String) Header names to include in requests to the HTTPS endpoint.
+- `use_insecure` (Boolean) May skip verification of the HTTPS endpoint's SSL certificate.
 
 
 <a id="nestedatt--config--log_destinations--splunk"></a>

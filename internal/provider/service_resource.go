@@ -176,11 +176,8 @@ func (r *ServiceResource) Configure(ctx context.Context, req resource.ConfigureR
 	r.client = client
 }
 
-// ModifyPlan validates private-S3-origin credential invariants during planning.
-// Create-time rules require both s3_aws_key + s3_aws_secret whenever is_private=true.
-// Update-time rules require credentials whenever the user rotates credentials_version
-// or flips an existing origin public → private (state cannot supply the WriteOnly
-// values, so config must).
+// ModifyPlan checks origin and log destination credentials from raw config,
+// allowing unknown write-only values until apply.
 func (r *ServiceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	// Destroy plan: nothing to validate.
 	if req.Plan.Raw.IsNull() {
