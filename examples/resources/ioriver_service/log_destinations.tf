@@ -2,7 +2,7 @@
 # Declare destinations in config.log_destinations, then reference them by
 # name in behaviors.actions.stream_logs (traffic) or security.logs_shipping.
 #
-# Supported types: aws_s3 | compatible_s3 | splunk
+# Supported types: aws_s3 | compatible_s3 | splunk | https
 # Supported file formats: json-list | json-object | json-line-delimited | csv
 #
 # Credentials are write-only — they are sent to the backend but never
@@ -10,9 +10,9 @@
 # Required credentials may be unknown during planning, but must resolve to
 # non-empty values at apply. This also applies to private S3 origin credentials.
 # Source defaults to traffic. Changing source replaces only that destination
-# (new UUID), keeps the service, and requires supplying credentials again.
-# Changing destination type also requires credentials for the new type,
-# independently of credentials_version.
+# (new UUID), keeps the service, and resends configured credentials.
+# All supported destinations require credentials on create or replacement.
+# Increment credentials_version to rotate the stored credential.
 # Omit selected_fields to use backend defaults based on source and file_format.
 # Configured lists must be nonempty and include timestamp, service_id and
 # service_uid. Header names must still
@@ -132,6 +132,18 @@ resource "ioriver_service" "log_destinations_example" {
           # even when credentials_version is omitted.
           credentials_version = 1
           credentials         = { token = "splunk-hec-token" }
+        }
+      },
+      {
+        name        = "https-collector"
+        file_format = "json-line-delimited"
+        https = {
+          endpoint        = "https://logs.example.com/ingest"
+          request_headers = ["X-Log-Request"]
+          use_insecure    = false
+          # Required on create; supply the credential string expected by the receiver.
+          credentials_version = 1
+          credentials         = jsonencode({ Authorization = "Bearer token" })
         }
       }
 

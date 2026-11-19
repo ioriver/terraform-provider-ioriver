@@ -44,7 +44,7 @@ func firstLogDest(t *testing.T, data *ServiceResourceModel) LogDestinationModel 
 }
 
 func TestLogDestinationCredentials_PhaseValidation(t *testing.T) {
-	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk"} {
+	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk", "https"} {
 		for _, valueCase := range []struct {
 			name  string
 			value types.String
@@ -61,7 +61,12 @@ func TestLogDestinationCredentials_PhaseValidation(t *testing.T) {
 				model := func(version types.Int64, source string, value types.String) *ServiceResourceModel {
 					destination := testSplunkDestination()
 					destination.Source = types.StringValue(source)
-					if kind == "splunk" {
+					if kind == "https" {
+						destination = testHTTPSDestination()
+						destination.Source = types.StringValue(source)
+						destination.HTTPS.CredentialsVersion = version
+						destination.HTTPS.Credentials = value
+					} else if kind == "splunk" {
 						destination.Splunk.CredentialsVersion = version
 						destination.Splunk.Credentials = &SplunkCredsModel{Token: value}
 					} else {

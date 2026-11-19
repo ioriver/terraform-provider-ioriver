@@ -52,6 +52,7 @@ type LogDestinationModel struct {
 	AwsS3               *EmbeddedAwsS3LogDestinationModel        `tfsdk:"aws_s3"`
 	CompatibleS3        *EmbeddedCompatibleS3LogDestinationModel `tfsdk:"compatible_s3"`
 	Splunk              *EmbeddedSplunkLogDestinationModel       `tfsdk:"splunk"`
+	HTTPS               *EmbeddedHTTPSLogDestinationModel        `tfsdk:"https"`
 	SelectedFields      types.List                               `tfsdk:"selected_fields"`
 	RequestHeaders      types.List                               `tfsdk:"request_headers"`
 	ResponseHeaders     types.List                               `tfsdk:"response_headers"`
@@ -69,6 +70,14 @@ type EmbeddedSplunkLogDestinationModel struct {
 	CredentialsVersion types.Int64       `tfsdk:"credentials_version"`
 }
 
+type EmbeddedHTTPSLogDestinationModel struct {
+	Endpoint           types.String `tfsdk:"endpoint"`
+	RequestHeaders     types.List   `tfsdk:"request_headers"`
+	UseInsecure        types.Bool   `tfsdk:"use_insecure"`
+	Credentials        types.String `tfsdk:"credentials"`
+	CredentialsVersion types.Int64  `tfsdk:"credentials_version"`
+}
+
 type SplunkCredsModel struct {
 	Token types.String `tfsdk:"token"`
 }
@@ -79,6 +88,16 @@ func EmbeddedSplunkAttrTypes() map[string]attr.Type {
 		"channel_id":          types.StringType,
 		"use_insecure":        types.BoolType,
 		"credentials":         types.ObjectType{AttrTypes: map[string]attr.Type{"token": types.StringType}},
+		"credentials_version": types.Int64Type,
+	}
+}
+
+func EmbeddedHTTPSAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"endpoint":            types.StringType,
+		"request_headers":     types.ListType{ElemType: types.StringType},
+		"use_insecure":        types.BoolType,
+		"credentials":         types.StringType,
 		"credentials_version": types.Int64Type,
 	}
 }
@@ -118,6 +137,7 @@ func LogDestinationAttrTypes() map[string]attr.Type {
 		"aws_s3":                 types.ObjectType{AttrTypes: EmbeddedAwsS3AttrTypes()},
 		"compatible_s3":          types.ObjectType{AttrTypes: EmbeddedCompatibleS3AttrTypes()},
 		"splunk":                 types.ObjectType{AttrTypes: EmbeddedSplunkAttrTypes()},
+		"https":                  types.ObjectType{AttrTypes: EmbeddedHTTPSAttrTypes()},
 		"selected_fields":        types.ListType{ElemType: types.StringType},
 		"request_headers":        types.ListType{ElemType: types.StringType},
 		"response_headers":       types.ListType{ElemType: types.StringType},
@@ -207,6 +227,7 @@ func LogDestinationAttributes() map[string]schema.Attribute {
 				objectvalidator.ExactlyOneOf(
 					path.MatchRelative().AtParent().AtName("compatible_s3"),
 					path.MatchRelative().AtParent().AtName("splunk"),
+					path.MatchRelative().AtParent().AtName("https"),
 				),
 			},
 		},
@@ -218,6 +239,7 @@ func LogDestinationAttributes() map[string]schema.Attribute {
 				objectvalidator.ExactlyOneOf(
 					path.MatchRelative().AtParent().AtName("aws_s3"),
 					path.MatchRelative().AtParent().AtName("splunk"),
+					path.MatchRelative().AtParent().AtName("https"),
 				),
 			},
 		},
@@ -229,6 +251,19 @@ func LogDestinationAttributes() map[string]schema.Attribute {
 				objectvalidator.ExactlyOneOf(
 					path.MatchRelative().AtParent().AtName("aws_s3"),
 					path.MatchRelative().AtParent().AtName("compatible_s3"),
+					path.MatchRelative().AtParent().AtName("https"),
+				),
+			},
+		},
+		"https": schema.SingleNestedAttribute{
+			MarkdownDescription: "HTTPS log destination",
+			Optional:            true,
+			Attributes:          HTTPSLogDestinationAttributes(),
+			Validators: []validator.Object{
+				objectvalidator.ExactlyOneOf(
+					path.MatchRelative().AtParent().AtName("aws_s3"),
+					path.MatchRelative().AtParent().AtName("compatible_s3"),
+					path.MatchRelative().AtParent().AtName("splunk"),
 				),
 			},
 		},
@@ -414,6 +449,41 @@ func SplunkCredsAttributes() map[string]schema.Attribute {
 	}
 }
 
+func HTTPSLogDestinationAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"endpoint": schema.StringAttribute{
+			MarkdownDescription: "Absolute HTTPS endpoint that receives the log data.",
+			Required:            true,
+		},
+		"request_headers": schema.ListAttribute{
+			MarkdownDescription: "Header names to include in requests to the HTTPS endpoint.",
+			Optional:            true,
+			Computed:            true,
+			ElementType:         types.StringType,
+			Default:             listdefault.StaticValue(types.ListValueMust(types.StringType, []attr.Value{})),
+		},
+		"use_insecure": schema.BoolAttribute{
+			MarkdownDescription: "May skip verification of the HTTPS endpoint's SSL certificate.",
+			Optional:            true,
+			Computed:            true,
+			Default:             booldefault.StaticBool(false),
+		},
+		"credentials": schema.StringAttribute{
+			MarkdownDescription: "Write-only credential string passed as supplied to the backend. Required when creating or replacing the destination or rotating credentials. Omit on other updates to keep the stored credential.",
+			Optional:            true,
+			WriteOnly:           true,
+			Validators: []validator.String{
+				stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("credentials_version")),
+			},
+		},
+		"credentials_version": schema.Int64Attribute{
+			MarkdownDescription: "Increment to send updated HTTPS credentials to the backend. Required with credentials; credentials are never stored in Terraform state.",
+			Optional:            true,
+			Validators:          []validator.Int64{int64validator.AtLeast(1)},
+		},
+	}
+}
+
 // redactedLogDestinationsForLog returns a printable representation of the outbound
 // log-destinations array with the JSON-serialized credentials blob replaced so it
 // is safe to hand to tflog. The original slice is never mutated.
@@ -555,6 +625,17 @@ func mergeLogDestCredentialsFromConfig(planData, configData, stateData *ServiceR
 				changed = true
 			}
 		}
+		if ld.HTTPS != nil && configLd.HTTPS != nil {
+			var stateVer types.Int64
+			if stateLd != nil && stateLd.HTTPS != nil {
+				stateVer = stateLd.HTTPS.CredentialsVersion
+			}
+			if stateLd == nil || logDestinationTypeChanged(ld, stateLd) || logDestinationSourceChanged(ld, stateLd) ||
+				shouldRotateLogDestinationCredentials(ld.HTTPS.CredentialsVersion, stateVer) {
+				ld.HTTPS.Credentials = configLd.HTTPS.Credentials
+				changed = true
+			}
+		}
 	}
 
 	if !changed {
@@ -646,6 +727,11 @@ func validateCreateLogDestinationCredentials(data *ServiceResourceModel, allowUn
 				return err
 			}
 		}
+		if ld.HTTPS != nil {
+			if err := requireHTTPSCredentials(name, ld.HTTPS.Credentials, allowUnknown); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -697,6 +783,11 @@ func validateUpdateLogDestinationCredentials(planData, stateData *ServiceResourc
 					return err
 				}
 			}
+			if planLD.HTTPS != nil {
+				if err := requireHTTPSCredentials(name, planLD.HTTPS.Credentials, allowUnknown); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 
@@ -738,6 +829,14 @@ func validateUpdateLogDestinationCredentials(planData, stateData *ServiceResourc
 				}
 			}
 		}
+		if planLD.HTTPS != nil {
+			if !exists || stateLD == nil || stateLD.HTTPS == nil ||
+				shouldRotateLogDestinationCredentials(planLD.HTTPS.CredentialsVersion, stateLD.HTTPS.CredentialsVersion) {
+				if err := requireHTTPSCredentials(name, planLD.HTTPS.Credentials, allowUnknown); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
@@ -759,7 +858,8 @@ func logDestinationTypeChanged(plan, state *LogDestinationModel) bool {
 	return plan != nil && state != nil &&
 		((plan.AwsS3 != nil) != (state.AwsS3 != nil) ||
 			(plan.CompatibleS3 != nil) != (state.CompatibleS3 != nil) ||
-			(plan.Splunk != nil) != (state.Splunk != nil))
+			(plan.Splunk != nil) != (state.Splunk != nil) ||
+			(plan.HTTPS != nil) != (state.HTTPS != nil))
 }
 
 func requireSplunkCredentials(name string, credentials *SplunkCredsModel, allowUnknown bool) error {
@@ -767,6 +867,13 @@ func requireSplunkCredentials(name string, credentials *SplunkCredsModel, allowU
 		return nil
 	}
 	return fmt.Errorf("log destination %q: creating/replacing splunk or rotating credentials requires credentials.token in config", name)
+}
+
+func requireHTTPSCredentials(name string, credentials types.String, allowUnknown bool) error {
+	if !credentialValueIsSet(credentials, allowUnknown) {
+		return fmt.Errorf("log destination %q: creating/replacing HTTPS or rotating credentials requires non-empty https.credentials in config", name)
+	}
+	return nil
 }
 
 func credentialsPayloadJSON(creds *AwsCredsModel) (string, bool) {
@@ -804,7 +911,7 @@ func credentialsPayloadJSON(creds *AwsCredsModel) (string, bool) {
 // ModelToMap converts LogDestinationModel to the service config API format.
 // The API stores log destinations as flat objects with fields:
 //
-//	name, type, s3_bucket, s3_path, s3_region, s3_domain, anonymize_ip, log_file_format, credentials
+//	name, type, destination-specific config, anonymize_ip, log_file_format, credentials
 //
 // Credentials are included in the payload on create/update but never returned
 // by the API (WriteOnly), so they are not stored in state.
@@ -899,6 +1006,28 @@ func (l *LogDestinationModel) ModelToMap() (map[string]interface{}, error) {
 			}
 			logDestMap["credentials"] = string(payload)
 		}
+	} else if l.HTTPS != nil {
+		if l.HTTPS.Endpoint.IsNull() || l.HTTPS.Endpoint.IsUnknown() {
+			return nil, fmt.Errorf("HTTPS endpoint must be known at apply")
+		}
+		logDestMap["type"] = "HTTPS"
+		requestHeaders := []string{}
+		if !l.HTTPS.RequestHeaders.IsNull() {
+			if diags := l.HTTPS.RequestHeaders.ElementsAs(context.Background(), &requestHeaders, false); diags.HasError() {
+				return nil, fmt.Errorf("invalid HTTPS request_headers: %v", diags)
+			}
+		}
+		logDestMap["https"] = map[string]interface{}{
+			"endpoint":        l.HTTPS.Endpoint.ValueString(),
+			"request_headers": requestHeaders,
+			"use_insecure":    l.HTTPS.UseInsecure.ValueBool(),
+		}
+		if !l.HTTPS.Credentials.IsNull() {
+			if l.HTTPS.Credentials.IsUnknown() || l.HTTPS.Credentials.ValueString() == "" {
+				return nil, fmt.Errorf("HTTPS credentials must be nonempty and known at apply")
+			}
+			logDestMap["credentials"] = l.HTTPS.Credentials.ValueString()
+		}
 	}
 
 	return logDestMap, nil
@@ -964,8 +1093,8 @@ func LogDestinationsFromMap(ctx context.Context, logDestArray []interface{}, upd
 // MapToModel converts the flat service config API format back to LogDestinationModel.
 // The API format is:
 //
-//	{ "uuid": "...", "name": "...", "type": "S3"|"S3_COMPATIBLE",
-//	  "s3_bucket": "...", "s3_path": "...", "s3_region": "...", "s3_domain": "..." }
+//	{ "uuid": "...", "name": "...", "type": "S3"|"S3_COMPATIBLE"|"SPLUNK"|"HTTPS",
+//	  destination-specific config, anonymize_ip, log_file_format }
 func MapToModel(logDestMap map[string]interface{}) (*LogDestinationModel, error) {
 	l := &LogDestinationModel{}
 	source, _ := logDestMap["source"].(string)
@@ -1052,6 +1181,31 @@ func MapToModel(logDestMap map[string]interface{}) (*LogDestinationModel, error)
 			URL: types.StringValue(url), ChannelID: types.StringValue(channel),
 			UseInsecure: types.BoolValue(insecure),
 		}
+	case "HTTPS":
+		https, ok := logDestMap["https"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("HTTPS destination is missing https configuration")
+		}
+		endpoint, endpointOK := https["endpoint"].(string)
+		if !endpointOK {
+			return nil, fmt.Errorf("HTTPS destination requires an endpoint")
+		}
+		headers := https["request_headers"]
+		if headers == nil {
+			headers = []string{}
+		}
+		requestHeaders, diags := types.ListValueFrom(context.Background(), types.StringType, headers)
+		if diags.HasError() {
+			return nil, fmt.Errorf("invalid HTTPS request_headers: %v", diags)
+		}
+		insecure, _ := https["use_insecure"].(bool)
+		l.HTTPS = &EmbeddedHTTPSLogDestinationModel{
+			Endpoint:       types.StringValue(endpoint),
+			RequestHeaders: requestHeaders,
+			UseInsecure:    types.BoolValue(insecure),
+			Credentials:    types.StringNull(),
+		}
+		l.HTTPS.CredentialsVersion = types.Int64Null()
 	default:
 		return nil, fmt.Errorf("unsupported log destination type: %q", destType)
 	}

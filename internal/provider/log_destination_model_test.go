@@ -34,7 +34,16 @@ func testAccLoggingDestination(kind, name, source string, version int, credentia
 	assumeRole := strings.HasSuffix(kind, "_assume_role")
 	kind = strings.TrimSuffix(kind, "_assume_role")
 	settings := fmt.Sprintf("credentials_version = %d", version)
-	if kind == "splunk" {
+	if kind == "https" {
+		settings = `
+			endpoint = "https://logs.example.com/ingest"
+			request_headers = ["X-Log-Request"]
+			use_insecure = false`
+		if credentials {
+			settings += fmt.Sprintf("\ncredentials_version = %d\ncredentials = %q",
+				version, fmt.Sprintf("test-https-credential-%d", version))
+		}
+	} else if kind == "splunk" {
 		settings += `
 			url = "https://splunk.example.com:8088/services/collector/raw"
 			channel_id = "00000000-0000-4000-8000-000000000001"
@@ -385,6 +394,10 @@ func TestAccIORiverService_LoggingConfigLifecycle(t *testing.T) {
 
 func testAccLoggingDestinationWithDeferredCredential(kind, name string) string {
 	destination := testAccLoggingDestination(kind, name, "traffic", 1, true)
+	if kind == "https" {
+		credential := "test-https-credential-1"
+		return strings.Replace(destination, fmt.Sprintf("%q", credential), `terraform_data.credential.output`, 1)
+	}
 	credential := testAccLogDestCredsKey
 	if kind == "splunk" {
 		credential = "test-token-1"
@@ -395,7 +408,7 @@ func testAccLoggingDestinationWithDeferredCredential(kind, name string) string {
 }
 
 func TestServiceLoggingConfigPlans(t *testing.T) {
-	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk"} {
+	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk", "https"} {
 		t.Run(kind, func(t *testing.T) {
 			traffic := testAccLoggingDestination(kind, "traffic", "traffic", 1, true)
 			security := testAccLoggingDestination(kind, "security", "security", 1, true)
@@ -510,6 +523,7 @@ func TestServiceLoggingConfigComputedFieldsApply(t *testing.T) {
 func TestServiceLoggingConfigConflicts(t *testing.T) {
 	traffic := testAccLoggingDestination("aws_s3", "traffic", "traffic", 1, true)
 	security := testAccLoggingDestination("splunk", "security", "security", 1, true)
+	https := testAccLoggingDestination("https", "https", "traffic", 1, false)
 	for _, tc := range []struct {
 		name, destination, traffic, security, message string
 	}{
@@ -531,7 +545,11 @@ func TestServiceLoggingConfigConflicts(t *testing.T) {
 		{"missing S3 secret", strings.Replace(traffic, fmt.Sprintf("secret_key = %q", testAccLogDestCredsSecret), "", 1), "", "", `(?is)(secret_key|credentials)`},
 		{"empty S3 key", strings.Replace(traffic, fmt.Sprintf("%q", testAccLogDestCredsKey), `""`, 1), "", "", `requires credentials`},
 		{"empty Splunk token", strings.Replace(security, `"test-token-1"`, `""`, 1), "", "", `requires credentials.token`},
+		{"HTTPS credentials need a version", strings.Replace(https, "use_insecure = false", "use_insecure = false\n credentials = jsonencode({ Authorization = \"Bearer token\" })", 1), "", "", `https\.credentials_version"\s+must\s+be\s+specified`},
+		{"HTTPS create requires credentials", https, "", "", `requires non-empty https.credentials`},
+		{"HTTPS create with version needs credentials", strings.Replace(https, "use_insecure = false", "use_insecure = false\n credentials_version = 1", 1), "", "", `requires non-empty https.credentials`},
 		{"conflicting destination types", strings.TrimSuffix(traffic, "}") + `splunk = { url = "https://splunk.example.com", channel_id = "channel" } }`, "", "", `Invalid Attribute Combination`},
+		{"HTTPS conflicts with S3", strings.TrimSuffix(traffic, "}") + `https = { endpoint = "https://logs.example.com/ingest" } }`, "", "", `Invalid Attribute Combination`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resource.UnitTest(t, resource.TestCase{
@@ -547,7 +565,7 @@ func TestServiceLoggingConfigConflicts(t *testing.T) {
 }
 
 func TestServiceLoggingApplyResolvedEmptyCredentials(t *testing.T) {
-	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk", "private_s3"} {
+	for _, kind := range []string{"aws_s3", "aws_s3_assume_role", "compatible_s3", "compatible_s3_assume_role", "splunk", "https", "private_s3"} {
 		t.Run(kind, func(t *testing.T) {
 			var config string
 			message := `(?s)requires.*credentials`
@@ -1172,6 +1190,252 @@ func testSplunkDestination() LogDestinationModel {
 			ChannelID:   types.StringValue("channel-123"),
 			UseInsecure: types.BoolValue(true),
 		},
+	}
+}
+
+func testHTTPSDestination() LogDestinationModel {
+	destination := testSplunkDestination()
+	destination.Name = types.StringValue("https-destination")
+	destination.Splunk = nil
+	destination.HTTPS = &EmbeddedHTTPSLogDestinationModel{
+		Endpoint: types.StringValue("https://logs.example.com/ingest"),
+		RequestHeaders: types.ListValueMust(types.StringType, []attr.Value{
+			types.StringValue("X-Log-Request"),
+		}),
+		UseInsecure:        types.BoolValue(true),
+		Credentials:        types.StringNull(),
+		CredentialsVersion: types.Int64Null(),
+	}
+	return destination
+}
+
+func TestLogDestinationConfig_HTTPSRoundTrip(t *testing.T) {
+	original := testHTTPSDestination()
+	original.HTTPS.Credentials = types.StringValue(`{"Authorization":"Bearer test-token"}`)
+	original.HTTPS.CredentialsVersion = types.Int64Value(1)
+	wire, err := original.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wire["source"] != "SECURITY" || wire["type"] != "HTTPS" {
+		t.Fatalf("unexpected source/type: %v", wire)
+	}
+	https := wire["https"].(map[string]interface{})
+	if https["endpoint"] != original.HTTPS.Endpoint.ValueString() || https["use_insecure"] != true {
+		t.Fatalf("unexpected HTTPS config: %v", https)
+	}
+	if wire["credentials"] != `{"Authorization":"Bearer test-token"}` {
+		t.Fatalf("unexpected HTTPS credentials: %v", wire["credentials"])
+	}
+	if redacted := redactedLogDestinationsForLog([]interface{}{wire}); strings.Contains(redacted, "test-token") {
+		t.Fatal("log output must redact HTTPS credentials")
+	}
+
+	encoded, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	roundTrip, err := MapToModel(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip.HTTPS == nil || roundTrip.HTTPS.Endpoint.ValueString() != original.HTTPS.Endpoint.ValueString() ||
+		!roundTrip.HTTPS.UseInsecure.ValueBool() || !roundTrip.HTTPS.Credentials.IsNull() {
+		t.Fatalf("HTTPS config did not round trip: %+v", roundTrip.HTTPS)
+	}
+	var headers []string
+	if diags := roundTrip.HTTPS.RequestHeaders.ElementsAs(context.Background(), &headers, false); diags.HasError() {
+		t.Fatalf("failed to read HTTPS request headers: %v", diags)
+	}
+	if !reflect.DeepEqual(headers, []string{"X-Log-Request"}) {
+		t.Fatalf("unexpected request headers: %v", headers)
+	}
+	if _, diags := types.ObjectValueFrom(context.Background(), LogDestinationAttrTypes(), roundTrip); diags.HasError() {
+		t.Fatalf("model/schema mismatch: %v", diags)
+	}
+}
+
+func TestLogDestinationConfig_HTTPSCredentialsVersion(t *testing.T) {
+	serviceModel := func(version types.Int64, credentials types.String) *ServiceResourceModel {
+		destination := testHTTPSDestination()
+		destination.HTTPS.CredentialsVersion = version
+		destination.HTTPS.Credentials = credentials
+		return &ServiceResourceModel{Config: &ServiceConfigModel{
+			LogDestinations: logDestListValue([]LogDestinationModel{destination}),
+		}}
+	}
+	state := serviceModel(types.Int64Value(1), types.StringNull())
+	withoutCredentials := serviceModel(types.Int64Null(), types.StringNull())
+	if err := validateUpdateLogDestinationCredentials(withoutCredentials, state, true); err != nil {
+		t.Fatalf("existing HTTPS destination must allow updates without credentials: %v", err)
+	}
+	if err := validateUpdateLogDestinationCredentials(withoutCredentials, nil, true); err == nil {
+		t.Fatal("adding an HTTPS destination must require credentials")
+	}
+	replacement := serviceModel(types.Int64Null(), types.StringNull())
+	destinationForReplacement := firstLogDest(t, replacement)
+	destinationForReplacement.Source = types.StringValue("traffic")
+	replacement.Config.LogDestinations = logDestListValue([]LogDestinationModel{destinationForReplacement})
+	if err := validateUpdateLogDestinationCredentials(replacement, state, true); err == nil {
+		t.Fatal("replacing an HTTPS destination must require credentials")
+	}
+	config := serviceModel(types.Int64Value(2), types.StringValue(`{"Authorization":"Bearer new-token"}`))
+	plan := serviceModel(types.Int64Value(2), types.StringNull())
+	if err := validateUpdateLogDestinationCredentials(plan, state, true); err == nil {
+		t.Fatal("rotating HTTPS credentials must require a payload")
+	}
+	if err := validateUpdateLogDestinationCredentials(config, state, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := mergeLogDestCredentialsFromConfig(plan, config, state); err != nil {
+		t.Fatal(err)
+	}
+	destination := firstLogDest(t, plan)
+	if destination.HTTPS.Credentials.ValueString() != `{"Authorization":"Bearer new-token"}` {
+		t.Fatal("new HTTPS credentials must be included in the apply plan")
+	}
+	wire, err := destination.ModelToMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wire["credentials"] != `{"Authorization":"Bearer new-token"}` {
+		t.Fatalf("HTTPS credentials missing from API payload: %v", wire)
+	}
+
+	newDestination := testHTTPSDestination()
+	newDestination.HTTPS.CredentialsVersion = types.Int64Value(1)
+	newPlan := &ServiceResourceModel{Config: &ServiceConfigModel{
+		LogDestinations: logDestListValue([]LogDestinationModel{newDestination}),
+	}}
+	if err := validateCreateLogDestinationCredentials(newPlan, true); err == nil {
+		t.Fatal("HTTPS credentials_version must require a credential payload")
+	}
+	newConfig := serviceModel(types.Int64Value(1), types.StringValue(`{"Authorization":"Bearer initial-token"}`))
+	if err := mergeLogDestCredentialsFromConfig(newPlan, newConfig, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCreateLogDestinationCredentials(newPlan, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLogDestinationConfig_HTTPSVersionStateRoundTrip(t *testing.T) {
+	destination := testHTTPSDestination()
+	destination.HTTPS.CredentialsVersion = types.Int64Value(3)
+	config := &ServiceConfigModel{
+		LogDestinations: logDestListValue([]LogDestinationModel{destination}),
+		Behaviors:       defaultBehaviorsBlockObjectValue,
+	}
+	transform := &ServiceTransformContext{LogDestNamesToUUIDs: map[string]string{}}
+	wire, err := config.ModelToMap(context.Background(), transform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := ServiceConfigMapToModel(context.Background(), wire, transform, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err := ListElementsAs[LogDestinationModel](context.Background(), read.LogDestinations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if models[0].HTTPS.CredentialsVersion.ValueInt64() != 3 {
+		t.Fatal("HTTPS credentials version must be retained in state")
+	}
+
+	imported, err := ServiceConfigMapToModel(context.Background(), wire, transform, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err = ListElementsAs[LogDestinationModel](context.Background(), imported.LogDestinations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !models[0].HTTPS.CredentialsVersion.IsNull() {
+		t.Fatal("import must not invent an HTTPS credentials version")
+	}
+}
+
+func TestLogDestinationConfig_HTTPSServiceCredentialLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		state       bool
+		stateVer    types.Int64
+		version     types.Int64
+		credentials types.String
+		source      string
+		send        bool
+	}{
+		{"create", false, types.Int64Null(), types.Int64Value(1), types.StringValue("opaque-credential"), "security", true},
+		{"unchanged version without credentials", true, types.Int64Value(1), types.Int64Value(1), types.StringNull(), "security", false},
+		{"unchanged version with credentials", true, types.Int64Value(1), types.Int64Value(1), types.StringValue("not-rotated"), "security", false},
+		{"omitted version", true, types.Int64Value(1), types.Int64Null(), types.StringNull(), "security", false},
+		{"rotation", true, types.Int64Value(1), types.Int64Value(2), types.StringValue("rotated-credential"), "security", true},
+		{"post import rotation", true, types.Int64Null(), types.Int64Value(1), types.StringValue("imported-credential"), "security", true},
+		{"source replacement", true, types.Int64Value(1), types.Int64Value(1), types.StringValue("replacement-credential"), "traffic", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			model := func(destination LogDestinationModel) *ServiceResourceModel {
+				return &ServiceResourceModel{Config: &ServiceConfigModel{
+					LogDestinations: logDestListValue([]LogDestinationModel{destination}),
+					Behaviors:       defaultBehaviorsBlockObjectValue,
+				}}
+			}
+			destination := testHTTPSDestination()
+			destination.HTTPS.CredentialsVersion = tc.version
+			destination.Source = types.StringValue(tc.source)
+			if tc.source == "traffic" {
+				destination.SelectedFields = types.ListValueMust(types.StringType, []attr.Value{
+					types.StringValue("timestamp"), types.StringValue("service_id"), types.StringValue("service_uid"), types.StringValue("status_code"),
+				})
+			}
+			plan := model(destination)
+			destination.HTTPS.Credentials = tc.credentials
+			config := model(destination)
+			var state *ServiceResourceModel
+			if tc.state {
+				prior := testHTTPSDestination()
+				prior.HTTPS.CredentialsVersion = tc.stateVer
+				state = model(prior)
+				if err := validateUpdateLogDestinationCredentials(config, state, false); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := validateCreateLogDestinationCredentials(config, false); err != nil {
+				t.Fatal(err)
+			}
+			if errs := ValidateLogDestination(context.Background(), firstLogDest(t, config)); len(errs) != 0 {
+				t.Fatalf("config validation rejected valid credentials lifecycle: %v", errs)
+			}
+			if err := mergeWriteOnlyCredentialsFromConfig(plan, config, state); err != nil {
+				t.Fatal(err)
+			}
+			transform := &ServiceTransformContext{LogDestNamesToUUIDs: map[string]string{}}
+			wire, err := plan.Config.ModelToMap(context.Background(), transform)
+			if err != nil {
+				t.Fatal(err)
+			}
+			destinations := wire["log_destinations"].([]interface{})
+			payload := destinations[0].(map[string]interface{})
+			value, sent := payload["credentials"]
+			if sent != tc.send || sent && value != tc.credentials.ValueString() {
+				t.Fatalf("expected credentials sent=%v, got %v", tc.send, payload)
+			}
+			read, err := ServiceConfigMapToModel(context.Background(), wire, transform, plan.Config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			refreshed := firstLogDest(t, &ServiceResourceModel{Config: read})
+			if !refreshed.HTTPS.Credentials.IsNull() {
+				t.Fatal("write-only HTTPS credentials must never be refreshed into state")
+			}
+			if !refreshed.HTTPS.CredentialsVersion.Equal(tc.version) {
+				t.Fatalf("HTTPS credentials_version changed during refresh: %v", refreshed.HTTPS.CredentialsVersion)
+			}
+		})
 	}
 }
 
