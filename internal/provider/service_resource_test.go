@@ -782,7 +782,7 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 						resourceName,
 						"config.behaviors.custom.0.actions.provider_specific.0.code",
 						func() string {
-							b, _ := json.Marshal(exampleSpecificFastlyCodeMap)
+							b, _ := json.Marshal(exampleSpecificFastlyCodeSnippets)
 							return string(b)
 						}(),
 					),
