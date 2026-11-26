@@ -15,16 +15,16 @@ import (
 // Behavior condition helpers
 // ---------------------------------------------------------------------------
 
-var exampleStringSpecificFastlyCode = `{
+var exampleStringSpecificFastlyCode = `[{
   "type": "SNIPPET",
   "vcl": " if(client.geo.country_code !~ \"(US|CA)\") { error 403 \"Forbidden\"; } ",
-  "subroutine": "<recv>"
-}`
-var exampleSpecificFastlyCodeMap = map[string]string{
+  "subroutine": "recv"
+}]`
+var exampleSpecificFastlyCodeSnippets = []map[string]string{{
 	"type":       "SNIPPET",
 	"vcl":        ` if(client.geo.country_code !~ "(US|CA)") { error 403 "Forbidden"; } `,
-	"subroutine": "<recv>",
-}
+	"subroutine": "recv",
+}}
 var exampleSpecificFastlyCode jsontypes.Normalized = jsontypes.NewNormalizedValue(exampleStringSpecificFastlyCode)
 
 func makeBehaviorCondition(field, operator string, values []string, fieldKey string) BehaviorConditionModel {
