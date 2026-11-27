@@ -713,8 +713,8 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access", "false"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.true_client_ip", "true"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_ip.0.ip", "1.2.3.4"),
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000"),
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.end_date", "2100000000"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000000"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.end_date", "2100000000000"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.0.source", "/api/test/123"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.0.destination", "/api/test/1234"),
 				),
@@ -741,8 +741,8 @@ func TestAccIORiverService_WithBehaviors(t *testing.T) {
 					// deny_access_by_ip
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_ip.0.ip", "1.2.3.4"),
 					// deny_access_by_time
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000"),
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.end_date", "2100000000"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000000"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.end_date", "2100000000000"),
 					// url_rewrites
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.0.source", "/old/path"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.0.destination", "/new/path"),
@@ -1834,7 +1834,7 @@ func TestAccIORiverService_BehaviorLifecycle(t *testing.T) {
 					// access control
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_ip.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000"),
+					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.deny_access_by_time.0.date_time_window.start_date", "2000000000000"),
 					// rewrites
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "config.behaviors.custom.0.actions.url_rewrites.0.source", "/old/path"),

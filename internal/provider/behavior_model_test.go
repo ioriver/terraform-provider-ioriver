@@ -1478,8 +1478,8 @@ resource "ioriver_service" "%s" {
 						deny_access_by_time = [
 							{
 								date_time_window = {
-									start_date = 2000000000
-									end_date   = 2100000000
+									start_date = 2000000000000
+									end_date   = 2100000000000
 								}
 							}
 						]
@@ -1563,8 +1563,8 @@ resource "ioriver_service" "%s" {
 						deny_access_by_time = [
 							{
 								date_time_window = {
-									start_date = 2000000000
-									end_date   = 2100000000
+									start_date = 2000000000000
+									end_date   = 2100000000000
 								}
 							}
 						]
@@ -1972,8 +1972,8 @@ resource "ioriver_service" "%s" {
 						deny_access_by_time = [
 							{
 								date_time_window = {
-									start_date = 2000000000
-									end_date   = 2100000000
+									start_date = 2000000000000
+									end_date   = 2100000000000
 								}
 							}
 						]
